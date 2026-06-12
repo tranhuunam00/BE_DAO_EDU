@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
@@ -31,11 +31,28 @@ export class StudentController {
 
   @Get()
   @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả học sinh (Dành cho ADMIN & TEACHER)' })
+  @ApiOperation({ summary: 'Lấy danh sách tất cả học sinh có phân trang và bộ lọc (Dành cho ADMIN & TEACHER)' })
+  @ApiQuery({ name: 'page', required: false, description: 'Số trang muốn lấy', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, description: 'Số bản ghi mỗi trang', example: 10 })
+  @ApiQuery({ name: 'search', required: false, description: 'Từ khóa tìm kiếm (Họ tên, mã học sinh, ĐT, email)' })
+  @ApiQuery({ name: 'status', required: false, description: 'Lọc theo trạng thái học tập' })
+  @ApiQuery({ name: 'province', required: false, description: 'Lọc theo Tỉnh / Thành phố' })
   @ApiResponse({ status: 200, description: 'Lấy danh sách thành công' })
   @ApiResponse({ status: 401, description: 'Yêu cầu token xác thực' })
   @ApiResponse({ status: 403, description: 'Từ chối truy cập (Học sinh không có quyền xem danh sách này)' })
-  async findAll() {
-    return this.getStudentsUseCase.execute();
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('province') province?: string,
+  ) {
+    return this.getStudentsUseCase.execute({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      search,
+      status,
+      province,
+    });
   }
 }

@@ -3,16 +3,25 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
+import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
+  constructor(
+    private readonly userRepository: IUserRepository,
+  ) {}
 
   @Get('profile')
-  getProfile(@Request() req: any) {
+  async getProfile(@Request() req: any) {
+    const user = await this.userRepository.findById(req.user.sub);
+    if (user) {
+      delete (user as any).passwordHash;
+      delete (user as any).refreshTokenHash;
+    }
     return {
       message: 'Lấy thông tin cá nhân thành công',
-      user: req.user,
+      user,
     };
   }
 

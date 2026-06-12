@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student } from '../../../../domain/entities/student.entity';
-import { IStudentRepository } from '../../../../domain/repositories/student-repository.interface';
+import { IStudentRepository, GetStudentsQuery } from '../../../../domain/repositories/student-repository.interface';
 import { StudentOrmEntity } from '../entities/student.orm-entity';
 import { StudentMapper } from '../mappers/student.mapper';
 
@@ -33,6 +33,41 @@ export class TypeOrmStudentRepository implements IStudentRepository {
     return orms
       .map(StudentMapper.toDomain)
       .filter((s): s is Student => s !== null);
+  }
+
+  async findPaginated(query: GetStudentsQuery): Promise<{ students: Student[]; total: number }> {
+    const page = query.page || 1;
+    const limit = query.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const qb = this.repository.createQueryBuilder('student');
+
+    if (query.search) {
+      const searchLower = `%${query.search.toLowerCase()}%`;
+      qb.andWhere(
+        '(LOWER(student.first_name) LIKE :search OR LOWER(student.last_name) LIKE :search OR LOWER(student.student_id) LIKE :search OR student.mobile LIKE :search OR LOWER(student.email) LIKE :search)',
+        { search: searchLower }
+      );
+    }
+
+    if (query.status) {
+      qb.andWhere('student.status = :status', { status: query.status });
+    }
+
+    if (query.province) {
+      qb.andWhere('student.province = :province', { province: query.province });
+    }
+
+    qb.orderBy('student.createdAt', 'DESC'); // Sử dụng trường camelCase do TypeORM tự map sang snake_case
+    qb.skip(skip);
+    qb.take(limit);
+
+    const [orms, total] = await qb.getManyAndCount();
+    const students = orms
+      .map(StudentMapper.toDomain)
+      .filter((s): s is Student => s !== null);
+
+    return { students, total };
   }
 
   async findById(id: string): Promise<Student | null> {
