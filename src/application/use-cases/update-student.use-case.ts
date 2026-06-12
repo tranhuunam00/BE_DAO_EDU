@@ -3,7 +3,11 @@ import * as bcrypt from 'bcryptjs';
 import { IStudentRepository } from '../../domain/repositories/student-repository.interface';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { UpdateStudentDto } from '../dtos/student.dto';
+import { User } from '../../domain/entities/user.entity';
+import { Role } from '../../domain/value-objects/role.enum';
 import { Student } from '../../domain/entities/student.entity';
+import { randomUUID } from 'crypto';
+import { ConflictException } from '@nestjs/common';
 import { MinioService } from '../../infrastructure/storage/minio.service';
 
 @Injectable()
@@ -52,17 +56,55 @@ export class UpdateStudentUseCase {
       }
     }
 
-    // Cập nhật thông tin tài khoản đăng nhập nếu học sinh có tài khoản
-    if (student.userId && (dto.loginPassword || dto.loginEmail)) {
+    // Cập nhật hoặc tạo mới thông tin tài khoản đăng nhập
+    if (dto.loginEmail) {
+      if (student.userId) {
+        // Cập nhật account đã có
+        const user = await this.userRepository.findById(student.userId);
+        if (user) {
+          if (dto.loginEmail !== user.email) {
+            const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
+            if (existingUser && existingUser.id !== user.id) {
+              throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
+            }
+            user.email = dto.loginEmail.toLowerCase();
+          }
+          if (dto.loginPassword) {
+            const salt = await bcrypt.genSalt(10);
+            user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+          }
+          await this.userRepository.save(user);
+          student.loginEmail = user.email;
+        }
+      } else {
+        // Tạo account mới cho học sinh chưa có tài khoản
+        const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
+        if (existingUser) {
+          throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
+        const newUserId = randomUUID();
+        const newUser = new User(
+          newUserId,
+          dto.loginEmail.toLowerCase(),
+          passwordHash,
+          student.getFullName(),
+          Role.STUDENT,
+          true
+        );
+        const savedUser = await this.userRepository.save(newUser);
+        
+        student.userId = savedUser.id;
+        student.loginEmail = savedUser.email;
+      }
+    } else if (dto.loginPassword && student.userId) {
+      // Đổi mật khẩu nhưng không đổi email
       const user = await this.userRepository.findById(student.userId);
       if (user) {
-        if (dto.loginEmail && dto.loginEmail !== user.email) {
-          user.email = dto.loginEmail.toLowerCase();
-        }
-        if (dto.loginPassword) {
-          const salt = await bcrypt.genSalt(10);
-          user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
-        }
+        const salt = await bcrypt.genSalt(10);
+        user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
         await this.userRepository.save(user);
       }
     }
