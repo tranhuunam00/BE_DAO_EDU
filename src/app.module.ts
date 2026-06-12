@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RegisterUseCase } from './application/use-cases/register.use-case';
 import { LoginUseCase } from './application/use-cases/login.use-case';
+import { RefreshTokenUseCase } from './application/use-cases/refresh-token.use-case';
 import { AddStudentUseCase } from './application/use-cases/add-student.use-case';
 import { GetStudentsUseCase } from './application/use-cases/get-students.use-case';
 import { IUserRepository } from './domain/repositories/user-repository.interface';
@@ -65,10 +66,14 @@ import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/r
       PermissionOrmEntity,
     ]),
 
-    JwtModule.register({
+    JwtModule.registerAsync({
       global: true,
-      secret: 'SUPER_SECRET_KEY_FOR_DEV_ONLY_12345',
-      signOptions: { expiresIn: '1d' },
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET', 'SUPER_SECRET_KEY_FOR_DEV_ONLY_12345'),
+        signOptions: { expiresIn: '15m' },
+      }),
     }),
   ],
   controllers: [
@@ -81,6 +86,7 @@ import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/r
     AppService,
     RegisterUseCase,
     LoginUseCase,
+    RefreshTokenUseCase,
     AddStudentUseCase,
     GetStudentsUseCase,
     {

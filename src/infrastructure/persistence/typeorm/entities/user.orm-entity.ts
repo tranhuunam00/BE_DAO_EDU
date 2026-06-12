@@ -18,6 +18,9 @@ export class UserOrmEntity {
   @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive!: boolean;
 
+  @Column({ type: 'varchar', name: 'refresh_token_hash', nullable: true })
+  refreshTokenHash!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

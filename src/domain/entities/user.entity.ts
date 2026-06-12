@@ -8,6 +8,7 @@ export class User {
     public name: string,
     public role: Role,
     public isActive: boolean = true,
+    public refreshTokenHash?: string | null,
   ) {}
 
   isAdmin(): boolean {

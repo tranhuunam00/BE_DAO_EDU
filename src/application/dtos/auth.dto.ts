@@ -34,3 +34,10 @@ export class LoginDto {
   @IsNotEmpty({ message: 'Mật khẩu không được để trống' })
   password!: string;
 }
+
+export class RefreshTokenDto {
+  @ApiProperty({ description: 'Refresh Token đã nhận được sau khi đăng nhập hoặc refresh lần trước', example: 'eyJhbGciOi...' })
+  @IsString({ message: 'Refresh Token phải là chuỗi' })
+  @IsNotEmpty({ message: 'Refresh Token không được để trống' })
+  refreshToken!: string;
+}

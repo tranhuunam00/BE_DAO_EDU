@@ -1,5 +1,6 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { Student } from '../../domain/entities/student.entity';
 import { User } from '../../domain/entities/user.entity';
 import { Role } from '../../domain/value-objects/role.enum';
@@ -27,7 +28,7 @@ export class AddStudentUseCase {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
       
-      const newUserId = `usr-${Math.random().toString(36).substring(2, 11)}`;
+      const newUserId = randomUUID();
       const user = new User(
         newUserId,
         dto.loginEmail.toLowerCase(),
@@ -47,7 +48,7 @@ export class AddStudentUseCase {
     const studentId = `STU-${1001 + count}`;
 
     // 3. Khởi tạo đối tượng domain Student
-    const randomUuid = `std-${Math.random().toString(36).substring(2, 11)}`;
+    const randomUuid = randomUUID();
     const student = new Student(
       randomUuid,
       studentId,

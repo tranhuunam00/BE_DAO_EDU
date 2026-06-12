@@ -12,7 +12,7 @@ export class LoginUseCase {
     private readonly jwtService: JwtService,
   ) {}
 
-  async execute(dto: LoginDto): Promise<{ accessToken: string; user: User }> {
+  async execute(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string; user: User }> {
     const user = await this.userRepository.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
@@ -30,13 +30,21 @@ export class LoginUseCase {
       role: user.role,
     };
 
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign({ sub: user.id }, { expiresIn: '7d' });
 
-    // Remove passwordHash from return object but preserve class methods
+    // Băm và lưu refresh token
+    const salt = await bcrypt.genSalt(10);
+    user.refreshTokenHash = await bcrypt.hash(refreshToken, salt);
+    await this.userRepository.save(user);
+
+    // Remove passwordHash and refreshTokenHash from return object but preserve class methods
     delete (user as any).passwordHash;
+    delete (user as any).refreshTokenHash;
 
     return {
       accessToken,
+      refreshToken,
       user,
     };
   }

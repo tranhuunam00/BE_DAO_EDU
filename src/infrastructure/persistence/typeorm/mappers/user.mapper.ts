@@ -13,6 +13,7 @@ export class UserMapper {
       orm.name,
       orm.role ? (orm.role.name as Role) : Role.STUDENT,
       orm.isActive,
+      orm.refreshTokenHash,
     );
   }
 
@@ -24,6 +25,7 @@ export class UserMapper {
     orm.passwordHash = domain.passwordHash;
     orm.name = domain.name;
     orm.isActive = domain.isActive;
+    orm.refreshTokenHash = domain.refreshTokenHash || null;
     if (roleOrm) {
       orm.role = roleOrm;
     }
