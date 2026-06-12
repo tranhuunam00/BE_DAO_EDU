@@ -1,15 +1,32 @@
 import { Controller, Get, UseGuards, Request } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
+import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
+import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
   constructor(
     private readonly userRepository: IUserRepository,
+    @InjectRepository(StudentOrmEntity)
+    private readonly studentRepo: Repository<StudentOrmEntity>,
+    @InjectRepository(ClassStudentOrmEntity)
+    private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
+    @InjectRepository(ClassSessionOrmEntity)
+    private readonly sessionRepo: Repository<ClassSessionOrmEntity>,
+    @InjectRepository(StudentAttendanceOrmEntity)
+    private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
+    @InjectRepository(ClassOrmEntity)
+    private readonly classRepo: Repository<ClassOrmEntity>,
   ) {}
 
   @Get('profile')
@@ -27,14 +44,18 @@ export class DashboardController {
 
   @Get('admin')
   @Roles(Role.ADMIN)
-  getAdminData() {
+  async getAdminData() {
+    // Count stats dynamically
+    const classCount = await this.classRepo.count();
+    const studentCount = await this.studentRepo.count();
+
     return {
       message: 'Chào mừng bạn đến với Dashboard của Admin',
       statistics: {
         totalUsers: 45,
         totalTeachers: 8,
-        totalStudents: 35,
-        classCount: 5,
+        totalStudents: studentCount,
+        classCount: classCount,
         systemStatus: 'Hoạt động bình thường',
       },
       auditLogs: [
@@ -64,12 +85,90 @@ export class DashboardController {
 
   @Get('student')
   @Roles(Role.STUDENT)
-  getStudentData(@Request() req: any) {
+  async getStudentData(@Request() req: any) {
+    // 1. Find the student profile using the user's ID
+    const student = await this.studentRepo.findOne({
+      where: { userId: req.user.sub },
+      relations: { user: true },
+    });
+
+    if (!student) {
+      return {
+        message: 'Chào mừng Học sinh đến với Cổng thông tin học tập',
+        studentInfo: { id: req.user.sub, name: req.user.email, role: req.user.role },
+        grades: [],
+        upcomingExams: [],
+        sessions: [],
+      };
+    }
+
+    // 2. Find classes this student is enrolled in (Active)
+    const classStudents = await this.classStudentRepo.find({
+      where: { studentId: student.id, status: 'Active' },
+    });
+    const classIds = classStudents.map((cs) => cs.classId);
+
+    let sessionsList: any[] = [];
+
+    if (classIds.length > 0) {
+      // 3. Find all sessions of those classes
+      const sessions = await this.sessionRepo
+        .createQueryBuilder('s')
+        .leftJoinAndSelect('s.classEntity', 'c')
+        .leftJoinAndSelect('s.room', 'r')
+        .leftJoinAndSelect('s.teacher', 't')
+        .where('s.class_id IN (:...classIds)', { classIds })
+        .orderBy('s.date', 'ASC')
+        .addOrderBy('s.start_time', 'ASC')
+        .getMany();
+
+      // 4. Map each session with student attendance status
+      sessionsList = await Promise.all(
+        sessions.map(async (session) => {
+          const attendance = await this.attendanceRepo.findOne({
+            where: { classSessionId: session.id, studentId: student.id },
+          });
+
+          // Determine color based on session and attendance status:
+          // - Chưa diễn ra: color: Blue (xanh nước biển)
+          // - Diễn ra rồi có tham gia: color: Green (xanh lá cây)
+          // - Diễn ra rồi không tham gia: color: Red (đỏ)
+          let attendanceColor = 'blue'; // blue (Scheduled)
+          let attendanceText = 'Chưa diễn ra';
+
+          if (session.status === 'Completed' || session.status === 'In-Progress') {
+            if (attendance && attendance.isPresent) {
+              attendanceColor = 'green';
+              attendanceText = 'Có tham gia';
+            } else {
+              attendanceColor = 'red';
+              attendanceText = 'Vắng mặt';
+            }
+          }
+
+          return {
+            id: session.id,
+            className: session.classEntity?.className || 'Lớp học',
+            classCode: session.classEntity?.classCode || '',
+            date: session.date,
+            startTime: session.startTime,
+            endTime: session.endTime,
+            roomName: session.room?.name || 'Chưa xếp phòng',
+            teacherName: session.teacher ? `${session.teacher.firstName} ${session.teacher.lastName}` : 'Chưa gán',
+            status: session.status,
+            attendanceColor,
+            attendanceText,
+            isPresent: attendance ? attendance.isPresent : false,
+          };
+        }),
+      );
+    }
+
     return {
       message: 'Chào mừng Học sinh đến với Cổng thông tin học tập',
       studentInfo: {
-        id: req.user.sub,
-        name: req.user.email,
+        id: student.id,
+        name: `${student.firstName} ${student.lastName}`,
         role: req.user.role,
       },
       grades: [
@@ -78,7 +177,8 @@ export class DashboardController {
       ],
       upcomingExams: [
         { subject: 'Toán học', date: '2026-06-18', time: '08:00 AM', type: 'Thi giữa kỳ' }
-      ]
+      ],
+      sessions: sessionsList,
     };
   }
 }

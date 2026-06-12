@@ -5,18 +5,36 @@ import { Center } from '../../../../domain/entities/center.entity';
 import { ICenterRepository, GetCentersQuery } from '../../../../domain/repositories/center-repository.interface';
 import { CenterOrmEntity } from '../entities/center.orm-entity';
 import { CenterMapper } from '../mappers/center.mapper';
+import { RoomOrmEntity } from '../entities/room.orm-entity';
 
 @Injectable()
 export class TypeOrmCenterRepository implements ICenterRepository {
   constructor(
     @InjectRepository(CenterOrmEntity)
     private readonly repository: Repository<CenterOrmEntity>,
+    @InjectRepository(RoomOrmEntity)
+    private readonly roomRepository: Repository<RoomOrmEntity>,
   ) {}
 
   async save(center: Center): Promise<Center> {
     const orm = CenterMapper.toOrm(center);
     if (!orm) throw new Error('Cannot map Center to ORM');
+
+    // Check if new center
+    const isNew = !(await this.repository.findOne({ where: { id: center.id } }));
+
     const saved = await this.repository.save(orm);
+
+    if (isNew) {
+      // Create 3 default rooms for this new center
+      const defaultRooms = [
+        { centerId: saved.id, name: 'Phòng Lab 101', capacity: 30, status: 'Active' },
+        { centerId: saved.id, name: 'Phòng Lý thuyết 201', capacity: 40, status: 'Active' },
+        { centerId: saved.id, name: 'Phòng VIP 301', capacity: 15, status: 'Active' },
+      ];
+      await this.roomRepository.save(this.roomRepository.create(defaultRooms));
+    }
+
     const domain = CenterMapper.toDomain(saved);
     if (!domain) throw new Error('Cannot map saved Center to Domain');
     return domain;

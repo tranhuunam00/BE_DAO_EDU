@@ -27,6 +27,15 @@ import { TypeOrmUserRepository } from './infrastructure/persistence/typeorm/repo
 import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-student.repository';
 import { MinioService } from './infrastructure/storage/minio.service';
 import { CenterOrmEntity } from './infrastructure/persistence/typeorm/entities/center.orm-entity';
+import { RoomOrmEntity } from './infrastructure/persistence/typeorm/entities/room.orm-entity';
+import { CourseOrmEntity } from './infrastructure/persistence/typeorm/entities/course.orm-entity';
+import { CourseLevelOrmEntity } from './infrastructure/persistence/typeorm/entities/course-level.orm-entity';
+import { CourseLevelPricingOrmEntity } from './infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
+import { ClassOrmEntity } from './infrastructure/persistence/typeorm/entities/class.orm-entity';
+import { ClassScheduleOrmEntity } from './infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
+import { ClassSessionOrmEntity } from './infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { ClassStudentOrmEntity } from './infrastructure/persistence/typeorm/entities/class-student.orm-entity';
+import { StudentAttendanceOrmEntity } from './infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { TypeOrmTeacherRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-teacher.repository';
 import { TypeOrmCenterRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-center.repository';
 import { ITeacherRepository } from './domain/repositories/teacher-repository.interface';
@@ -41,6 +50,9 @@ import { GetCenterByIdUseCase } from './application/use-cases/get-center-by-id.u
 import { UpdateCenterUseCase } from './application/use-cases/update-center.use-case';
 import { TeacherController } from './presentation/controllers/teacher.controller';
 import { CenterController } from './presentation/controllers/center.controller';
+import { CourseController } from './presentation/controllers/course.controller';
+import { RoomController } from './presentation/controllers/room.controller';
+import { ClassController } from './presentation/controllers/class.controller';
 
 @Module({
   imports: [
@@ -67,6 +79,15 @@ import { CenterController } from './presentation/controllers/center.controller';
           RoleOrmEntity,
           PermissionOrmEntity,
           CenterOrmEntity,
+          RoomOrmEntity,
+          CourseOrmEntity,
+          CourseLevelOrmEntity,
+          CourseLevelPricingOrmEntity,
+          ClassOrmEntity,
+          ClassScheduleOrmEntity,
+          ClassSessionOrmEntity,
+          ClassStudentOrmEntity,
+          StudentAttendanceOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
@@ -84,6 +105,15 @@ import { CenterController } from './presentation/controllers/center.controller';
       RoleOrmEntity,
       PermissionOrmEntity,
       CenterOrmEntity,
+      RoomOrmEntity,
+      CourseOrmEntity,
+      CourseLevelOrmEntity,
+      CourseLevelPricingOrmEntity,
+      ClassOrmEntity,
+      ClassScheduleOrmEntity,
+      ClassSessionOrmEntity,
+      ClassStudentOrmEntity,
+      StudentAttendanceOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -103,6 +133,9 @@ import { CenterController } from './presentation/controllers/center.controller';
     StudentController,
     TeacherController,
     CenterController,
+    CourseController,
+    RoomController,
+    ClassController,
   ],
   providers: [
     AppService,

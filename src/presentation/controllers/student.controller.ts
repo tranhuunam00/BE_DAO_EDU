@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
@@ -9,6 +11,7 @@ import { GetStudentsUseCase } from '../../application/use-cases/get-students.use
 import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
 import { CreateStudentDto, UpdateStudentDto } from '../../application/dtos/student.dto';
+import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 
 @ApiTags('Học sinh (Students)')
 @ApiBearerAuth()
@@ -20,6 +23,8 @@ export class StudentController {
     private readonly getStudentsUseCase: GetStudentsUseCase,
     private readonly getStudentByIdUseCase: GetStudentByIdUseCase,
     private readonly updateStudentUseCase: UpdateStudentUseCase,
+    @InjectRepository(ClassStudentOrmEntity)
+    private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
   ) {}
 
   @Post()
@@ -77,5 +82,22 @@ export class StudentController {
   @ApiResponse({ status: 403, description: 'Từ chối truy cập (Bạn không phải ADMIN)' })
   async update(@Param('id') id: string, @Body() dto: UpdateStudentDto) {
     return this.updateStudentUseCase.execute(id, dto);
+  }
+
+  @Get(':id/classes')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy danh sách lớp học của học sinh' })
+  async getStudentClasses(@Param('id') studentId: string) {
+    return this.classStudentRepo.find({
+      where: { studentId },
+      relations: {
+        classEntity: {
+          course: true,
+          courseLevel: true,
+          center: true,
+        }
+      },
+      order: { joinedDate: 'DESC' }
+    });
   }
 }
