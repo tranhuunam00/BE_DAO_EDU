@@ -4,12 +4,14 @@ import { IStudentRepository } from '../../domain/repositories/student-repository
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { UpdateStudentDto } from '../dtos/student.dto';
 import { Student } from '../../domain/entities/student.entity';
+import { MinioService } from '../../infrastructure/storage/minio.service';
 
 @Injectable()
 export class UpdateStudentUseCase {
   constructor(
     private readonly studentRepository: IStudentRepository,
     private readonly userRepository: IUserRepository,
+    private readonly minioService: MinioService,
   ) {}
 
   async execute(id: string, dto: UpdateStudentDto): Promise<Student> {
@@ -42,7 +44,13 @@ export class UpdateStudentUseCase {
     if (dto.primaryAddress !== undefined) student.primaryAddress = dto.primaryAddress;
     if (dto.oldAddress !== undefined) student.oldAddress = dto.oldAddress;
     if (dto.status !== undefined) student.status = dto.status;
-    if (dto.avatar !== undefined) student.avatar = dto.avatar;
+    if (dto.avatar !== undefined) {
+      if (dto.avatar && dto.avatar.startsWith('data:image')) {
+        student.avatar = await this.minioService.uploadBase64Image(dto.avatar, 'avatars');
+      } else {
+        student.avatar = dto.avatar;
+      }
+    }
 
     // Cập nhật thông tin tài khoản đăng nhập nếu học sinh có tài khoản
     if (student.userId && (dto.loginPassword || dto.loginEmail)) {

@@ -25,6 +25,7 @@ import { PermissionOrmEntity } from './infrastructure/persistence/typeorm/entiti
 import { TeacherOrmEntity } from './infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { TypeOrmUserRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-user.repository';
 import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-student.repository';
+import { MinioService } from './infrastructure/storage/minio.service';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/r
       provide: IStudentRepository,
       useClass: TypeOrmStudentRepository,
     },
+    MinioService,
   ],
 })
 export class AppModule {}
