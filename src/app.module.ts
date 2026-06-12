@@ -26,6 +26,21 @@ import { TeacherOrmEntity } from './infrastructure/persistence/typeorm/entities/
 import { TypeOrmUserRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-user.repository';
 import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-student.repository';
 import { MinioService } from './infrastructure/storage/minio.service';
+import { CenterOrmEntity } from './infrastructure/persistence/typeorm/entities/center.orm-entity';
+import { TypeOrmTeacherRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-teacher.repository';
+import { TypeOrmCenterRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-center.repository';
+import { ITeacherRepository } from './domain/repositories/teacher-repository.interface';
+import { ICenterRepository } from './domain/repositories/center-repository.interface';
+import { AddTeacherUseCase } from './application/use-cases/add-teacher.use-case';
+import { GetTeachersUseCase } from './application/use-cases/get-teachers.use-case';
+import { GetTeacherByIdUseCase } from './application/use-cases/get-teacher-by-id.use-case';
+import { UpdateTeacherUseCase } from './application/use-cases/update-teacher.use-case';
+import { AddCenterUseCase } from './application/use-cases/add-center.use-case';
+import { GetCentersUseCase } from './application/use-cases/get-centers.use-case';
+import { GetCenterByIdUseCase } from './application/use-cases/get-center-by-id.use-case';
+import { UpdateCenterUseCase } from './application/use-cases/update-center.use-case';
+import { TeacherController } from './presentation/controllers/teacher.controller';
+import { CenterController } from './presentation/controllers/center.controller';
 
 @Module({
   imports: [
@@ -51,6 +66,7 @@ import { MinioService } from './infrastructure/storage/minio.service';
           TeacherOrmEntity,
           RoleOrmEntity,
           PermissionOrmEntity,
+          CenterOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
@@ -67,6 +83,7 @@ import { MinioService } from './infrastructure/storage/minio.service';
       TeacherOrmEntity,
       RoleOrmEntity,
       PermissionOrmEntity,
+      CenterOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -83,7 +100,9 @@ import { MinioService } from './infrastructure/storage/minio.service';
     AppController, 
     AuthController, 
     DashboardController, 
-    StudentController
+    StudentController,
+    TeacherController,
+    CenterController,
   ],
   providers: [
     AppService,
@@ -94,6 +113,15 @@ import { MinioService } from './infrastructure/storage/minio.service';
     GetStudentsUseCase,
     GetStudentByIdUseCase,
     UpdateStudentUseCase,
+    AddTeacherUseCase,
+    GetTeachersUseCase,
+    GetTeacherByIdUseCase,
+    UpdateTeacherUseCase,
+    AddCenterUseCase,
+    GetCentersUseCase,
+    GetCenterByIdUseCase,
+    UpdateCenterUseCase,
+    MinioService,
     {
       provide: IUserRepository,
       useClass: TypeOrmUserRepository,
@@ -102,7 +130,14 @@ import { MinioService } from './infrastructure/storage/minio.service';
       provide: IStudentRepository,
       useClass: TypeOrmStudentRepository,
     },
-    MinioService,
+    {
+      provide: ITeacherRepository,
+      useClass: TypeOrmTeacherRepository,
+    },
+    {
+      provide: ICenterRepository,
+      useClass: TypeOrmCenterRepository,
+    },
   ],
 })
 export class AppModule {}

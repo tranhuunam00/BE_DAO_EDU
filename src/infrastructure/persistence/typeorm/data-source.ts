@@ -10,6 +10,7 @@ import { StudentOrmEntity } from './entities/student.orm-entity';
 import { TeacherOrmEntity } from './entities/teacher.orm-entity';
 import { RoleOrmEntity } from './entities/role.orm-entity';
 import { PermissionOrmEntity } from './entities/permission.orm-entity';
+import { CenterOrmEntity } from './entities/center.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -24,6 +25,7 @@ export const AppDataSource = new DataSource({
     TeacherOrmEntity,
     RoleOrmEntity,
     PermissionOrmEntity,
+    CenterOrmEntity,
   ],
   migrations: [
     path.join(__dirname, '/migrations/*.{ts,js}')
