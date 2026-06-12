@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Dịch vụ Cơ sở dữ liệu: PostgreSQL
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-dao-edu-infra}-postgres
+    restart: ${RESTART_POLICY:-always}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # BẢO MẬT: Chỉ lắng nghe trên 127.0.0.1 (localhost) của server.
+      # Tránh bị tấn công brute-force hoặc quét cổng từ môi trường mạng bên ngoài.
+      # Sử dụng SSH Tunneling (Local Port Forwarding) từ máy cá nhân để kết nối an toàn.
+      - "127.0.0.1:${POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - dao_edu_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+    healthcheck:
+      # Kiểm tra tình trạng sẵn sàng của DB trước khi các dịch vụ khác sử dụng
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # =============================================================================
+  # Dịch vụ Lưu trữ tệp: MinIO (S3-compatible Storage)
+  # =============================================================================
+  minio:
+    image: minio/minio:RELEASE.2023-11-06T22-40-42Z # Phiên bản cụ thể đảm bảo tính ổn định
+    container_name: ${COMPOSE_PROJECT_NAME:-dao-edu-infra}-minio
+    restart: ${RESTART_POLICY:-always}
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      # Cổng API chính thức (cho ứng dụng Backend kết nối)
+      # Khuyến nghị bảo mật: Chỉ cho phép localhost để chạy qua Reverse Proxy (Nginx/Caddy) với HTTPS.
+      # Nếu muốn mở trực tiếp ra internet công cộng (không khuyến nghị), sửa thành: "9005:9000"
+      - "127.0.0.1:${MINIO_API_PORT:-9005}:9000"
+
+      # Cổng giao diện Console quản trị (đăng nhập Web UI)
+      # Khuyến nghị bảo mật: Chỉ cho phép localhost để chạy qua Reverse Proxy (Nginx/Caddy) với HTTPS.
+      # Nếu muốn mở trực tiếp ra internet công cộng (không khuyến nghị), sửa thành: "9006:9001"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9006}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - dao_edu_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+    healthcheck:
+      # Kiểm tra tình trạng sẵn sàng của MinIO qua API endpoint
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# =============================================================================
+# Mạng và Khối lưu trữ (Volumes & Networks)
+# =============================================================================
+networks:
+  dao_edu_network:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME:-dao-edu-infra}-network
+
+volumes:
+  pg_data:
+    name: ${COMPOSE_PROJECT_NAME:-dao-edu-infra}-postgres-data
+  minio_data:
+    name: ${COMPOSE_PROJECT_NAME:-dao-edu-infra}-minio-data
