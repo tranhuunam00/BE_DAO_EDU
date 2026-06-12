@@ -26,10 +26,7 @@ export class RegisterUseCase {
       passwordHash,
       dto.name,
       dto.role,
-      dto.specialty,
-      dto.licenseNumber,
-      dto.dateOfBirth,
-      dto.medicalHistory,
+      true,
     );
 
     const savedUser = await this.userRepository.save(user);

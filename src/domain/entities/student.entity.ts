@@ -1,6 +1,7 @@
 export class Student {
   constructor(
     public id: string,
+    public studentId: string,
     public firstName: string,
     public lastName: string,
     public nickName: string | undefined,
@@ -8,13 +9,25 @@ export class Student {
     public mobile: string,
     public email: string | undefined,
     public birthdate: string,
-    public parentName: string | undefined,
-    public relationship: string | undefined,
-    public citizenId: string | undefined,
-    public status: string, // e.g. "Waiting for class", "Studying", "Suspended"
-    public primaryAddress: string,
+    public parentGuardian1: string | undefined,
+    public parentGuardian2: string | undefined,
+    public parent1CitizenId: string | undefined,
+    public parent2CitizenId: string | undefined,
+    public studentCitizenId: string | undefined,
+    public relationship1: string | undefined,
+    public relationship2: string | undefined,
+    public otherPhone1: string | undefined,
+    public otherPhone2: string | undefined,
     public description: string | undefined,
+    public country: string | undefined,
+    public province: string | undefined,
+    public districtWard: string | undefined,
+    public primaryAddress: string,
+    public oldAddress: string | undefined,
+    public status: string,
+    public userId: string | undefined,
     public createdAt: Date = new Date(),
+    public updatedAt: Date = new Date(),
   ) {}
 
   getFullName(): string {

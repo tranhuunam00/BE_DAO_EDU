@@ -7,12 +7,7 @@ export class User {
     public passwordHash: string,
     public name: string,
     public role: Role,
-    // Teacher specific fields
-    public subject?: string,
-    public employeeId?: string,
-    // Student specific fields
-    public dateOfBirth?: string,
-    public classId?: string,
+    public isActive: boolean = true,
   ) {}
 
   isAdmin(): boolean {
