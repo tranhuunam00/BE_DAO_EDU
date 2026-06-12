@@ -14,7 +14,7 @@ services:
       # BẢO MẬT: Chỉ lắng nghe trên 127.0.0.1 (localhost) của server.
       # Tránh bị tấn công brute-force hoặc quét cổng từ môi trường mạng bên ngoài.
       # Sử dụng SSH Tunneling (Local Port Forwarding) từ máy cá nhân để kết nối an toàn.
-      - "127.0.0.1:${POSTGRES_PORT:-5435}:5432"
+      - "${POSTGRES_PORT:-5435}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
@@ -47,12 +47,12 @@ services:
       # Cổng API chính thức (cho ứng dụng Backend kết nối)
       # Khuyến nghị bảo mật: Chỉ cho phép localhost để chạy qua Reverse Proxy (Nginx/Caddy) với HTTPS.
       # Nếu muốn mở trực tiếp ra internet công cộng (không khuyến nghị), sửa thành: "9005:9000"
-      - "127.0.0.1:${MINIO_API_PORT:-9005}:9000"
+      - "${MINIO_API_PORT:-9005}:9000"
 
       # Cổng giao diện Console quản trị (đăng nhập Web UI)
       # Khuyến nghị bảo mật: Chỉ cho phép localhost để chạy qua Reverse Proxy (Nginx/Caddy) với HTTPS.
       # Nếu muốn mở trực tiếp ra internet công cộng (không khuyến nghị), sửa thành: "9006:9001"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9006}:9001"
+      - "${MINIO_CONSOLE_PORT:-9006}:9001"
     volumes:
       - minio_data:/data
     networks:
