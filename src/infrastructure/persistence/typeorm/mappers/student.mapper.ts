@@ -31,6 +31,8 @@ export class StudentMapper {
       orm.oldAddress || undefined,
       orm.status,
       orm.userId || undefined,
+      orm.avatar || undefined,
+      orm.user ? orm.user.email : undefined,
       orm.createdAt,
       orm.updatedAt,
     );
@@ -65,6 +67,7 @@ export class StudentMapper {
     orm.oldAddress = domain.oldAddress ?? null;
     orm.status = domain.status;
     orm.userId = domain.userId ?? null;
+    orm.avatar = domain.avatar ?? null;
     orm.createdAt = domain.createdAt;
     orm.updatedAt = domain.updatedAt;
     return orm;

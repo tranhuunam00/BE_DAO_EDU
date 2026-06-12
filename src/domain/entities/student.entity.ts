@@ -26,6 +26,8 @@ export class Student {
     public oldAddress: string | undefined,
     public status: string,
     public userId: string | undefined,
+    public avatar: string | undefined = undefined,
+    public loginEmail: string | undefined = undefined,
     public createdAt: Date = new Date(),
     public updatedAt: Date = new Date(),
   ) {}

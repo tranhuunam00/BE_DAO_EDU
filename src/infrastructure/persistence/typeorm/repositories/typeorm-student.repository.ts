@@ -71,7 +71,7 @@ export class TypeOrmStudentRepository implements IStudentRepository {
   }
 
   async findById(id: string): Promise<Student | null> {
-    const orm = await this.repository.findOne({ where: { id } });
+    const orm = await this.repository.findOne({ where: { id }, relations: { user: true } });
     return StudentMapper.toDomain(orm);
   }
 

@@ -9,6 +9,8 @@ import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RefreshTokenUseCase } from './application/use-cases/refresh-token.use-case';
 import { AddStudentUseCase } from './application/use-cases/add-student.use-case';
 import { GetStudentsUseCase } from './application/use-cases/get-students.use-case';
+import { GetStudentByIdUseCase } from './application/use-cases/get-student-by-id.use-case';
+import { UpdateStudentUseCase } from './application/use-cases/update-student.use-case';
 import { IUserRepository } from './domain/repositories/user-repository.interface';
 import { IStudentRepository } from './domain/repositories/student-repository.interface';
 import { AuthController } from './presentation/controllers/auth.controller';
@@ -89,6 +91,8 @@ import { TypeOrmStudentRepository } from './infrastructure/persistence/typeorm/r
     RefreshTokenUseCase,
     AddStudentUseCase,
     GetStudentsUseCase,
+    GetStudentByIdUseCase,
+    UpdateStudentUseCase,
     {
       provide: IUserRepository,
       useClass: TypeOrmUserRepository,

@@ -78,6 +78,9 @@ export class StudentOrmEntity {
   @Column({ type: 'varchar', default: 'Waiting for class' })
   status!: string;
 
+  @Column({ type: 'text', nullable: true })
+  avatar!: string | null;
+
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId!: string | null;
 

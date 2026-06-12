@@ -127,4 +127,38 @@ export class CreateStudentDto {
   @IsString()
   @IsOptional()
   loginPassword?: string;
+
+  @ApiPropertyOptional({ description: 'Ảnh đại diện học sinh (Base64 hoặc URL)', example: 'data:image/png;base64,...' })
+  @IsString()
+  @IsOptional()
+  avatar?: string;
+}
+
+export class UpdateStudentDto {
+  @IsString() @IsOptional() firstName?: string;
+  @IsString() @IsOptional() lastName?: string;
+  @IsString() @IsOptional() nickName?: string;
+  @IsString() @IsOptional() gender?: string;
+  @IsString() @IsOptional() mobile?: string;
+  @IsString() @IsOptional() email?: string;
+  @IsString() @IsOptional() birthdate?: string;
+  @IsString() @IsOptional() parentGuardian1?: string;
+  @IsString() @IsOptional() parentGuardian2?: string;
+  @IsString() @IsOptional() parent1CitizenId?: string;
+  @IsString() @IsOptional() parent2CitizenId?: string;
+  @IsString() @IsOptional() studentCitizenId?: string;
+  @IsString() @IsOptional() relationship1?: string;
+  @IsString() @IsOptional() relationship2?: string;
+  @IsString() @IsOptional() otherPhone1?: string;
+  @IsString() @IsOptional() otherPhone2?: string;
+  @IsString() @IsOptional() description?: string;
+  @IsString() @IsOptional() country?: string;
+  @IsString() @IsOptional() province?: string;
+  @IsString() @IsOptional() districtWard?: string;
+  @IsString() @IsOptional() primaryAddress?: string;
+  @IsString() @IsOptional() oldAddress?: string;
+  @IsString() @IsOptional() status?: string;
+  @IsString() @IsOptional() avatar?: string;
+  @IsEmail({}, { message: 'Email đăng nhập không hợp lệ' }) @IsOptional() loginEmail?: string;
+  @IsString() @IsOptional() loginPassword?: string;
 }

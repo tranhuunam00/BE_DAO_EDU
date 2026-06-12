@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -8,6 +9,10 @@ async function bootstrap() {
 
   // Set API prefix
   app.setGlobalPrefix('api');
+
+  // Tăng giới hạn payload body để hỗ trợ upload ảnh base64
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Configure Swagger Documentation
   const config = new DocumentBuilder()

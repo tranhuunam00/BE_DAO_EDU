@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
@@ -6,16 +6,20 @@ import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { AddStudentUseCase } from '../../application/use-cases/add-student.use-case';
 import { GetStudentsUseCase } from '../../application/use-cases/get-students.use-case';
-import { CreateStudentDto } from '../../application/dtos/student.dto';
+import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
+import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
+import { CreateStudentDto, UpdateStudentDto } from '../../application/dtos/student.dto';
 
 @ApiTags('Học sinh (Students)')
-@ApiBearerAuth() // Đánh dấu API yêu cầu xác thực JWT Bearer Token
+@ApiBearerAuth()
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class StudentController {
   constructor(
     private readonly addStudentUseCase: AddStudentUseCase,
     private readonly getStudentsUseCase: GetStudentsUseCase,
+    private readonly getStudentByIdUseCase: GetStudentByIdUseCase,
+    private readonly updateStudentUseCase: UpdateStudentUseCase,
   ) {}
 
   @Post()
@@ -54,5 +58,24 @@ export class StudentController {
       status,
       province,
     });
+  }
+
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy chi tiết một học sinh theo ID (Dành cho ADMIN & TEACHER)' })
+  @ApiResponse({ status: 200, description: 'Lấy thông tin học sinh thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
+  async findOne(@Param('id') id: string) {
+    return this.getStudentByIdUseCase.execute(id);
+  }
+
+  @Patch(':id')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Cập nhật thông tin học sinh (Chỉ dành cho ADMIN)' })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
+  @ApiResponse({ status: 403, description: 'Từ chối truy cập (Bạn không phải ADMIN)' })
+  async update(@Param('id') id: string, @Body() dto: UpdateStudentDto) {
+    return this.updateStudentUseCase.execute(id, dto);
   }
 }

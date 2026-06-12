@@ -76,6 +76,7 @@ export class AddStudentUseCase {
       dto.oldAddress,
       dto.status || 'Waiting for class',
       createdUserId,
+      dto.avatar,
     );
 
     return this.studentRepository.save(student);
