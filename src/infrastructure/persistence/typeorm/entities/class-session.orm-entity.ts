@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { ClassOrmEntity } from './class.orm-entity';
 import { RoomOrmEntity } from './room.orm-entity';
 import { TeacherOrmEntity } from './teacher.orm-entity';
+import { TeacherMonthlyWageOrmEntity } from './teacher-monthly-wage.orm-entity';
 
 @Entity('class_sessions')
 export class ClassSessionOrmEntity {
@@ -16,6 +17,9 @@ export class ClassSessionOrmEntity {
 
   @Column({ type: 'uuid', name: 'teacher_id', nullable: true })
   teacherId!: string | null;
+
+  @Column({ type: 'uuid', name: 'wage_id', nullable: true })
+  wageId!: string | null;
 
   @Column({ type: 'date' })
   date!: string;
@@ -49,4 +53,8 @@ export class ClassSessionOrmEntity {
   @ManyToOne(() => TeacherOrmEntity)
   @JoinColumn({ name: 'teacher_id' })
   teacher!: TeacherOrmEntity;
+
+  @ManyToOne(() => TeacherMonthlyWageOrmEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'wage_id' })
+  wage!: TeacherMonthlyWageOrmEntity | null;
 }

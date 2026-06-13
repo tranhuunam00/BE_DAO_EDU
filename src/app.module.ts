@@ -36,6 +36,12 @@ import { ClassScheduleOrmEntity } from './infrastructure/persistence/typeorm/ent
 import { ClassSessionOrmEntity } from './infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { ClassStudentOrmEntity } from './infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 import { StudentAttendanceOrmEntity } from './infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { StudentMonthlyBillOrmEntity } from './infrastructure/persistence/typeorm/entities/student-monthly-bill.orm-entity';
+import { TeacherMonthlyWageOrmEntity } from './infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
+import { StudentMonthlyBillItemOrmEntity } from './infrastructure/persistence/typeorm/entities/student-monthly-bill-item.orm-entity';
+import { TeacherMonthlyWageItemOrmEntity } from './infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
+import { PaymentPeriodOrmEntity } from './infrastructure/persistence/typeorm/entities/payment-period.orm-entity';
+import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
 import { TypeOrmTeacherRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-teacher.repository';
 import { TypeOrmCenterRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-center.repository';
 import { ITeacherRepository } from './domain/repositories/teacher-repository.interface';
@@ -88,6 +94,11 @@ import { ClassController } from './presentation/controllers/class.controller';
           ClassSessionOrmEntity,
           ClassStudentOrmEntity,
           StudentAttendanceOrmEntity,
+          StudentMonthlyBillOrmEntity,
+          TeacherMonthlyWageOrmEntity,
+          StudentMonthlyBillItemOrmEntity,
+          TeacherMonthlyWageItemOrmEntity,
+          PaymentPeriodOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
@@ -114,6 +125,11 @@ import { ClassController } from './presentation/controllers/class.controller';
       ClassSessionOrmEntity,
       ClassStudentOrmEntity,
       StudentAttendanceOrmEntity,
+      StudentMonthlyBillOrmEntity,
+      TeacherMonthlyWageOrmEntity,
+      StudentMonthlyBillItemOrmEntity,
+      TeacherMonthlyWageItemOrmEntity,
+      PaymentPeriodOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -136,6 +152,7 @@ import { ClassController } from './presentation/controllers/class.controller';
     CourseController,
     RoomController,
     ClassController,
+    PaymentPeriodController,
   ],
   providers: [
     AppService,

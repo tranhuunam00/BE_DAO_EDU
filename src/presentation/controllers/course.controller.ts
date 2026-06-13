@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ConflictException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { CourseLevelOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level.orm-entity';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
@@ -160,11 +160,60 @@ export class CourseController {
   async addPricing(@Param('levelId') levelId: string, @Body() dto: CourseLevelPricingDto) {
     const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
 
+    // Validate new dates overlap with any existing records
+    const pricingList = await this.pricingRepo.find({ where: { courseLevelId: level.id } });
+    const newFrom = dto.effectiveFrom;
+    const newTo = dto.effectiveTo || null;
+
+    if (newTo && newFrom > newTo) {
+      throw new ConflictException('Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
+    }
+
+    // 1. Auto-cap the current open-ended pricing (where effectiveTo is null)
+    const activePricing = await this.pricingRepo.findOne({
+      where: { courseLevelId: level.id, effectiveTo: IsNull() },
+    });
+
+    if (activePricing) {
+      if (newFrom <= activePricing.effectiveFrom) {
+        throw new ConflictException(
+          `Ngày bắt đầu áp dụng mới (${newFrom}) phải sau ngày bắt đầu của giá hiện hành (${activePricing.effectiveFrom}).`
+        );
+      }
+
+      // Cap the previous open pricing at 1 day before the new one starts
+      const prevDate = new Date(newFrom);
+      prevDate.setDate(prevDate.getDate() - 1);
+      activePricing.effectiveTo = prevDate.toISOString().split('T')[0];
+      await this.pricingRepo.save(activePricing);
+    }
+
+    // 2. Perform general overlap validation against all OTHER records (now including the capped activePricing)
+    for (const p of pricingList) {
+      if (p.id === activePricing?.id) {
+        // Double check against the updated/capped active pricing just in case
+        const capTo = activePricing.effectiveTo;
+        if (capTo && (newFrom <= capTo) && (newTo === null || activePricing.effectiveFrom <= newTo)) {
+          throw new ConflictException(`Khoảng thời gian này bị trùng lặp với giá hiện hành đã được điều chỉnh.`);
+        }
+        continue;
+      }
+      
+      const pFrom = p.effectiveFrom;
+      const pTo = p.effectiveTo;
+
+      const overlap = (pTo === null || newFrom <= pTo) && (newTo === null || pFrom <= newTo);
+      if (overlap) {
+        throw new ConflictException(`Khoảng thời gian áp dụng trùng lặp với bảng giá đã cấu hình (${pFrom} - ${pTo || 'nay'}).`);
+      }
+    }
+
     const pricing = this.pricingRepo.create({
       courseLevelId: level.id,
       pricePerSession: dto.pricePerSession,
-      effectiveFrom: dto.effectiveFrom,
-      effectiveTo: dto.effectiveTo || null,
+      teacherWagePerSession: dto.teacherWagePerSession,
+      effectiveFrom: newFrom,
+      effectiveTo: newTo,
     });
 
     return this.pricingRepo.save(pricing);

@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { ClassSessionOrmEntity } from './class-session.orm-entity';
 import { StudentOrmEntity } from './student.orm-entity';
+import { StudentMonthlyBillOrmEntity } from './student-monthly-bill.orm-entity';
 
 @Entity('student_attendance')
 export class StudentAttendanceOrmEntity {
@@ -12,6 +13,9 @@ export class StudentAttendanceOrmEntity {
 
   @Column({ type: 'uuid', name: 'student_id' })
   studentId!: string;
+
+  @Column({ type: 'uuid', name: 'bill_id', nullable: true })
+  billId!: string | null;
 
   @Column({ type: 'boolean', name: 'is_present', default: false })
   isPresent!: boolean;
@@ -35,4 +39,8 @@ export class StudentAttendanceOrmEntity {
   @ManyToOne(() => StudentOrmEntity)
   @JoinColumn({ name: 'student_id' })
   student!: StudentOrmEntity;
+
+  @ManyToOne(() => StudentMonthlyBillOrmEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'bill_id' })
+  bill!: StudentMonthlyBillOrmEntity | null;
 }

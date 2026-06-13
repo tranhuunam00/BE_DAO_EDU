@@ -11,6 +11,20 @@ import { TeacherOrmEntity } from './entities/teacher.orm-entity';
 import { RoleOrmEntity } from './entities/role.orm-entity';
 import { PermissionOrmEntity } from './entities/permission.orm-entity';
 import { CenterOrmEntity } from './entities/center.orm-entity';
+import { RoomOrmEntity } from './entities/room.orm-entity';
+import { CourseOrmEntity } from './entities/course.orm-entity';
+import { CourseLevelOrmEntity } from './entities/course-level.orm-entity';
+import { CourseLevelPricingOrmEntity } from './entities/course-level-pricing.orm-entity';
+import { ClassOrmEntity } from './entities/class.orm-entity';
+import { ClassScheduleOrmEntity } from './entities/class-schedule.orm-entity';
+import { ClassSessionOrmEntity } from './entities/class-session.orm-entity';
+import { ClassStudentOrmEntity } from './entities/class-student.orm-entity';
+import { StudentAttendanceOrmEntity } from './entities/student-attendance.orm-entity';
+import { StudentMonthlyBillOrmEntity } from './entities/student-monthly-bill.orm-entity';
+import { TeacherMonthlyWageOrmEntity } from './entities/teacher-monthly-wage.orm-entity';
+import { StudentMonthlyBillItemOrmEntity } from './entities/student-monthly-bill-item.orm-entity';
+import { TeacherMonthlyWageItemOrmEntity } from './entities/teacher-monthly-wage-item.orm-entity';
+import { PaymentPeriodOrmEntity } from './entities/payment-period.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -26,6 +40,20 @@ export const AppDataSource = new DataSource({
     RoleOrmEntity,
     PermissionOrmEntity,
     CenterOrmEntity,
+    RoomOrmEntity,
+    CourseOrmEntity,
+    CourseLevelOrmEntity,
+    CourseLevelPricingOrmEntity,
+    ClassOrmEntity,
+    ClassScheduleOrmEntity,
+    ClassSessionOrmEntity,
+    ClassStudentOrmEntity,
+    StudentAttendanceOrmEntity,
+    StudentMonthlyBillOrmEntity,
+    TeacherMonthlyWageOrmEntity,
+    StudentMonthlyBillItemOrmEntity,
+    TeacherMonthlyWageItemOrmEntity,
+    PaymentPeriodOrmEntity,
   ],
   migrations: [
     path.join(__dirname, '/migrations/*.{ts,js}')

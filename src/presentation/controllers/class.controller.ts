@@ -86,7 +86,21 @@ export class ClassController {
     const total = await qb.getCount();
     const classes = await qb.skip((page - 1) * limit).take(limit).getMany();
 
-    return { classes, total, page: Number(page), limit: Number(limit) };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const oneWeekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    oneWeekLater.setHours(23, 59, 59, 999);
+
+    const classesWithEndingSoon = classes.map(c => {
+      let isEndingSoon = false;
+      if (c.status === 'Active' && c.finishDate) {
+        const finish = new Date(c.finishDate);
+        isEndingSoon = finish >= today && finish <= oneWeekLater;
+      }
+      return { ...c, isEndingSoon };
+    });
+
+    return { classes: classesWithEndingSoon, total, page: Number(page), limit: Number(limit) };
   }
 
   @Get(':id')
@@ -107,7 +121,18 @@ export class ClassController {
       order: { joinedDate: 'ASC' },
     });
 
-    return { ...classEntity, schedules, students };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const oneWeekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    oneWeekLater.setHours(23, 59, 59, 999);
+
+    let isEndingSoon = false;
+    if (classEntity.status === 'Active' && classEntity.finishDate) {
+      const finish = new Date(classEntity.finishDate);
+      isEndingSoon = finish >= today && finish <= oneWeekLater;
+    }
+
+    return { ...classEntity, schedules, students, isEndingSoon };
   }
 
   @Post()
@@ -402,7 +427,7 @@ export class ClassController {
     const futureSessions = await this.sessionRepo
       .createQueryBuilder('s')
       .where('s.class_id = :classId', { classId })
-      .andWhere('s.date >= :today', { today })
+      .andWhere('s.date > :today', { today })
       .andWhere('s.attendance_locked = false')
       .getMany();
 
