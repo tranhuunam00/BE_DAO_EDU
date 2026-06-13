@@ -10,7 +10,9 @@ import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entit
 import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
-import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
+import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboard/get-dashboard-summary.use-case';
+import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
+import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -25,8 +27,9 @@ export class DashboardController {
     private readonly sessionRepo: Repository<ClassSessionOrmEntity>,
     @InjectRepository(StudentAttendanceOrmEntity)
     private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
-    @InjectRepository(ClassOrmEntity)
-    private readonly classRepo: Repository<ClassOrmEntity>,
+    private readonly getSummaryUseCase: GetDashboardSummaryUseCase,
+    private readonly getRevenueUseCase: GetDashboardRevenueUseCase,
+    private readonly getActivitiesUseCase: GetDashboardActivitiesUseCase,
   ) {}
 
   @Get('profile')
@@ -42,27 +45,22 @@ export class DashboardController {
     };
   }
 
-  @Get('admin')
+  @Get('admin/summary')
   @Roles(Role.ADMIN)
-  async getAdminData() {
-    // Count stats dynamically
-    const classCount = await this.classRepo.count();
-    const studentCount = await this.studentRepo.count();
+  async getAdminSummary() {
+    return this.getSummaryUseCase.execute();
+  }
 
-    return {
-      message: 'Chào mừng bạn đến với Dashboard của Admin',
-      statistics: {
-        totalUsers: 45,
-        totalTeachers: 8,
-        totalStudents: studentCount,
-        classCount: classCount,
-        systemStatus: 'Hoạt động bình thường',
-      },
-      auditLogs: [
-        { id: 1, action: 'Thêm học sinh mới', target: 'Học sinh Nguyễn Bình Minh', time: new Date() },
-        { id: 2, action: 'Cập nhật phân công giảng dạy', target: 'GV Nguyễn Thị Mai', time: new Date() },
-      ]
-    };
+  @Get('admin/revenue')
+  @Roles(Role.ADMIN)
+  async getAdminRevenue() {
+    return this.getRevenueUseCase.execute();
+  }
+
+  @Get('admin/activities')
+  @Roles(Role.ADMIN)
+  async getAdminActivities() {
+    return this.getActivitiesUseCase.execute();
   }
 
   @Get('teacher')

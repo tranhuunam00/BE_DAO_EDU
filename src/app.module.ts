@@ -16,6 +16,9 @@ import { IStudentRepository } from './domain/repositories/student-repository.int
 import { AuthController } from './presentation/controllers/auth.controller';
 import { DashboardController } from './presentation/controllers/dashboard.controller';
 import { StudentController } from './presentation/controllers/student.controller';
+import { GetDashboardSummaryUseCase } from './application/use-cases/dashboard/get-dashboard-summary.use-case';
+import { GetDashboardRevenueUseCase } from './application/use-cases/dashboard/get-dashboard-revenue.use-case';
+import { GetDashboardActivitiesUseCase } from './application/use-cases/dashboard/get-dashboard-activities.use-case';
 
 // TypeORM Infrastructure
 import { UserOrmEntity } from './infrastructure/persistence/typeorm/entities/user.orm-entity';
@@ -42,6 +45,9 @@ import { StudentMonthlyBillItemOrmEntity } from './infrastructure/persistence/ty
 import { TeacherMonthlyWageItemOrmEntity } from './infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
 import { PaymentPeriodOrmEntity } from './infrastructure/persistence/typeorm/entities/payment-period.orm-entity';
 import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
+import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
+import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
+import { CreatePaymentPeriodUseCase } from './application/use-cases/payment-periods/create-payment-period.use-case';
 import { TypeOrmTeacherRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-teacher.repository';
 import { TypeOrmCenterRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-center.repository';
 import { ITeacherRepository } from './domain/repositories/teacher-repository.interface';
@@ -156,6 +162,12 @@ import { ClassController } from './presentation/controllers/class.controller';
   ],
   providers: [
     AppService,
+    GetDashboardSummaryUseCase,
+    GetDashboardRevenueUseCase,
+    GetDashboardActivitiesUseCase,
+    PreviewTuitionUseCase,
+    PreviewSalaryUseCase,
+    CreatePaymentPeriodUseCase,
     RegisterUseCase,
     LoginUseCase,
     RefreshTokenUseCase,

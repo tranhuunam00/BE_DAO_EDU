@@ -12,9 +12,10 @@ import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/ty
 import { StudentMonthlyBillItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill-item.orm-entity';
 import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { TeacherMonthlyWageItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
-import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
-import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
-import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
+
+import { PreviewTuitionUseCase } from '../../application/use-cases/payment-periods/preview-tuition.use-case';
+import { PreviewSalaryUseCase } from '../../application/use-cases/payment-periods/preview-salary.use-case';
+import { CreatePaymentPeriodUseCase } from '../../application/use-cases/payment-periods/create-payment-period.use-case';
 
 @ApiTags('Quản lý Đợt Thanh Toán (Payment Periods)')
 @ApiBearerAuth()
@@ -33,10 +34,9 @@ export class PaymentPeriodController {
     private readonly teacherWageRepo: Repository<TeacherMonthlyWageOrmEntity>,
     @InjectRepository(TeacherMonthlyWageItemOrmEntity)
     private readonly teacherWageItemRepo: Repository<TeacherMonthlyWageItemOrmEntity>,
-    @InjectRepository(StudentAttendanceOrmEntity)
-    private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
-    @InjectRepository(ClassSessionOrmEntity)
-    private readonly sessionRepo: Repository<ClassSessionOrmEntity>,
+    private readonly previewTuitionUseCase: PreviewTuitionUseCase,
+    private readonly previewSalaryUseCase: PreviewSalaryUseCase,
+    private readonly createPaymentPeriodUseCase: CreatePaymentPeriodUseCase,
   ) {}
 
   @Get()
@@ -81,6 +81,20 @@ export class PaymentPeriodController {
     }
 
     return results;
+  }
+
+  @Get('preview/tuition')
+  @ApiOperation({ summary: 'Xem trước danh sách học sinh cần thu học phí (chưa chốt sổ) đến một ngày cụ thể' })
+  async previewTuition(@Query('endDate') endDate: string) {
+    if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
+    return this.previewTuitionUseCase.execute(endDate.substring(0, 7), endDate);
+  }
+
+  @Get('preview/salary')
+  @ApiOperation({ summary: 'Xem trước danh sách giáo viên cần trả lương (chưa chốt sổ) đến một ngày cụ thể' })
+  async previewSalary(@Query('endDate') endDate: string) {
+    if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
+    return this.previewSalaryUseCase.execute(endDate);
   }
 
   @Get(':id')
@@ -172,535 +186,111 @@ export class PaymentPeriodController {
     };
   }
 
-  @Get('preview/tuition')
-  @ApiOperation({ summary: 'Xem trước danh sách học sinh cần thu học phí (chưa chốt sổ) đến một ngày cụ thể' })
-  async previewTuition(@Query('endDate') endDate: string) {
-    if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
-    
-    const pricings = await this.periodRepo.manager.find(CourseLevelPricingOrmEntity);
-
-    const qb = this.attendanceRepo.createQueryBuilder('attendance')
-      .leftJoinAndSelect('attendance.classSession', 'session')
-      .leftJoinAndSelect('session.classEntity', 'classEntity')
-      .leftJoinAndSelect('classEntity.course', 'course')
-      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .leftJoinAndSelect('attendance.student', 'student')
-      .where('attendance.billId IS NULL')
-      .andWhere('session.date <= :endDateStr', { endDateStr: endDate })
-      .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true })
-      .andWhere('(attendance.isPresent = :present OR (attendance.isPresent = :absent AND (attendance.reason IS NULL OR attendance.reason = \'\' OR TRIM(attendance.reason) = \'\')))', { present: true, absent: false });
-
-    const attendances = await qb.getMany();
-
-    const studentMap = new Map<string, { student: any, attendances: StudentAttendanceOrmEntity[] }>();
-    for (const att of attendances) {
-      const sId = att.studentId;
-      if (!studentMap.has(sId)) {
-        studentMap.set(sId, { student: att.student, attendances: [] });
-      }
-      studentMap.get(sId)!.attendances.push(att);
-    }
-
-    const results = [];
-
-    for (const [studentId, data] of studentMap.entries()) {
-      const { student, attendances: attList } = data;
-      const classMap = new Map<string, { atts: StudentAttendanceOrmEntity[]; classEntity: any }>();
-      for (const att of attList) {
-        const classId = att.classSession.classId;
-        if (!classMap.has(classId)) {
-          classMap.set(classId, { atts: [], classEntity: att.classSession.classEntity });
-        }
-        classMap.get(classId)!.atts.push(att);
-      }
-
-      let studentTotalAmount = 0;
-      let totalSessions = 0;
-
-      for (const [classId, group] of classMap.entries()) {
-        for (const att of group.atts) {
-          const dateStr = att.classSession.date;
-          const levelId = group.classEntity.courseLevelId;
-          const pricing = pricings.find(
-            (p) =>
-              p.courseLevelId === levelId &&
-              p.effectiveFrom <= dateStr &&
-              (p.effectiveTo === null || p.effectiveTo >= dateStr)
-          );
-          const rate = pricing ? Number(pricing.pricePerSession) : 0;
-          studentTotalAmount += rate;
-          totalSessions++;
-        }
-      }
-
-      if (studentTotalAmount > 0) {
-        results.push({
-          studentId: studentId,
-          studentCode: student?.studentId || '',
-          name: `${student?.lastName || ''} ${student?.firstName || ''}`.trim(),
-          nickName: student?.nickName || '',
-          mobile: student?.mobile || '',
-          status: student?.status || '',
-          totalSessions,
-          totalAmount: studentTotalAmount,
-        });
-      }
-    }
-
-    const grandTotal = results.reduce((sum, r) => sum + r.totalAmount, 0);
-    return { students: results, grandTotal, endDate };
-  }
-
-  @Get('preview/salary')
-  @ApiOperation({ summary: 'Xem trước danh sách giáo viên cần trả lương (chưa chốt sổ) đến một ngày cụ thể' })
-  async previewSalary(@Query('endDate') endDate: string) {
-    if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
-
-    const pricings = await this.periodRepo.manager.find(CourseLevelPricingOrmEntity);
-
-    const qb = this.sessionRepo.createQueryBuilder('session')
-      .leftJoinAndSelect('session.classEntity', 'classEntity')
-      .leftJoinAndSelect('classEntity.course', 'course')
-      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .leftJoinAndSelect('session.teacher', 'teacher')
-      .where('session.wageId IS NULL')
-      .andWhere('session.teacherId IS NOT NULL')
-      .andWhere('session.date <= :endDateStr', { endDateStr: endDate })
-      .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true });
-
-    const sessions = await qb.getMany();
-
-    const teacherMap = new Map<string, { teacher: any, sessions: ClassSessionOrmEntity[] }>();
-    for (const sess of sessions) {
-      const tId = sess.teacherId!;
-      if (!teacherMap.has(tId)) {
-        teacherMap.set(tId, { teacher: sess.teacher, sessions: [] });
-      }
-      teacherMap.get(tId)!.sessions.push(sess);
-    }
-
-    const results = [];
-
-    for (const [teacherId, data] of teacherMap.entries()) {
-      const { teacher, sessions: sessionList } = data;
-      
-      const classMap = new Map<string, { sessions: ClassSessionOrmEntity[]; classEntity: any }>();
-      for (const sess of sessionList) {
-        const classId = sess.classId;
-        if (!classMap.has(classId)) {
-          classMap.set(classId, { sessions: [], classEntity: sess.classEntity });
-        }
-        classMap.get(classId)!.sessions.push(sess);
-      }
-
-      let teacherTotalAmount = 0;
-      let totalSessions = 0;
-
-      for (const [classId, group] of classMap.entries()) {
-        for (const sess of group.sessions) {
-          const dateStr = sess.date;
-          const levelId = group.classEntity.courseLevelId;
-          const pricing = pricings.find(
-            (p) =>
-              p.courseLevelId === levelId &&
-              p.effectiveFrom <= dateStr &&
-              (p.effectiveTo === null || p.effectiveTo >= dateStr)
-          );
-          const rate = pricing ? Number(pricing.teacherWagePerSession) : 0;
-          teacherTotalAmount += rate;
-          totalSessions++;
-        }
-      }
-
-      if (teacherTotalAmount > 0) {
-        results.push({
-          teacherId: teacherId,
-          teacherCode: teacher?.teacherId || '',
-          name: `${teacher?.lastName || ''} ${teacher?.firstName || ''}`.trim(),
-          mobile: teacher?.mobile || '',
-          type: teacher?.type || '',
-          status: teacher?.status || '',
-          totalSessions,
-          totalAmount: teacherTotalAmount,
-        });
-      }
-    }
-
-    const grandTotal = results.reduce((sum, r) => sum + r.totalAmount, 0);
-    return { teachers: results, grandTotal, endDate };
-  }
-
   @Post()
   @ApiOperation({ summary: 'Tạo đợt thanh toán mới và tự động chốt đơn hàng bên trong' })
-  async create(@Body() body: {
-    name: string;
-    type: 'tuition' | 'salary';
-    month: string;
-    startDate: string;
-    endDate: string;
-    studentIds?: string[];
-    teacherIds?: string[];
-  }) {
-    const { name, type, month, startDate, endDate, studentIds, teacherIds } = body;
-    if (!name || !type || !month || !startDate || !endDate) {
-      throw new BadRequestException('Vui lòng điền đầy đủ thông tin: name, type, month, startDate, endDate');
-    }
-
-    // 1. Save Period
-    const period = new PaymentPeriodOrmEntity();
-    period.name = name;
-    period.type = type;
-    period.month = month;
-    period.startDate = new Date(startDate);
-    period.endDate = new Date(endDate);
-    period.status = 'Active';
-    const savedPeriod = await this.periodRepo.save(period);
-
-    // Load all level pricing for memory calculation
-    const pricings = await this.periodRepo.manager.find(CourseLevelPricingOrmEntity);
-
-    if (type === 'tuition') {
-      // 2. Fetch unbilled attendances (isPresent = true OR (isPresent = false and empty reason))
-      const qb = this.attendanceRepo.createQueryBuilder('attendance')
-        .leftJoinAndSelect('attendance.classSession', 'session')
-        .leftJoinAndSelect('session.classEntity', 'classEntity')
-        .leftJoinAndSelect('classEntity.course', 'course')
-        .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-        .leftJoinAndSelect('attendance.student', 'student')
-        .where('attendance.billId IS NULL')
-        .andWhere('session.date <= :endDateStr', { endDateStr: endDate })
-        .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true })
-        .andWhere('(attendance.isPresent = :present OR (attendance.isPresent = :absent AND (attendance.reason IS NULL OR attendance.reason = \'\' OR TRIM(attendance.reason) = \'\')))', { present: true, absent: false });
-
-      if (studentIds && studentIds.length > 0) {
-        qb.andWhere('attendance.studentId IN (:...studentIds)', { studentIds });
-      }
-
-      const attendances = await qb.getMany();
-
-      // Group attendances by student
-      const studentMap = new Map<string, StudentAttendanceOrmEntity[]>();
-      for (const att of attendances) {
-        const sId = att.studentId;
-        if (!studentMap.has(sId)) {
-          studentMap.set(sId, []);
-        }
-        studentMap.get(sId)!.push(att);
-      }
-
-      for (const [studentId, attList] of studentMap.entries()) {
-        // Group student attendances by class
-        const classMap = new Map<string, { atts: StudentAttendanceOrmEntity[]; classEntity: any }>();
-        for (const att of attList) {
-          const classId = att.classSession.classId;
-          if (!classMap.has(classId)) {
-            classMap.set(classId, { atts: [], classEntity: att.classSession.classEntity });
-          }
-          classMap.get(classId)!.atts.push(att);
-        }
-
-        let studentTotalAmount = 0;
-        const billItemsData = [];
-
-        for (const [classId, group] of classMap.entries()) {
-          for (const att of group.atts) {
-            const dateStr = att.classSession.date;
-            const levelId = group.classEntity.courseLevelId;
-            const pricing = pricings.find(
-              (p) =>
-                p.courseLevelId === levelId &&
-                p.effectiveFrom <= dateStr &&
-                (p.effectiveTo === null || p.effectiveTo >= dateStr)
-            );
-            const rate = pricing ? Number(pricing.pricePerSession) : 0;
-            
-            const p = dateStr.split('-');
-            const dateFormatted = p.length === 3 ? `${p[2]}/${p[1]}` : dateStr;
-            const originalName = group.classEntity.className || group.classEntity.name || '';
-
-            billItemsData.push({
-              classId,
-              className: `${originalName} (Buổi ${dateFormatted})`,
-              courseName: group.classEntity.course?.name || '',
-              levelName: group.classEntity.courseLevel?.levelName || '',
-              sessionsCount: 1,
-              rate: rate,
-              totalAmount: rate,
-            });
-            studentTotalAmount += rate;
-          }
-        }
-
-        if (studentTotalAmount > 0) {
-          // Create Student Bill
-          const bill = new StudentMonthlyBillOrmEntity();
-          bill.studentId = studentId;
-          bill.periodId = savedPeriod.id;
-          bill.month = month;
-          bill.totalAmount = studentTotalAmount;
-          bill.paidAmount = 0;
-          bill.status = 'Unpaid';
-          bill.billingStartDate = savedPeriod.startDate;
-          bill.billingEndDate = savedPeriod.endDate;
-          const savedBill = await this.studentBillRepo.save(bill);
-
-          // Create Bill Items
-          const itemsToSave = billItemsData.map((item) => {
-            const dbItem = new StudentMonthlyBillItemOrmEntity();
-            dbItem.billId = savedBill.id;
-            dbItem.classId = item.classId;
-            dbItem.className = item.className;
-            dbItem.courseName = item.courseName;
-            dbItem.levelName = item.levelName;
-            dbItem.sessionsCount = item.sessionsCount;
-            dbItem.rate = item.rate;
-            dbItem.totalAmount = item.totalAmount;
-            return dbItem;
-          });
-          await this.studentBillItemRepo.save(itemsToSave);
-
-          // Update attendances to point to this bill
-          const attIds = attList.map((a) => a.id);
-          await this.attendanceRepo.update({ id: In(attIds) }, { billId: savedBill.id });
-        }
-      }
-    } else {
-      // Type is salary (Teacher Wages)
-      // 2. Fetch unbilled teacher sessions
-      const qb = this.sessionRepo.createQueryBuilder('session')
-        .leftJoinAndSelect('session.classEntity', 'classEntity')
-        .leftJoinAndSelect('classEntity.course', 'course')
-        .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-        .leftJoinAndSelect('session.teacher', 'teacher')
-        .where('session.wageId IS NULL')
-        .andWhere('session.teacherId IS NOT NULL')
-        .andWhere('session.date <= :endDateStr', { endDateStr: endDate })
-        .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true });
-
-      if (teacherIds && teacherIds.length > 0) {
-        qb.andWhere('session.teacherId IN (:...teacherIds)', { teacherIds });
-      }
-
-      const sessions = await qb.getMany();
-
-      // Group sessions by teacher
-      const teacherMap = new Map<string, ClassSessionOrmEntity[]>();
-      for (const sess of sessions) {
-        const tId = sess.teacherId!;
-        if (!teacherMap.has(tId)) {
-          teacherMap.set(tId, []);
-        }
-        teacherMap.get(tId)!.push(sess);
-      }
-
-      for (const [teacherId, sessionList] of teacherMap.entries()) {
-        // Group teacher sessions by class
-        const classMap = new Map<string, { sessions: ClassSessionOrmEntity[]; classEntity: any }>();
-        for (const sess of sessionList) {
-          const classId = sess.classId;
-          if (!classMap.has(classId)) {
-            classMap.set(classId, { sessions: [], classEntity: sess.classEntity });
-          }
-          classMap.get(classId)!.sessions.push(sess);
-        }
-
-        let teacherTotalAmount = 0;
-        const wageItemsData = [];
-
-        for (const [classId, group] of classMap.entries()) {
-          for (const sess of group.sessions) {
-            const dateStr = sess.date;
-            const levelId = group.classEntity.courseLevelId;
-            const pricing = pricings.find(
-              (p) =>
-                p.courseLevelId === levelId &&
-                p.effectiveFrom <= dateStr &&
-                (p.effectiveTo === null || p.effectiveTo >= dateStr)
-            );
-            const rate = pricing ? Number(pricing.teacherWagePerSession) : 0;
-            
-            const p = dateStr.split('-');
-            const dateFormatted = p.length === 3 ? `${p[2]}/${p[1]}` : dateStr;
-            const originalName = group.classEntity.className || group.classEntity.name || '';
-
-            wageItemsData.push({
-              classId,
-              className: `${originalName} (Buổi ${dateFormatted})`,
-              courseName: group.classEntity.course?.name || '',
-              levelName: group.classEntity.courseLevel?.levelName || '',
-              sessionsCount: 1,
-              rate: rate,
-              totalAmount: rate,
-            });
-            teacherTotalAmount += rate;
-          }
-        }
-
-        if (teacherTotalAmount > 0) {
-          // Create Teacher Wage
-          const wage = new TeacherMonthlyWageOrmEntity();
-          wage.teacherId = teacherId;
-          wage.periodId = savedPeriod.id;
-          wage.month = month;
-          wage.totalAmount = teacherTotalAmount;
-          wage.paidAmount = 0;
-          wage.status = 'Unpaid';
-          wage.billingStartDate = savedPeriod.startDate;
-          wage.billingEndDate = savedPeriod.endDate;
-          const savedWage = await this.teacherWageRepo.save(wage);
-
-          // Create Wage Items
-          const itemsToSave = wageItemsData.map((item) => {
-            const dbItem = new TeacherMonthlyWageItemOrmEntity();
-            dbItem.wageId = savedWage.id;
-            dbItem.classId = item.classId;
-            dbItem.className = item.className;
-            dbItem.courseName = item.courseName;
-            dbItem.levelName = item.levelName;
-            dbItem.sessionsCount = item.sessionsCount;
-            dbItem.rate = item.rate;
-            dbItem.totalAmount = item.totalAmount;
-            return dbItem;
-          });
-          await this.teacherWageItemRepo.save(itemsToSave);
-
-          // Update sessions to point to this wage
-          const sessionIds = sessionList.map((s) => s.id);
-          await this.sessionRepo.update({ id: In(sessionIds) }, { wageId: savedWage.id });
-        }
-      }
-    }
-
-    return savedPeriod;
+  async create(@Body() body: any) {
+    return this.createPaymentPeriodUseCase.execute(body);
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Cập nhật trạng thái của đợt thanh toán (Khóa / Mở)' })
-  async updateStatus(
+  @ApiOperation({ summary: 'Cập nhật trạng thái của đợt thanh toán' })
+  async updatePeriodStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'Active' | 'Closed' }
+    @Body('status') status: 'Active' | 'Closed'
   ) {
     const period = await this.periodRepo.findOne({ where: { id } });
-    if (!period) {
-      throw new NotFoundException('Không tìm thấy đợt thanh toán');
-    }
+    if (!period) throw new NotFoundException('Không tìm thấy đợt thanh toán');
 
-    if (body.status !== 'Active' && body.status !== 'Closed') {
-      throw new BadRequestException('Trạng thái không hợp lệ. Chỉ chấp nhận Active hoặc Closed.');
-    }
-
-    period.status = body.status;
-    return this.periodRepo.save(period);
+    period.status = status;
+    await this.periodRepo.save(period);
+    return { message: 'Cập nhật trạng thái thành công' };
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Xóa đợt thanh toán (Tự động giải phóng các buổi học/điểm danh bên trong)' })
-  async remove(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Xóa đợt thanh toán và các đơn hàng liên quan' })
+  async deletePeriod(@Param('id') id: string) {
     const period = await this.periodRepo.findOne({ where: { id } });
-    if (!period) {
-      throw new NotFoundException('Không tìm thấy đợt thanh toán');
+    if (!period) throw new NotFoundException('Không tìm thấy đợt thanh toán');
+
+    if (period.type === 'tuition') {
+      const bills = await this.studentBillRepo.find({ where: { periodId: period.id } });
+      const billIds = bills.map((b) => b.id);
+      
+      if (billIds.length > 0) {
+        await this.studentBillItemRepo.delete({ billId: In(billIds) });
+        await this.studentBillRepo.delete({ id: In(billIds) });
+      }
+    } else {
+      const wages = await this.teacherWageRepo.find({ where: { periodId: period.id } });
+      const wageIds = wages.map((w) => w.id);
+      
+      if (wageIds.length > 0) {
+        await this.teacherWageItemRepo.delete({ wageId: In(wageIds) });
+        await this.teacherWageRepo.delete({ id: In(wageIds) });
+      }
     }
 
-    // CASCADE delete in studentBills / teacherWages will automatically delete the orders
-    // The foreign keys student_attendance.bill_id ON DELETE SET NULL and class_sessions.wage_id ON DELETE SET NULL
-    // will set bill_id / wage_id back to null in the database.
-    await this.periodRepo.remove(period);
-
-    return { success: true, message: 'Đã xóa đợt thanh toán và giải phóng các buổi học thành công.' };
+    await this.periodRepo.delete(id);
+    return { message: 'Xóa đợt thanh toán thành công' };
   }
 
   @Patch('orders/:type/:orderId')
-  @ApiOperation({ summary: 'Cập nhật trạng thái thanh toán của một hóa đơn/lương cụ thể trong đợt' })
-  async updateOrderPayment(
+  @ApiOperation({ summary: 'Cập nhật trạng thái thanh toán của 1 đơn hàng cụ thể' })
+  async updateOrderStatus(
     @Param('type') type: 'tuition' | 'salary',
     @Param('orderId') orderId: string,
-    @Body() body: {
-      status: 'Paid' | 'Unpaid';
-      paidAmount: number;
-      paymentDate?: string;
-      note?: string;
-    }
+    @Body('status') status: 'Paid' | 'Unpaid',
+    @Body('paidAmount') paidAmount?: number,
+    @Body('note') note?: string,
   ) {
-    const { status, paidAmount, paymentDate, note } = body;
-    if (status !== 'Paid' && status !== 'Unpaid') {
-      throw new BadRequestException('Trạng thái thanh toán không hợp lệ');
-    }
-
     if (type === 'tuition') {
-      const bill = await this.studentBillRepo.findOne({
-        where: { id: orderId },
-        relations: { period: true },
-      });
-      if (!bill) {
-        throw new NotFoundException('Không tìm thấy hóa đơn học phí');
-      }
-
-      if (bill.period && bill.period.status === 'Closed') {
-        throw new BadRequestException('Đợt thanh toán này đã bị Khóa. Không thể chỉnh sửa.');
-      }
-
+      const bill = await this.studentBillRepo.findOne({ where: { id: orderId } });
+      if (!bill) throw new NotFoundException('Không tìm thấy đơn hàng học sinh');
+      
       bill.status = status;
-      bill.paidAmount = paidAmount;
-      bill.paymentDate = status === 'Paid' ? (paymentDate ? new Date(paymentDate) : new Date()) : null;
-      bill.note = note || null;
-
-      return this.studentBillRepo.save(bill);
+      if (status === 'Paid') {
+        bill.paidAmount = paidAmount !== undefined ? paidAmount : bill.totalAmount;
+        bill.paymentDate = new Date();
+      } else {
+        bill.paidAmount = 0;
+        bill.paymentDate = null;
+      }
+      if (note !== undefined) bill.note = note;
+      
+      await this.studentBillRepo.save(bill);
     } else {
-      const wage = await this.teacherWageRepo.findOne({
-        where: { id: orderId },
-        relations: { period: true },
-      });
-      if (!wage) {
-        throw new NotFoundException('Không tìm thấy đơn lương giáo viên');
-      }
-
-      if (wage.period && wage.period.status === 'Closed') {
-        throw new BadRequestException('Đợt thanh toán này đã bị Khóa. Không thể chỉnh sửa.');
-      }
-
+      const wage = await this.teacherWageRepo.findOne({ where: { id: orderId } });
+      if (!wage) throw new NotFoundException('Không tìm thấy bảng lương giáo viên');
+      
       wage.status = status;
-      wage.paidAmount = paidAmount;
-      wage.paymentDate = status === 'Paid' ? (paymentDate ? new Date(paymentDate) : new Date()) : null;
-      wage.note = note || null;
-
-      return this.teacherWageRepo.save(wage);
+      if (status === 'Paid') {
+        wage.paidAmount = paidAmount !== undefined ? paidAmount : wage.totalAmount;
+        wage.paymentDate = new Date();
+      } else {
+        wage.paidAmount = 0;
+        wage.paymentDate = null;
+      }
+      if (note !== undefined) wage.note = note;
+      
+      await this.teacherWageRepo.save(wage);
     }
+
+    return { message: 'Cập nhật trạng thái đơn hàng thành công' };
   }
 
   @Delete('orders/:type/:orderId')
-  @ApiOperation({ summary: 'Loại bỏ một đơn hàng (hóa đơn/lương) khỏi đợt thanh toán' })
-  async removeOrder(
+  @ApiOperation({ summary: 'Xóa 1 đơn hàng cụ thể (bỏ khỏi đợt thu)' })
+  async deleteOrder(
     @Param('type') type: 'tuition' | 'salary',
     @Param('orderId') orderId: string
   ) {
     if (type === 'tuition') {
-      const bill = await this.studentBillRepo.findOne({
-        where: { id: orderId },
-        relations: { period: true },
-      });
-      if (!bill) {
-        throw new NotFoundException('Không tìm thấy hóa đơn học phí');
-      }
-      if (bill.period && bill.period.status === 'Closed') {
-        throw new BadRequestException('Đợt thanh toán này đã bị Khóa. Không thể chỉnh sửa.');
-      }
-      // Delete will trigger ON DELETE SET NULL on student_attendance.bill_id
-      await this.studentBillRepo.remove(bill);
+      await this.studentBillItemRepo.delete({ billId: orderId });
+      await this.studentBillRepo.delete({ id: orderId });
     } else {
-      const wage = await this.teacherWageRepo.findOne({
-        where: { id: orderId },
-        relations: { period: true },
-      });
-      if (!wage) {
-        throw new NotFoundException('Không tìm thấy đơn lương giáo viên');
-      }
-      if (wage.period && wage.period.status === 'Closed') {
-        throw new BadRequestException('Đợt thanh toán này đã bị Khóa. Không thể chỉnh sửa.');
-      }
-      // Delete will trigger ON DELETE SET NULL on class_sessions.wage_id
-      await this.teacherWageRepo.remove(wage);
+      await this.teacherWageItemRepo.delete({ wageId: orderId });
+      await this.teacherWageRepo.delete({ id: orderId });
     }
-
-    return { success: true, message: 'Đã loại bỏ đơn hàng khỏi đợt và giải phóng các ca học tương ứng.' };
+    return { message: 'Đã xóa đơn hàng thành công' };
   }
 }
