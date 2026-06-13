@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { TeacherOrmEntity } from './teacher.orm-entity';
 import { PaymentPeriodOrmEntity } from './payment-period.orm-entity';
+import { TeacherMonthlyWageItemOrmEntity } from './teacher-monthly-wage-item.orm-entity';
 
 @Entity('teacher_monthly_wages')
 export class TeacherMonthlyWageOrmEntity {
@@ -50,4 +51,7 @@ export class TeacherMonthlyWageOrmEntity {
   @ManyToOne(() => PaymentPeriodOrmEntity, (period) => period.teacherWages, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'period_id' })
   period!: PaymentPeriodOrmEntity | null;
+
+  @OneToMany(() => TeacherMonthlyWageItemOrmEntity, (item) => item.wage)
+  items!: TeacherMonthlyWageItemOrmEntity[];
 }

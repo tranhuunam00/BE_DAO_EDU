@@ -7,9 +7,12 @@ import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
+import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill.orm-entity';
 import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboard/get-dashboard-summary.use-case';
 import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
 import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
@@ -21,12 +24,18 @@ export class DashboardController {
     private readonly userRepository: IUserRepository,
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepo: Repository<StudentOrmEntity>,
+    @InjectRepository(TeacherOrmEntity)
+    private readonly teacherRepo: Repository<TeacherOrmEntity>,
     @InjectRepository(ClassStudentOrmEntity)
     private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
     @InjectRepository(ClassSessionOrmEntity)
     private readonly sessionRepo: Repository<ClassSessionOrmEntity>,
     @InjectRepository(StudentAttendanceOrmEntity)
     private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
+    @InjectRepository(TeacherMonthlyWageOrmEntity)
+    private readonly teacherWageRepo: Repository<TeacherMonthlyWageOrmEntity>,
+    @InjectRepository(StudentMonthlyBillOrmEntity)
+    private readonly studentBillRepo: Repository<StudentMonthlyBillOrmEntity>,
     private readonly getSummaryUseCase: GetDashboardSummaryUseCase,
     private readonly getRevenueUseCase: GetDashboardRevenueUseCase,
     private readonly getActivitiesUseCase: GetDashboardActivitiesUseCase,
@@ -65,20 +74,77 @@ export class DashboardController {
 
   @Get('teacher')
   @Roles(Role.TEACHER)
-  getTeacherData(@Request() req: any) {
+  async getTeacherData(@Request() req: any) {
+    const teacher = await this.teacherRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+
+    if (!teacher) {
+      return {
+        message: 'Chào mừng Giáo viên đến với Dashboard',
+        teacherInfo: { id: req.user.sub, name: req.user.email, role: req.user.role },
+        sessions: [],
+        pendingGradingCount: 0,
+      };
+    }
+
+    // Find all class sessions for this teacher
+    const sessions = await this.sessionRepo.find({
+      where: { teacherId: teacher.id },
+      relations: { classEntity: true, room: true },
+      order: { date: 'ASC', startTime: 'ASC' },
+    });
+
+    const formattedSessions = sessions.map(s => {
+      // Determine past/future status for UI
+      const sessionDateTime = new Date(`${s.date}T${s.startTime}`);
+      const isPast = sessionDateTime < new Date();
+
+      return {
+        id: s.id,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        classCode: s.classEntity?.classCode || '',
+        className: s.classEntity?.className || '',
+        roomName: s.room?.name || 'Chưa xếp phòng',
+        status: s.status,
+        attendanceLocked: s.attendanceLocked,
+        isPast: isPast
+      };
+    });
+
     return {
-      message: 'Chào mừng Giáo viên đến với Dashboard Học đường',
+      message: 'Chào mừng Giáo viên đến với Dashboard',
       teacherInfo: {
-        id: req.user.sub,
-        name: req.user.email,
+        id: teacher.id,
+        name: `${teacher.lastName} ${teacher.firstName}`.trim(),
         role: req.user.role,
+        avatar: teacher.avatar,
       },
-      schedules: [
-        { id: 'sch-1', className: 'Lớp 10A1', time: '08:00 - 09:30 AM', subject: 'Toán Đại Số' },
-        { id: 'sch-2', className: 'Lớp 10A2', time: '10:00 - 11:30 AM', subject: 'Toán Hình Học' },
-      ],
-      pendingGradingCount: 15
+      sessions: formattedSessions,
+      pendingGradingCount: 0 // Will be implemented in Phase 2
     };
+  }
+
+  @Get('teacher/salary-history')
+  @Roles(Role.TEACHER)
+  async getTeacherSalaryHistory(@Request() req: any) {
+    const teacher = await this.teacherRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+
+    if (!teacher) {
+      return [];
+    }
+
+    const wages = await this.teacherWageRepo.find({
+      where: { teacherId: teacher.id },
+      relations: { items: true, period: true },
+      order: { month: 'DESC' },
+    });
+
+    return wages;
   }
 
   @Get('student')
@@ -178,5 +244,25 @@ export class DashboardController {
       ],
       sessions: sessionsList,
     };
+  }
+
+  @Get('student/tuition-history')
+  @Roles(Role.STUDENT)
+  async getStudentTuitionHistory(@Request() req: any) {
+    const student = await this.studentRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+
+    if (!student) {
+      return [];
+    }
+
+    const bills = await this.studentBillRepo.find({
+      where: { studentId: student.id },
+      relations: { items: true, period: true },
+      order: { month: 'DESC' },
+    });
+
+    return bills;
   }
 }

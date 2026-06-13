@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, BadRequestException, Request, NotFoundException, Put } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -143,6 +143,66 @@ export class StudentController {
 
     const grandTotal = results.reduce((sum, r) => sum + r.totalAmount, 0);
     return { students: results, grandTotal, startDate, endDate };
+  }
+
+  @Get('me')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Lấy thông tin cá nhân của học sinh đang đăng nhập' })
+  async getMyProfile(@Request() req: any) {
+    const student = await this.studentRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    return student;
+  }
+
+  @Put('me')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Cập nhật thông tin cá nhân của học sinh đang đăng nhập' })
+  async updateMyProfile(@Request() req: any, @Body() dto: UpdateStudentDto) {
+    const student = await this.studentRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    
+    // Only allow updating certain fields for student role to prevent privilege escalation
+    const allowedDto: UpdateStudentDto = {
+      mobile: dto.mobile,
+      email: dto.email,
+      primaryAddress: dto.primaryAddress,
+      avatar: dto.avatar,
+      loginPassword: dto.loginPassword,
+      otherPhone1: dto.otherPhone1,
+      otherPhone2: dto.otherPhone2,
+      province: dto.province,
+      districtWard: dto.districtWard,
+      oldAddress: dto.oldAddress,
+    };
+    
+    return this.updateStudentUseCase.execute(student.id, allowedDto);
+  }
+
+  @Get('me/tuition')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Lấy danh sách hóa đơn học phí của học sinh đang đăng nhập' })
+  async getMyTuition(@Request() req: any) {
+    const student = await this.studentRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+
+    const bills = await this.monthlyBillRepo.find({
+      where: { studentId: student.id },
+      relations: { period: true },
+      order: { month: 'DESC' },
+    });
+
+    const results = await Promise.all(bills.map(async (bill) => {
+      const items = await this.monthlyBillItemRepo.find({ where: { billId: bill.id } });
+      return { ...bill, items };
+    }));
+
+    return results;
   }
 
   private async calculateStudentBillingItems(

@@ -19,11 +19,11 @@ export class TypeOrmStudentRepository implements IStudentRepository {
       throw new Error('Không thể map Student sang ORM Entity');
     }
     const saved = await this.repository.save(orm);
-    const domain = StudentMapper.toDomain(saved);
-    if (!domain) {
-      throw new Error('Không thể map saved Student sang Domain');
+    const fullyLoaded = await this.findById(saved.id);
+    if (!fullyLoaded) {
+      throw new Error('Không thể load lại Student từ database sau khi save');
     }
-    return domain;
+    return fullyLoaded;
   }
 
   async findAll(): Promise<Student[]> {
