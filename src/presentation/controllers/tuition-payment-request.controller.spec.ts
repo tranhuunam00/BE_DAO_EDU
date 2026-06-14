@@ -11,20 +11,44 @@ describe('TuitionPaymentRequestController', () => {
         create: jest.fn((value) => value),
         save: jest.fn(async (value) => ({ id: 'request-1', ...value })),
       },
-      billRepo: { findOne: jest.fn() },
+      billRepo: {
+        findOne: jest.fn(),
+        save: jest.fn(async (value) => value),
+      },
       notificationRepo: {
         create: jest.fn((value) => value),
         save: jest.fn(async (value) => value),
       },
+      logRepo: {
+        find: jest.fn(async () => []),
+        create: jest.fn((value) => value),
+        save: jest.fn(async (value) => ({ id: `log-${value.event}`, ...value })),
+      },
     };
     const config = {
       get: jest.fn((key: string) => configValues[key]),
+    };
+    const dataSource = {
+      transaction: jest.fn(async (callback) =>
+        callback({
+          getRepository: (entity: { name: string }) => {
+            if (entity.name === 'TuitionPaymentRequestOrmEntity') {
+              return repos.paymentRequestRepo;
+            }
+            if (entity.name === 'StudentMonthlyBillOrmEntity') {
+              return repos.billRepo;
+            }
+            return repos.logRepo;
+          },
+        }),
+      ),
     };
     const controller = new TuitionPaymentRequestController(
       repos.paymentRequestRepo as any,
       repos.billRepo as any,
       repos.notificationRepo as any,
       config as any,
+      dataSource as any,
     );
     return { controller, repos };
   };
@@ -54,7 +78,7 @@ describe('TuitionPaymentRequestController', () => {
     expect(result.transferContent).toBe('DAOHP12345678ABCD');
     expect(result.qrUrl).toContain('MB-123456789-compact2.png');
     expect(result.qrUrl).toContain('amount=1250000');
-    expect(repos.billRepo).not.toHaveProperty('save');
+    expect(repos.billRepo.save).not.toHaveBeenCalled();
     expect(repos.notificationRepo.save).toHaveBeenCalledTimes(1);
   });
 
@@ -119,5 +143,33 @@ describe('TuitionPaymentRequestController', () => {
         bill.id,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('marks a student transfer claim as processing without marking the bill paid', async () => {
+    const { controller, repos } = createController(bankConfig);
+    const paymentRequest = {
+      id: 'request-1',
+      billId: bill.id,
+      amount: bill.totalAmount,
+      transferContent: 'DAOHP12345678ABCD',
+      status: 'pending',
+      logs: [],
+      bill: { ...bill, paidAmount: 0, note: null },
+    };
+    repos.paymentRequestRepo.findOne.mockResolvedValue(paymentRequest);
+    repos.billRepo.findOne.mockResolvedValue(paymentRequest.bill);
+    const result = await controller.confirmTransfer(
+      { user: { sub: 'student-user', role: Role.STUDENT } },
+      bill.id,
+    );
+
+    expect(result.status).toBe('processing');
+    expect(paymentRequest.bill.status).toBe('Unpaid');
+    expect(paymentRequest.bill.paidAmount).toBe(0);
+    expect(repos.billRepo.save).not.toHaveBeenCalled();
+    expect(repos.logRepo.save).toHaveBeenCalledTimes(1);
+    expect(result.logs.map((log: any) => log.event)).toEqual([
+      'transfer_claimed',
+    ]);
   });
 });

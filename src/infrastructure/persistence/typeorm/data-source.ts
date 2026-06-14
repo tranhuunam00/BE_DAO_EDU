@@ -31,6 +31,8 @@ import { AssignmentSubmissionOrmEntity } from './entities/assignment-submission.
 import { SubmissionAttachmentOrmEntity } from './entities/submission-attachment.orm-entity';
 import { NotificationOrmEntity } from './entities/notification.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from './entities/tuition-payment-request.orm-entity';
+import { TuitionPaymentLogOrmEntity } from './entities/tuition-payment-log.orm-entity';
+import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -66,6 +68,8 @@ export const AppDataSource = new DataSource({
     SubmissionAttachmentOrmEntity,
     NotificationOrmEntity,
     TuitionPaymentRequestOrmEntity,
+    TuitionPaymentLogOrmEntity,
+    VietQrCallbackLogOrmEntity,
   ],
   migrations: [path.join(__dirname, '/migrations/*.{ts,js}')],
   synchronize: false, // Turn off synchronize when using migrations

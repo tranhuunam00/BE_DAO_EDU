@@ -24,6 +24,7 @@ import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/ty
 import { StudentMonthlyBillItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill-item.orm-entity';
 import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { TeacherMonthlyWageItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
+import { TuitionPaymentRequestOrmEntity } from '../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 
 import { PreviewTuitionUseCase } from '../../application/use-cases/payment-periods/preview-tuition.use-case';
 import { PreviewSalaryUseCase } from '../../application/use-cases/payment-periods/preview-salary.use-case';
@@ -46,6 +47,8 @@ export class PaymentPeriodController {
     private readonly teacherWageRepo: Repository<TeacherMonthlyWageOrmEntity>,
     @InjectRepository(TeacherMonthlyWageItemOrmEntity)
     private readonly teacherWageItemRepo: Repository<TeacherMonthlyWageItemOrmEntity>,
+    @InjectRepository(TuitionPaymentRequestOrmEntity)
+    private readonly tuitionPaymentRequestRepo: Repository<TuitionPaymentRequestOrmEntity>,
     private readonly previewTuitionUseCase: PreviewTuitionUseCase,
     private readonly previewSalaryUseCase: PreviewSalaryUseCase,
     private readonly createPaymentPeriodUseCase: CreatePaymentPeriodUseCase,
@@ -139,7 +142,7 @@ export class PaymentPeriodController {
     if (period.type === 'tuition') {
       const bills = await this.studentBillRepo.find({
         where: { periodId: period.id },
-        relations: { student: true, paymentRequest: true },
+        relations: { student: true, paymentRequest: { logs: true } },
         order: { student: { lastName: 'ASC', firstName: 'ASC' } },
       });
 
@@ -299,6 +302,12 @@ export class PaymentPeriodController {
       if (note !== undefined) bill.note = note;
 
       await this.studentBillRepo.save(bill);
+      if (status === 'Unpaid') {
+        await this.tuitionPaymentRequestRepo.update(
+          { billId: bill.id },
+          { status: 'pending', claimedAt: null, reconciledAt: null },
+        );
+      }
     } else {
       const wage = await this.teacherWageRepo.findOne({
         where: { id: orderId },

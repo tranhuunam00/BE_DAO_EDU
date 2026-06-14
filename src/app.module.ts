@@ -50,9 +50,12 @@ import { AssignmentSubmissionOrmEntity } from './infrastructure/persistence/type
 import { SubmissionAttachmentOrmEntity } from './infrastructure/persistence/typeorm/entities/submission-attachment.orm-entity';
 import { NotificationOrmEntity } from './infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from './infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
+import { TuitionPaymentLogOrmEntity } from './infrastructure/persistence/typeorm/entities/tuition-payment-log.orm-entity';
+import { VietQrCallbackLogOrmEntity } from './infrastructure/persistence/typeorm/entities/vietqr-callback-log.orm-entity';
 import { AssignmentController } from './presentation/controllers/assignment.controller';
 import { NotificationController } from './presentation/controllers/notification.controller';
 import { TuitionPaymentRequestController } from './presentation/controllers/tuition-payment-request.controller';
+import { VietQrCallbackController } from './presentation/controllers/vietqr-callback.controller';
 import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
 import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
 import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
@@ -123,6 +126,8 @@ import { ClassController } from './presentation/controllers/class.controller';
           SubmissionAttachmentOrmEntity,
           NotificationOrmEntity,
           TuitionPaymentRequestOrmEntity,
+          TuitionPaymentLogOrmEntity,
+          VietQrCallbackLogOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
@@ -161,6 +166,8 @@ import { ClassController } from './presentation/controllers/class.controller';
       SubmissionAttachmentOrmEntity,
       NotificationOrmEntity,
       TuitionPaymentRequestOrmEntity,
+      TuitionPaymentLogOrmEntity,
+      VietQrCallbackLogOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -190,6 +197,7 @@ import { ClassController } from './presentation/controllers/class.controller';
     AssignmentController,
     NotificationController,
     TuitionPaymentRequestController,
+    VietQrCallbackController,
   ],
   providers: [
     AppService,

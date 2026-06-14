@@ -11,11 +11,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Role } from '../../domain/value-objects/role.enum';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from '../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
+import { TuitionPaymentLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/tuition-payment-log.orm-entity';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
@@ -31,6 +32,7 @@ export class TuitionPaymentRequestController {
     @InjectRepository(NotificationOrmEntity)
     private readonly notificationRepo: Repository<NotificationOrmEntity>,
     private readonly config: ConfigService,
+    private readonly dataSource: DataSource,
   ) {}
 
   @Post('bills/:billId/send')
@@ -76,6 +78,8 @@ export class TuitionPaymentRequestController {
         qrUrl,
         status: 'pending' as const,
         sentAt: now,
+        claimedAt: null,
+        reconciledAt: null,
       });
     } else {
       request = this.paymentRequestRepo.create({
@@ -104,12 +108,76 @@ export class TuitionPaymentRequestController {
     return saved;
   }
 
+  @Post('bills/:billId/confirm-transfer')
+  @Roles(Role.STUDENT)
+  async confirmTransfer(@Request() req: any, @Param('billId') billId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const requestRepo = manager.getRepository(TuitionPaymentRequestOrmEntity);
+      const billRepo = manager.getRepository(StudentMonthlyBillOrmEntity);
+      const logRepo = manager.getRepository(TuitionPaymentLogOrmEntity);
+
+      const paymentRequest = await requestRepo.findOne({
+        where: { billId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const bill = await billRepo.findOne({
+        where: { id: billId },
+        relations: { student: true },
+      });
+      if (
+        !paymentRequest ||
+        !bill ||
+        bill.student.userId !== req.user.sub
+      ) {
+        throw new NotFoundException(
+          'Chưa có yêu cầu thanh toán cho hóa đơn này',
+        );
+      }
+      paymentRequest.bill = bill;
+      paymentRequest.logs = await logRepo.find({
+        where: { paymentRequestId: paymentRequest.id },
+        order: { createdAt: 'ASC' },
+      });
+      if (
+        paymentRequest.status === 'reconciled' ||
+        bill.status === 'Paid'
+      ) {
+        return paymentRequest;
+      }
+      if (paymentRequest.status !== 'pending') {
+        throw new BadRequestException(
+          'Yêu cầu thanh toán hiện không thể xác nhận chuyển khoản',
+        );
+      }
+
+      const now = new Date();
+      paymentRequest.status = 'processing';
+      paymentRequest.claimedAt = now;
+      await requestRepo.save(paymentRequest);
+      const claimedLog = await logRepo.save(
+        logRepo.create({
+          paymentRequestId: paymentRequest.id,
+          billId,
+          event: 'transfer_claimed',
+          status: 'processing',
+          amount: Number(paymentRequest.amount),
+          source: 'simulation',
+          message: 'Học sinh xác nhận đã chuyển khoản',
+          metadata: { confirmedByUserId: req.user.sub },
+        }),
+      );
+
+      paymentRequest.logs = [...(paymentRequest.logs || []), claimedLog];
+      return paymentRequest;
+    });
+  }
+
   @Get('bills/:billId')
   @Roles(Role.ADMIN, Role.STUDENT)
   async findForBill(@Request() req: any, @Param('billId') billId: string) {
     const request = await this.paymentRequestRepo.findOne({
       where: { billId },
-      relations: { bill: { student: true } },
+      relations: { bill: { student: true }, logs: true },
     });
     if (!request) {
       throw new NotFoundException('Chưa có yêu cầu thanh toán cho hóa đơn này');
@@ -152,11 +220,22 @@ export class TuitionPaymentRequestController {
     amount: number,
     transferContent: string,
   ) {
+    // 1. Loại bỏ dấu tiếng Việt và ký tự đặc biệt khỏi nội dung chuyển khoản
+    const cleanAddInfo = transferContent
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Bỏ dấu
+      .replace(/[^a-zA-Z0-9 ]/g, '') // Chỉ giữ lại chữ và số
+      .trim();
+
+    // 2. Tạo query string thủ công thay vì dùng URLSearchParams để kiểm soát chặt chẽ
     const params = new URLSearchParams({
       amount: String(Math.round(amount)),
-      addInfo: transferContent,
+      addInfo: cleanAddInfo,
       accountName: bank.accountName,
     });
-    return `https://img.vietqr.io/image/${encodeURIComponent(bank.bankCode)}-${encodeURIComponent(bank.accountNumber)}-compact2.png?${params.toString()}`;
+
+    // 3. Không nên encode phần path (bankCode-accountNumber),
+    // chỉ cần đảm bảo chúng là chuỗi sạch (không dấu, không cách)
+    return `https://img.vietqr.io/image/${bank.bankCode}-${bank.accountNumber}-compact2.png?${params.toString()}`;
   }
 }

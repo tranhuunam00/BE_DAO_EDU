@@ -292,7 +292,7 @@ export class StudentController {
 
     const bills = await this.monthlyBillRepo.find({
       where: { studentId: student.id },
-      relations: { period: true, paymentRequest: true },
+      relations: { period: true, paymentRequest: { logs: true } },
       order: { month: 'DESC' },
     });
 

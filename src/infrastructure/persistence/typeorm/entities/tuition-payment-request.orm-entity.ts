@@ -4,10 +4,12 @@ import {
   Entity,
   JoinColumn,
   OneToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { StudentMonthlyBillOrmEntity } from './student-monthly-bill.orm-entity';
+import { TuitionPaymentLogOrmEntity } from './tuition-payment-log.orm-entity';
 
 @Entity('tuition_payment_requests')
 export class TuitionPaymentRequestOrmEntity {
@@ -36,10 +38,24 @@ export class TuitionPaymentRequestOrmEntity {
   qrUrl!: string;
 
   @Column({ type: 'varchar', default: 'pending' })
-  status!: 'pending' | 'cancelled';
+  status!: 'pending' | 'processing' | 'reconciled' | 'cancelled';
 
   @Column({ type: 'timestamp with time zone', name: 'sent_at' })
   sentAt!: Date;
+
+  @Column({
+    type: 'timestamp with time zone',
+    name: 'claimed_at',
+    nullable: true,
+  })
+  claimedAt!: Date | null;
+
+  @Column({
+    type: 'timestamp with time zone',
+    name: 'reconciled_at',
+    nullable: true,
+  })
+  reconciledAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
@@ -52,4 +68,7 @@ export class TuitionPaymentRequestOrmEntity {
   })
   @JoinColumn({ name: 'bill_id' })
   bill!: StudentMonthlyBillOrmEntity;
+
+  @OneToMany(() => TuitionPaymentLogOrmEntity, (log) => log.paymentRequest)
+  logs!: TuitionPaymentLogOrmEntity[];
 }
