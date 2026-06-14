@@ -56,7 +56,18 @@ pm2 save
 API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:5000/api}"
 
 echo "Checking backend health..."
-curl --fail --silent --show-error --retry 10 --retry-delay 2 "${API_HEALTH_URL}" >/dev/null
+if ! curl \
+  --fail \
+  --silent \
+  --show-error \
+  --retry 15 \
+  --retry-delay 2 \
+  --retry-connrefused \
+  "${API_HEALTH_URL}" >/dev/null; then
+  echo "Backend health check failed. Recent PM2 logs:"
+  pm2 logs dao-edu-api --lines 80 --nostream
+  exit 1
+fi
 
 echo "Backend deployment completed successfully."
 pm2 status
