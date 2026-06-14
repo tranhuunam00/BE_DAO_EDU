@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Delete, Query, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Delete,
+  Query,
+  UseGuards,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -40,7 +52,9 @@ export class PaymentPeriodController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách tất cả các đợt thanh toán kèm thống kê số liệu' })
+  @ApiOperation({
+    summary: 'Lấy danh sách tất cả các đợt thanh toán kèm thống kê số liệu',
+  })
   async findAll() {
     const periods = await this.periodRepo.find({
       order: { createdAt: 'DESC' },
@@ -59,7 +73,10 @@ export class PaymentPeriodController {
         });
         totalOrders = bills.length;
         paidOrders = bills.filter((b) => b.status === 'Paid').length;
-        totalExpected = bills.reduce((sum, b) => sum + Number(b.totalAmount), 0);
+        totalExpected = bills.reduce(
+          (sum, b) => sum + Number(b.totalAmount),
+          0,
+        );
         totalPaid = bills.reduce((sum, b) => sum + Number(b.paidAmount), 0);
       } else {
         const wages = await this.teacherWageRepo.find({
@@ -67,7 +84,10 @@ export class PaymentPeriodController {
         });
         totalOrders = wages.length;
         paidOrders = wages.filter((w) => w.status === 'Paid').length;
-        totalExpected = wages.reduce((sum, w) => sum + Number(w.totalAmount), 0);
+        totalExpected = wages.reduce(
+          (sum, w) => sum + Number(w.totalAmount),
+          0,
+        );
         totalPaid = wages.reduce((sum, w) => sum + Number(w.paidAmount), 0);
       }
 
@@ -84,21 +104,29 @@ export class PaymentPeriodController {
   }
 
   @Get('preview/tuition')
-  @ApiOperation({ summary: 'Xem trước danh sách học sinh cần thu học phí (chưa chốt sổ) đến một ngày cụ thể' })
+  @ApiOperation({
+    summary:
+      'Xem trước danh sách học sinh cần thu học phí (chưa chốt sổ) đến một ngày cụ thể',
+  })
   async previewTuition(@Query('endDate') endDate: string) {
     if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
     return this.previewTuitionUseCase.execute(endDate.substring(0, 7), endDate);
   }
 
   @Get('preview/salary')
-  @ApiOperation({ summary: 'Xem trước danh sách giáo viên cần trả lương (chưa chốt sổ) đến một ngày cụ thể' })
+  @ApiOperation({
+    summary:
+      'Xem trước danh sách giáo viên cần trả lương (chưa chốt sổ) đến một ngày cụ thể',
+  })
   async previewSalary(@Query('endDate') endDate: string) {
     if (!endDate) throw new BadRequestException('Vui lòng cung cấp endDate');
     return this.previewSalaryUseCase.execute(endDate);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Lấy chi tiết một đợt thanh toán kèm danh sách đơn hàng bên trong' })
+  @ApiOperation({
+    summary: 'Lấy chi tiết một đợt thanh toán kèm danh sách đơn hàng bên trong',
+  })
   async findOne(@Param('id') id: string) {
     const period = await this.periodRepo.findOne({
       where: { id },
@@ -111,7 +139,7 @@ export class PaymentPeriodController {
     if (period.type === 'tuition') {
       const bills = await this.studentBillRepo.find({
         where: { periodId: period.id },
-        relations: { student: true },
+        relations: { student: true, paymentRequest: true },
         order: { student: { lastName: 'ASC', firstName: 'ASC' } },
       });
 
@@ -131,6 +159,7 @@ export class PaymentPeriodController {
           status: bill.status,
           paymentDate: bill.paymentDate,
           note: bill.note,
+          paymentRequest: bill.paymentRequest,
           items: items.map((item) => ({
             id: item.id,
             classId: item.classId,
@@ -187,7 +216,9 @@ export class PaymentPeriodController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Tạo đợt thanh toán mới và tự động chốt đơn hàng bên trong' })
+  @ApiOperation({
+    summary: 'Tạo đợt thanh toán mới và tự động chốt đơn hàng bên trong',
+  })
   async create(@Body() body: any) {
     return this.createPaymentPeriodUseCase.execute(body);
   }
@@ -196,7 +227,7 @@ export class PaymentPeriodController {
   @ApiOperation({ summary: 'Cập nhật trạng thái của đợt thanh toán' })
   async updatePeriodStatus(
     @Param('id') id: string,
-    @Body('status') status: 'Active' | 'Closed'
+    @Body('status') status: 'Active' | 'Closed',
   ) {
     const period = await this.periodRepo.findOne({ where: { id } });
     if (!period) throw new NotFoundException('Không tìm thấy đợt thanh toán');
@@ -213,17 +244,21 @@ export class PaymentPeriodController {
     if (!period) throw new NotFoundException('Không tìm thấy đợt thanh toán');
 
     if (period.type === 'tuition') {
-      const bills = await this.studentBillRepo.find({ where: { periodId: period.id } });
+      const bills = await this.studentBillRepo.find({
+        where: { periodId: period.id },
+      });
       const billIds = bills.map((b) => b.id);
-      
+
       if (billIds.length > 0) {
         await this.studentBillItemRepo.delete({ billId: In(billIds) });
         await this.studentBillRepo.delete({ id: In(billIds) });
       }
     } else {
-      const wages = await this.teacherWageRepo.find({ where: { periodId: period.id } });
+      const wages = await this.teacherWageRepo.find({
+        where: { periodId: period.id },
+      });
       const wageIds = wages.map((w) => w.id);
-      
+
       if (wageIds.length > 0) {
         await this.teacherWageItemRepo.delete({ wageId: In(wageIds) });
         await this.teacherWageRepo.delete({ id: In(wageIds) });
@@ -235,7 +270,9 @@ export class PaymentPeriodController {
   }
 
   @Patch('orders/:type/:orderId')
-  @ApiOperation({ summary: 'Cập nhật trạng thái thanh toán của 1 đơn hàng cụ thể' })
+  @ApiOperation({
+    summary: 'Cập nhật trạng thái thanh toán của 1 đơn hàng cụ thể',
+  })
   async updateOrderStatus(
     @Param('type') type: 'tuition' | 'salary',
     @Param('orderId') orderId: string,
@@ -244,34 +281,42 @@ export class PaymentPeriodController {
     @Body('note') note?: string,
   ) {
     if (type === 'tuition') {
-      const bill = await this.studentBillRepo.findOne({ where: { id: orderId } });
-      if (!bill) throw new NotFoundException('Không tìm thấy đơn hàng học sinh');
-      
+      const bill = await this.studentBillRepo.findOne({
+        where: { id: orderId },
+      });
+      if (!bill)
+        throw new NotFoundException('Không tìm thấy đơn hàng học sinh');
+
       bill.status = status;
       if (status === 'Paid') {
-        bill.paidAmount = paidAmount !== undefined ? paidAmount : bill.totalAmount;
+        bill.paidAmount =
+          paidAmount !== undefined ? paidAmount : bill.totalAmount;
         bill.paymentDate = new Date();
       } else {
         bill.paidAmount = 0;
         bill.paymentDate = null;
       }
       if (note !== undefined) bill.note = note;
-      
+
       await this.studentBillRepo.save(bill);
     } else {
-      const wage = await this.teacherWageRepo.findOne({ where: { id: orderId } });
-      if (!wage) throw new NotFoundException('Không tìm thấy bảng lương giáo viên');
-      
+      const wage = await this.teacherWageRepo.findOne({
+        where: { id: orderId },
+      });
+      if (!wage)
+        throw new NotFoundException('Không tìm thấy bảng lương giáo viên');
+
       wage.status = status;
       if (status === 'Paid') {
-        wage.paidAmount = paidAmount !== undefined ? paidAmount : wage.totalAmount;
+        wage.paidAmount =
+          paidAmount !== undefined ? paidAmount : wage.totalAmount;
         wage.paymentDate = new Date();
       } else {
         wage.paidAmount = 0;
         wage.paymentDate = null;
       }
       if (note !== undefined) wage.note = note;
-      
+
       await this.teacherWageRepo.save(wage);
     }
 
@@ -282,7 +327,7 @@ export class PaymentPeriodController {
   @ApiOperation({ summary: 'Xóa 1 đơn hàng cụ thể (bỏ khỏi đợt thu)' })
   async deleteOrder(
     @Param('type') type: 'tuition' | 'salary',
-    @Param('orderId') orderId: string
+    @Param('orderId') orderId: string,
   ) {
     if (type === 'tuition') {
       await this.studentBillItemRepo.delete({ billId: orderId });

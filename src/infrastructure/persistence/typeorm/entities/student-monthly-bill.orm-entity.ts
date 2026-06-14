@@ -1,7 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
 import { StudentOrmEntity } from './student.orm-entity';
 import { PaymentPeriodOrmEntity } from './payment-period.orm-entity';
 import { StudentMonthlyBillItemOrmEntity } from './student-monthly-bill-item.orm-entity';
+import { TuitionPaymentRequestOrmEntity } from './tuition-payment-request.orm-entity';
 
 @Entity('student_monthly_bills')
 export class StudentMonthlyBillOrmEntity {
@@ -17,10 +28,22 @@ export class StudentMonthlyBillOrmEntity {
   @Column({ type: 'varchar' })
   month!: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'total_amount', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'total_amount',
+    default: 0,
+  })
   totalAmount!: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'paid_amount', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    name: 'paid_amount',
+    default: 0,
+  })
   paidAmount!: number;
 
   @Column({ type: 'varchar', default: 'Unpaid' })
@@ -48,10 +71,16 @@ export class StudentMonthlyBillOrmEntity {
   @JoinColumn({ name: 'student_id' })
   student!: StudentOrmEntity;
 
-  @ManyToOne(() => PaymentPeriodOrmEntity, (period) => period.studentBills, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => PaymentPeriodOrmEntity, (period) => period.studentBills, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'period_id' })
   period!: PaymentPeriodOrmEntity | null;
 
   @OneToMany(() => StudentMonthlyBillItemOrmEntity, (item) => item.bill)
   items!: StudentMonthlyBillItemOrmEntity[];
+
+  @OneToOne(() => TuitionPaymentRequestOrmEntity, (request) => request.bill)
+  paymentRequest!: TuitionPaymentRequestOrmEntity | null;
 }

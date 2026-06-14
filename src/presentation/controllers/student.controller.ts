@@ -1,5 +1,24 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, BadRequestException, Request, NotFoundException, Put } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+  BadRequestException,
+  Request,
+  NotFoundException,
+  Put,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
@@ -11,7 +30,10 @@ import { AddStudentUseCase } from '../../application/use-cases/add-student.use-c
 import { GetStudentsUseCase } from '../../application/use-cases/get-students.use-case';
 import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
-import { CreateStudentDto, UpdateStudentDto } from '../../application/dtos/student.dto';
+import {
+  CreateStudentDto,
+  UpdateStudentDto,
+} from '../../application/dtos/student.dto';
 import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
@@ -45,24 +67,61 @@ export class StudentController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Tạo mới hồ sơ học sinh (Chỉ dành cho ADMIN)' })
   @ApiResponse({ status: 201, description: 'Tạo học sinh mới thành công' })
-  @ApiResponse({ status: 400, description: 'Dữ liệu đầu vào không hợp lệ hoặc thiếu trường bắt buộc' })
-  @ApiResponse({ status: 409, description: 'Email tài khoản đăng nhập học sinh đã tồn tại' })
-  @ApiResponse({ status: 403, description: 'Từ chối truy cập (Bạn không phải ADMIN)' })
+  @ApiResponse({
+    status: 400,
+    description: 'Dữ liệu đầu vào không hợp lệ hoặc thiếu trường bắt buộc',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Email tài khoản đăng nhập học sinh đã tồn tại',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Từ chối truy cập (Bạn không phải ADMIN)',
+  })
   async create(@Body() dto: CreateStudentDto) {
     return this.addStudentUseCase.execute(dto);
   }
 
   @Get()
   @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả học sinh có phân trang và bộ lọc (Dành cho ADMIN & TEACHER)' })
-  @ApiQuery({ name: 'page', required: false, description: 'Số trang muốn lấy', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, description: 'Số bản ghi mỗi trang', example: 10 })
-  @ApiQuery({ name: 'search', required: false, description: 'Từ khóa tìm kiếm (Họ tên, mã học sinh, ĐT, email)' })
-  @ApiQuery({ name: 'status', required: false, description: 'Lọc theo trạng thái học tập' })
-  @ApiQuery({ name: 'province', required: false, description: 'Lọc theo Tỉnh / Thành phố' })
+  @ApiOperation({
+    summary:
+      'Lấy danh sách tất cả học sinh có phân trang và bộ lọc (Dành cho ADMIN & TEACHER)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Số trang muốn lấy',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Số bản ghi mỗi trang',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Từ khóa tìm kiếm (Họ tên, mã học sinh, ĐT, email)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Lọc theo trạng thái học tập',
+  })
+  @ApiQuery({
+    name: 'province',
+    required: false,
+    description: 'Lọc theo Tỉnh / Thành phố',
+  })
   @ApiResponse({ status: 200, description: 'Lấy danh sách thành công' })
   @ApiResponse({ status: 401, description: 'Yêu cầu token xác thực' })
-  @ApiResponse({ status: 403, description: 'Từ chối truy cập (Học sinh không có quyền xem danh sách này)' })
+  @ApiResponse({
+    status: 403,
+    description: 'Từ chối truy cập (Học sinh không có quyền xem danh sách này)',
+  })
   async findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -81,40 +140,66 @@ export class StudentController {
 
   @Get('tuition-bulk')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Tính học phí cho tất cả học sinh trong khoảng thời gian (Kế Toán)' })
+  @ApiOperation({
+    summary:
+      'Tính học phí cho tất cả học sinh trong khoảng thời gian (Kế Toán)',
+  })
   async getTuitionBulk(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    const students = await this.studentRepo.find({ order: { lastName: 'ASC', firstName: 'ASC' } });
+    const students = await this.studentRepo.find({
+      order: { lastName: 'ASC', firstName: 'ASC' },
+    });
     const results: any[] = [];
 
     for (const student of students) {
       const enrollments = await this.classStudentRepo.find({
         where: { studentId: student.id },
-        relations: { classEntity: { course: true, courseLevel: true } }
+        relations: { classEntity: { course: true, courseLevel: true } },
       });
       if (enrollments.length === 0) {
-        results.push({ studentId: student.id, studentCode: student.studentId, name: `${student.lastName} ${student.firstName}`, mobile: student.mobile, status: student.status, totalSessions: 0, totalAmount: 0 });
+        results.push({
+          studentId: student.id,
+          studentCode: student.studentId,
+          name: `${student.lastName} ${student.firstName}`,
+          mobile: student.mobile,
+          status: student.status,
+          totalSessions: 0,
+          totalAmount: 0,
+        });
         continue;
       }
-      const classIds = enrollments.map(e => e.classId);
+      const classIds = enrollments.map((e) => e.classId);
       const sessions = await this.sessionRepo
         .createQueryBuilder('session')
         .leftJoinAndSelect('session.classEntity', 'classEntity')
         .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-        .leftJoinAndMapOne('session.attendance', StudentAttendanceOrmEntity, 'attendance',
-          'attendance.class_session_id = session.id AND attendance.student_id = :studentId', { studentId: student.id })
+        .leftJoinAndMapOne(
+          'session.attendance',
+          StudentAttendanceOrmEntity,
+          'attendance',
+          'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
+          { studentId: student.id },
+        )
         .where('session.class_id IN (:...classIds)', { classIds })
         .andWhere('session.date >= :startDate', { startDate })
         .andWhere('session.date <= :endDate', { endDate })
-        .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: 'Completed', l: true })
+        .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
+          s: 'Completed',
+          l: true,
+        })
         .getMany();
 
-      const levelIds = Array.from(new Set(sessions.map(s => s.classEntity.courseLevelId)));
+      const levelIds = Array.from(
+        new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+      );
       let pricingList: CourseLevelPricingOrmEntity[] = [];
       if (levelIds.length > 0) {
-        pricingList = await this.sessionRepo.manager.find(CourseLevelPricingOrmEntity, { where: { courseLevelId: In(levelIds) } });
+        pricingList = await this.sessionRepo.manager.find(
+          CourseLevelPricingOrmEntity,
+          { where: { courseLevelId: In(levelIds) } },
+        );
       }
 
       let totalAmount = 0;
@@ -122,11 +207,19 @@ export class StudentController {
       for (const session of sessions) {
         const date = session.date;
         const levelId = session.classEntity.courseLevelId;
-        const pricing = pricingList.find(p => p.courseLevelId === levelId && p.effectiveFrom <= date && (p.effectiveTo === null || p.effectiveTo >= date));
+        const pricing = pricingList.find(
+          (p) =>
+            p.courseLevelId === levelId &&
+            p.effectiveFrom <= date &&
+            (p.effectiveTo === null || p.effectiveTo >= date),
+        );
         const rate = pricing ? Number(pricing.pricePerSession) : 0;
         const attendance = (session as any).attendance;
         const isPresent = attendance ? attendance.isPresent : false;
-        if (isPresent) { totalAmount += rate; totalSessions++; }
+        if (isPresent) {
+          totalAmount += rate;
+          totalSessions++;
+        }
       }
 
       results.push({
@@ -147,7 +240,9 @@ export class StudentController {
 
   @Get('me')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: 'Lấy thông tin cá nhân của học sinh đang đăng nhập' })
+  @ApiOperation({
+    summary: 'Lấy thông tin cá nhân của học sinh đang đăng nhập',
+  })
   async getMyProfile(@Request() req: any) {
     const student = await this.studentRepo.findOne({
       where: { userId: req.user.sub },
@@ -158,13 +253,15 @@ export class StudentController {
 
   @Put('me')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: 'Cập nhật thông tin cá nhân của học sinh đang đăng nhập' })
+  @ApiOperation({
+    summary: 'Cập nhật thông tin cá nhân của học sinh đang đăng nhập',
+  })
   async updateMyProfile(@Request() req: any, @Body() dto: UpdateStudentDto) {
     const student = await this.studentRepo.findOne({
       where: { userId: req.user.sub },
     });
     if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
-    
+
     // Only allow updating certain fields for student role to prevent privilege escalation
     const allowedDto: UpdateStudentDto = {
       mobile: dto.mobile,
@@ -178,13 +275,15 @@ export class StudentController {
       districtWard: dto.districtWard,
       oldAddress: dto.oldAddress,
     };
-    
+
     return this.updateStudentUseCase.execute(student.id, allowedDto);
   }
 
   @Get('me/tuition')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: 'Lấy danh sách hóa đơn học phí của học sinh đang đăng nhập' })
+  @ApiOperation({
+    summary: 'Lấy danh sách hóa đơn học phí của học sinh đang đăng nhập',
+  })
   async getMyTuition(@Request() req: any) {
     const student = await this.studentRepo.findOne({
       where: { userId: req.user.sub },
@@ -193,14 +292,18 @@ export class StudentController {
 
     const bills = await this.monthlyBillRepo.find({
       where: { studentId: student.id },
-      relations: { period: true },
+      relations: { period: true, paymentRequest: true },
       order: { month: 'DESC' },
     });
 
-    const results = await Promise.all(bills.map(async (bill) => {
-      const items = await this.monthlyBillItemRepo.find({ where: { billId: bill.id } });
-      return { ...bill, items };
-    }));
+    const results = await Promise.all(
+      bills.map(async (bill) => {
+        const items = await this.monthlyBillItemRepo.find({
+          where: { billId: bill.id },
+        });
+        return { ...bill, items };
+      }),
+    );
 
     return results;
   }
@@ -224,7 +327,7 @@ export class StudentController {
       return { items: [], totalAmount: 0 };
     }
 
-    const classIds = enrollments.map(e => e.classId);
+    const classIds = enrollments.map((e) => e.classId);
     const sessions = await this.sessionRepo
       .createQueryBuilder('session')
       .leftJoinAndSelect('session.classEntity', 'classEntity')
@@ -240,19 +343,30 @@ export class StudentController {
       .where('session.class_id IN (:...classIds)', { classIds })
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
-      .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: 'Completed', l: true })
+      .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
+        s: 'Completed',
+        l: true,
+      })
       .getMany();
 
-    const levelIds = Array.from(new Set(sessions.map(s => s.classEntity.courseLevelId)));
+    const levelIds = Array.from(
+      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+    );
     let pricingList: CourseLevelPricingOrmEntity[] = [];
     if (levelIds.length > 0) {
-      pricingList = await this.sessionRepo.manager.find(CourseLevelPricingOrmEntity, {
-        where: { courseLevelId: In(levelIds) },
-      });
+      pricingList = await this.sessionRepo.manager.find(
+        CourseLevelPricingOrmEntity,
+        {
+          where: { courseLevelId: In(levelIds) },
+        },
+      );
     }
 
     // Group sessions by class
-    const classSessionMap = new Map<string, { sessions: any[]; classEntity: any }>();
+    const classSessionMap = new Map<
+      string,
+      { sessions: any[]; classEntity: any }
+    >();
     for (const session of sessions) {
       const attendance = (session as any).attendance;
       const isPresent = attendance ? attendance.isPresent : false;
@@ -260,7 +374,10 @@ export class StudentController {
 
       const classId = session.classId;
       if (!classSessionMap.has(classId)) {
-        classSessionMap.set(classId, { sessions: [], classEntity: session.classEntity });
+        classSessionMap.set(classId, {
+          sessions: [],
+          classEntity: session.classEntity,
+        });
       }
       classSessionMap.get(classId)!.sessions.push(session);
     }
@@ -277,7 +394,7 @@ export class StudentController {
         const date = session.date;
         const levelId = group.classEntity.courseLevelId;
         const pricing = pricingList.find(
-          p =>
+          (p) =>
             p.courseLevelId === levelId &&
             p.effectiveFrom <= date &&
             (p.effectiveTo === null || p.effectiveTo >= date),
@@ -310,20 +427,30 @@ export class StudentController {
 
   @Get('monthly-bills')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Lấy danh sách hóa đơn học phí theo tháng (Kế Toán)' })
+  @ApiOperation({
+    summary: 'Lấy danh sách hóa đơn học phí theo tháng (Kế Toán)',
+  })
   async getMonthlyBills(@Query('month') month: string) {
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-      throw new BadRequestException('Tháng không hợp lệ. Định dạng yêu cầu là YYYY-MM');
+      throw new BadRequestException(
+        'Tháng không hợp lệ. Định dạng yêu cầu là YYYY-MM',
+      );
     }
 
-    const students = await this.studentRepo.find({ order: { lastName: 'ASC', firstName: 'ASC' } });
+    const students = await this.studentRepo.find({
+      order: { lastName: 'ASC', firstName: 'ASC' },
+    });
     const savedBills = await this.monthlyBillRepo.find({ where: { month } });
-    const savedBillsMap = new Map(savedBills.map(b => [b.studentId, b]));
+    const savedBillsMap = new Map(savedBills.map((b) => [b.studentId, b]));
 
     let waveStartDate: Date;
     let waveEndDate: Date;
 
-    if (savedBills.length > 0 && savedBills[0].billingStartDate && savedBills[0].billingEndDate) {
+    if (
+      savedBills.length > 0 &&
+      savedBills[0].billingStartDate &&
+      savedBills[0].billingEndDate
+    ) {
       waveStartDate = savedBills[0].billingStartDate;
       waveEndDate = savedBills[0].billingEndDate;
     } else {
@@ -333,9 +460,10 @@ export class StudentController {
       const lastDay = new Date(qYear, qMonth, 0).getDate();
       const lastDayStr = `${qYear}-${String(qMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-      const computedEndDateStr = month === todayMonthStr
-        ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-        : lastDayStr;
+      const computedEndDateStr =
+        month === todayMonthStr
+          ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+          : lastDayStr;
 
       waveEndDate = new Date(computedEndDateStr);
 
@@ -350,7 +478,9 @@ export class StudentController {
         nextDay.setDate(nextDay.getDate() + 1);
         waveStartDate = nextDay;
       } else {
-        waveStartDate = new Date(`${qYear}-${String(qMonth).padStart(2, '0')}-01`);
+        waveStartDate = new Date(
+          `${qYear}-${String(qMonth).padStart(2, '0')}-01`,
+        );
       }
     }
 
@@ -363,7 +493,9 @@ export class StudentController {
       const savedBill = savedBillsMap.get(student.id);
 
       if (savedBill) {
-        const savedItems = await this.monthlyBillItemRepo.find({ where: { billId: savedBill.id } });
+        const savedItems = await this.monthlyBillItemRepo.find({
+          where: { billId: savedBill.id },
+        });
         results.push({
           id: savedBill.id,
           studentId: student.id,
@@ -380,7 +512,7 @@ export class StudentController {
           billingEndDate: savedBill.billingEndDate,
           note: savedBill.note,
           isDraft: false,
-          items: savedItems.map(item => ({
+          items: savedItems.map((item) => ({
             id: item.id,
             classId: item.classId,
             className: item.className,
@@ -424,25 +556,44 @@ export class StudentController {
 
   @Post('monthly-bills/pay')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Cập nhật tình trạng đóng học phí tháng của học sinh (Kế Toán)' })
-  async payMonthlyBill(@Body() body: {
-    studentId: string;
-    month: string;
-    totalAmount: number;
-    paidAmount: number;
-    status: string;
-    note?: string;
-    paymentDate?: string;
-    billingStartDate?: string;
-    billingEndDate?: string;
-  }) {
-    const { studentId, month, totalAmount, paidAmount, status, note, paymentDate, billingStartDate, billingEndDate } = body;
+  @ApiOperation({
+    summary: 'Cập nhật tình trạng đóng học phí tháng của học sinh (Kế Toán)',
+  })
+  async payMonthlyBill(
+    @Body()
+    body: {
+      studentId: string;
+      month: string;
+      totalAmount: number;
+      paidAmount: number;
+      status: string;
+      note?: string;
+      paymentDate?: string;
+      billingStartDate?: string;
+      billingEndDate?: string;
+    },
+  ) {
+    const {
+      studentId,
+      month,
+      totalAmount,
+      paidAmount,
+      status,
+      note,
+      paymentDate,
+      billingStartDate,
+      billingEndDate,
+    } = body;
     if (!studentId || !month || !/^\d{4}-\d{2}$/.test(month)) {
-      throw new BadRequestException('Dữ liệu không hợp lệ. Yêu cầu studentId và month (YYYY-MM)');
+      throw new BadRequestException(
+        'Dữ liệu không hợp lệ. Yêu cầu studentId và month (YYYY-MM)',
+      );
     }
 
     if (status === 'Unpaid') {
-      const bill = await this.monthlyBillRepo.findOne({ where: { studentId, month } });
+      const bill = await this.monthlyBillRepo.findOne({
+        where: { studentId, month },
+      });
       if (bill) {
         await this.monthlyBillRepo.remove(bill); // CASCADE will delete items
       }
@@ -453,8 +604,14 @@ export class StudentController {
     let finalBillingEndDate = billingEndDate;
 
     if (!finalBillingStartDate || !finalBillingEndDate) {
-      const existingBill = await this.monthlyBillRepo.findOne({ where: { month } });
-      if (existingBill && existingBill.billingStartDate && existingBill.billingEndDate) {
+      const existingBill = await this.monthlyBillRepo.findOne({
+        where: { month },
+      });
+      if (
+        existingBill &&
+        existingBill.billingStartDate &&
+        existingBill.billingEndDate
+      ) {
         finalBillingStartDate = `${existingBill.billingStartDate.getFullYear()}-${String(existingBill.billingStartDate.getMonth() + 1).padStart(2, '0')}-${String(existingBill.billingStartDate.getDate()).padStart(2, '0')}`;
         finalBillingEndDate = `${existingBill.billingEndDate.getFullYear()}-${String(existingBill.billingEndDate.getMonth() + 1).padStart(2, '0')}-${String(existingBill.billingEndDate.getDate()).padStart(2, '0')}`;
       } else {
@@ -464,13 +621,16 @@ export class StudentController {
         const lastDay = new Date(qYear, qMonth, 0).getDate();
         const lastDayStr = `${qYear}-${String(qMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-        finalBillingEndDate = month === todayMonthStr
-          ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-          : lastDayStr;
+        finalBillingEndDate =
+          month === todayMonthStr
+            ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+            : lastDayStr;
 
         const prevBill = await this.monthlyBillRepo
           .createQueryBuilder('bill')
-          .where('bill.billingEndDate < :endDate', { endDate: new Date(finalBillingEndDate) })
+          .where('bill.billingEndDate < :endDate', {
+            endDate: new Date(finalBillingEndDate),
+          })
           .orderBy('bill.billingEndDate', 'DESC')
           .getOne();
 
@@ -484,13 +644,16 @@ export class StudentController {
       }
     }
 
-    const { items, totalAmount: calculatedTotalAmount } = await this.calculateStudentBillingItems(
-      studentId,
-      finalBillingStartDate,
-      finalBillingEndDate,
-    );
+    const { items, totalAmount: calculatedTotalAmount } =
+      await this.calculateStudentBillingItems(
+        studentId,
+        finalBillingStartDate,
+        finalBillingEndDate,
+      );
 
-    let bill = await this.monthlyBillRepo.findOne({ where: { studentId, month } });
+    let bill = await this.monthlyBillRepo.findOne({
+      where: { studentId, month },
+    });
     if (!bill) {
       bill = new StudentMonthlyBillOrmEntity();
       bill.studentId = studentId;
@@ -512,7 +675,7 @@ export class StudentController {
 
     // Save details to student_monthly_bill_items
     if (items.length > 0) {
-      const ormItems = items.map(item => {
+      const ormItems = items.map((item) => {
         const dbItem = new StudentMonthlyBillItemOrmEntity();
         dbItem.billId = savedBill.id;
         dbItem.classId = item.classId;
@@ -532,8 +695,13 @@ export class StudentController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Lấy chi tiết một học sinh theo ID (Dành cho ADMIN & TEACHER)' })
-  @ApiResponse({ status: 200, description: 'Lấy thông tin học sinh thành công' })
+  @ApiOperation({
+    summary: 'Lấy chi tiết một học sinh theo ID (Dành cho ADMIN & TEACHER)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy thông tin học sinh thành công',
+  })
   @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
   async findOne(@Param('id') id: string) {
     return this.getStudentByIdUseCase.execute(id);
@@ -544,7 +712,10 @@ export class StudentController {
   @ApiOperation({ summary: 'Cập nhật thông tin học sinh (Chỉ dành cho ADMIN)' })
   @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
-  @ApiResponse({ status: 403, description: 'Từ chối truy cập (Bạn không phải ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'Từ chối truy cập (Bạn không phải ADMIN)',
+  })
   async update(@Param('id') id: string, @Body() dto: UpdateStudentDto) {
     return this.updateStudentUseCase.execute(id, dto);
   }
@@ -560,9 +731,9 @@ export class StudentController {
           course: true,
           courseLevel: true,
           center: true,
-        }
+        },
       },
-      order: { joinedDate: 'DESC' }
+      order: { joinedDate: 'DESC' },
     });
   }
 
@@ -579,7 +750,7 @@ export class StudentController {
       return [];
     }
 
-    const classIds = enrollments.map(e => e.classId);
+    const classIds = enrollments.map((e) => e.classId);
 
     // 2. Query sessions of these classes
     const sessions = await this.sessionRepo
@@ -594,7 +765,7 @@ export class StudentController {
         StudentAttendanceOrmEntity,
         'attendance',
         'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
-        { studentId }
+        { studentId },
       )
       .where('session.class_id IN (:...classIds)', { classIds })
       .orderBy('session.date', 'DESC')
@@ -602,15 +773,17 @@ export class StudentController {
       .getMany();
 
     // 3. Filter sessions for dropped/active students strictly based on enrollment joinedDate and droppedDate
-    const filtered = sessions.filter(session => {
-      const enrollment = enrollments.find(e => e.classId === session.classId);
+    const filtered = sessions.filter((session) => {
+      const enrollment = enrollments.find((e) => e.classId === session.classId);
       if (!enrollment) return false;
       const joinedDate = enrollment.joinedDate;
       if (enrollment.status === 'Active') {
         return session.date >= joinedDate;
       }
       if (enrollment.status === 'Dropped') {
-        const droppedDate = enrollment.updatedAt ? new Date(enrollment.updatedAt).toISOString().split('T')[0] : enrollment.joinedDate;
+        const droppedDate = enrollment.updatedAt
+          ? new Date(enrollment.updatedAt).toISOString().split('T')[0]
+          : enrollment.joinedDate;
         return session.date >= joinedDate && session.date <= droppedDate;
       }
       return false;
@@ -621,7 +794,9 @@ export class StudentController {
 
   @Get(':id/tuition-report')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Tính tiền học phí cho học sinh trong khoảng thời gian' })
+  @ApiOperation({
+    summary: 'Tính tiền học phí cho học sinh trong khoảng thời gian',
+  })
   async getTuitionReport(
     @Param('id') studentId: string,
     @Query('startDate') startDate: string,
@@ -633,15 +808,15 @@ export class StudentController {
         classEntity: {
           course: true,
           courseLevel: true,
-        }
-      }
+        },
+      },
     });
 
     if (enrollments.length === 0) {
       return { sessions: [], totalSessions: 0, totalAmount: 0 };
     }
 
-    const classIds = enrollments.map(e => e.classId);
+    const classIds = enrollments.map((e) => e.classId);
 
     const sessions = await this.sessionRepo
       .createQueryBuilder('session')
@@ -653,33 +828,43 @@ export class StudentController {
         StudentAttendanceOrmEntity,
         'attendance',
         'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
-        { studentId }
+        { studentId },
       )
       .where('session.class_id IN (:...classIds)', { classIds })
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
-      .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true })
+      .andWhere(
+        '(session.status = :completedStatus OR session.attendance_locked = :locked)',
+        { completedStatus: 'Completed', locked: true },
+      )
       .orderBy('session.date', 'ASC')
       .addOrderBy('session.start_time', 'ASC')
       .getMany();
 
-    const levelIds = Array.from(new Set(sessions.map(s => s.classEntity.courseLevelId)));
+    const levelIds = Array.from(
+      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+    );
     let pricingList: CourseLevelPricingOrmEntity[] = [];
     if (levelIds.length > 0) {
-      pricingList = await this.sessionRepo.manager.find(CourseLevelPricingOrmEntity, {
-        where: { courseLevelId: In(levelIds) },
-        relations: { courseLevel: true }
-      });
+      pricingList = await this.sessionRepo.manager.find(
+        CourseLevelPricingOrmEntity,
+        {
+          where: { courseLevelId: In(levelIds) },
+          relations: { courseLevel: true },
+        },
+      );
     }
 
-    const reportSessions = sessions.map(session => {
+    const reportSessions = sessions.map((session) => {
       const date = session.date;
       const levelId = session.classEntity.courseLevelId;
 
-      const pricing = pricingList.find(p => {
-        return p.courseLevelId === levelId &&
-               p.effectiveFrom <= date &&
-               (p.effectiveTo === null || p.effectiveTo >= date);
+      const pricing = pricingList.find((p) => {
+        return (
+          p.courseLevelId === levelId &&
+          p.effectiveFrom <= date &&
+          (p.effectiveTo === null || p.effectiveTo >= date)
+        );
       });
 
       const rate = pricing ? Number(pricing.pricePerSession) : 0;
@@ -706,20 +891,20 @@ export class StudentController {
     });
 
     const totalAmount = reportSessions.reduce((sum, s) => sum + s.amount, 0);
-    const totalSessions = reportSessions.filter(s => s.isPresent).length;
+    const totalSessions = reportSessions.filter((s) => s.isPresent).length;
 
     return {
       sessions: reportSessions,
       totalSessions,
       totalAmount,
-      pricingHistory: pricingList.map(p => ({
+      pricingHistory: pricingList.map((p) => ({
         id: p.id,
         levelName: p.courseLevel?.levelName || '',
         pricePerSession: Number(p.pricePerSession),
         teacherWagePerSession: Number(p.teacherWagePerSession),
         effectiveFrom: p.effectiveFrom,
-        effectiveTo: p.effectiveTo
-      }))
+        effectiveTo: p.effectiveTo,
+      })),
     };
   }
 }

@@ -49,8 +49,10 @@ import { AssignmentAttachmentOrmEntity } from './infrastructure/persistence/type
 import { AssignmentSubmissionOrmEntity } from './infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
 import { SubmissionAttachmentOrmEntity } from './infrastructure/persistence/typeorm/entities/submission-attachment.orm-entity';
 import { NotificationOrmEntity } from './infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { TuitionPaymentRequestOrmEntity } from './infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 import { AssignmentController } from './presentation/controllers/assignment.controller';
 import { NotificationController } from './presentation/controllers/notification.controller';
+import { TuitionPaymentRequestController } from './presentation/controllers/tuition-payment-request.controller';
 import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
 import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
 import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
@@ -79,7 +81,7 @@ import { ClassController } from './presentation/controllers/class.controller';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    
+
     // TypeORM PostgreSQL connection configuration
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -89,7 +91,10 @@ import { ClassController } from './presentation/controllers/class.controller';
         host: config.get<string>('DATABASE_HOST', 'localhost'),
         port: config.get<number>('DATABASE_PORT', 5435),
         username: config.get<string>('DATABASE_USER', 'dao_edu_db_admin'),
-        password: config.get<string>('DATABASE_PASSWORD', 'P@ssw0rd_Edu_Dao_2026_Secure!'),
+        password: config.get<string>(
+          'DATABASE_PASSWORD',
+          'P@ssw0rd_Edu_Dao_2026_Secure!',
+        ),
         database: config.get<string>('DATABASE_NAME', 'dao_edu_db'),
         entities: [
           UserOrmEntity,
@@ -117,16 +122,18 @@ import { ClassController } from './presentation/controllers/class.controller';
           AssignmentSubmissionOrmEntity,
           SubmissionAttachmentOrmEntity,
           NotificationOrmEntity,
+          TuitionPaymentRequestOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
         migrations: [
           // Thêm các file migrations để NestJS tìm thấy khi chạy build
-          __dirname + '/infrastructure/persistence/typeorm/migrations/*.{js,ts}'
-        ]
+          __dirname +
+            '/infrastructure/persistence/typeorm/migrations/*.{js,ts}',
+        ],
       }),
     }),
-    
+
     TypeOrmModule.forFeature([
       UserOrmEntity,
       StudentOrmEntity,
@@ -153,6 +160,7 @@ import { ClassController } from './presentation/controllers/class.controller';
       AssignmentSubmissionOrmEntity,
       SubmissionAttachmentOrmEntity,
       NotificationOrmEntity,
+      TuitionPaymentRequestOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -160,15 +168,18 @@ import { ClassController } from './presentation/controllers/class.controller';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'SUPER_SECRET_KEY_FOR_DEV_ONLY_12345'),
+        secret: config.get<string>(
+          'JWT_SECRET',
+          'SUPER_SECRET_KEY_FOR_DEV_ONLY_12345',
+        ),
         signOptions: { expiresIn: '15m' },
       }),
     }),
   ],
   controllers: [
-    AppController, 
-    AuthController, 
-    DashboardController, 
+    AppController,
+    AuthController,
+    DashboardController,
     StudentController,
     TeacherController,
     CenterController,
@@ -178,6 +189,7 @@ import { ClassController } from './presentation/controllers/class.controller';
     PaymentPeriodController,
     AssignmentController,
     NotificationController,
+    TuitionPaymentRequestController,
   ],
   providers: [
     AppService,
