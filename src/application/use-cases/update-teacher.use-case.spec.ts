@@ -105,4 +105,107 @@ describe('UpdateTeacherUseCase', () => {
     expect(result.userId).toBe('new-user-id');
     expect(result.loginEmail).toBe('new@example.com');
   });
+
+  it('should update the existing login email', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    const existingUser = {
+      id: 'user-1',
+      email: 'old@example.com',
+      passwordHash: 'old-hash',
+      name: 'Doe John',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+    userRepository.findById.mockResolvedValue(existingUser as any);
+    userRepository.findByEmail.mockResolvedValue(null);
+    userRepository.save.mockImplementation(async (user) => user as any);
+
+    const result = await useCase.execute('1', { loginEmail: ' NEW@example.com ' });
+
+    expect(userRepository.findByEmail).toHaveBeenCalledWith('new@example.com');
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'new@example.com' }),
+    );
+    expect(result.loginEmail).toBe('new@example.com');
+  });
+
+  it('should reject an existing login email owned by another user', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    userRepository.findById.mockResolvedValue({
+      id: 'user-1',
+      email: 'old@example.com',
+      passwordHash: 'old-hash',
+    } as any);
+    userRepository.findByEmail.mockResolvedValue({
+      id: 'user-2',
+      email: 'used@example.com',
+    } as any);
+
+    await expect(
+      useCase.execute('1', { loginEmail: 'used@example.com' }),
+    ).rejects.toThrow(ConflictException);
+    expect(userRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('should hash a new password and revoke refresh tokens', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    const existingUser = {
+      id: 'user-1',
+      email: 'teacher@example.com',
+      passwordHash: 'old-hash',
+      refreshTokenHash: 'old-refresh-hash',
+      name: 'Doe John',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+    userRepository.findById.mockResolvedValue(existingUser as any);
+    userRepository.save.mockImplementation(async (user) => user as any);
+    (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
+    (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+    await useCase.execute('1', { loginPassword: 'new-password' });
+
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 'salt');
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passwordHash: 'new-hash',
+        refreshTokenHash: null,
+      }),
+    );
+  });
+
+  it('should fail when the linked login account no longer exists', async () => {
+    teacherRepository.findById.mockResolvedValue({
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'missing-user',
+      firstName: 'John',
+      lastName: 'Doe',
+    } as any);
+    userRepository.findById.mockResolvedValue(null);
+
+    await expect(useCase.execute('1', { firstName: 'Jane' })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(teacherRepository.save).not.toHaveBeenCalled();
+  });
 });

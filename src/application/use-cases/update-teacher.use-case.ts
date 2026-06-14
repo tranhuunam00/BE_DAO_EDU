@@ -23,6 +23,9 @@ export class UpdateTeacherUseCase {
       throw new NotFoundException('Không tìm thấy giáo viên');
     }
 
+    const previousFirstName = teacher.firstName;
+    const previousLastName = teacher.lastName;
+
     if (dto.firstName !== undefined) teacher.firstName = dto.firstName;
     if (dto.lastName !== undefined) teacher.lastName = dto.lastName;
     if (dto.gender !== undefined) teacher.gender = dto.gender;
@@ -41,8 +44,10 @@ export class UpdateTeacherUseCase {
       teacher.avatar = await this.minioService.uploadBase64Image(dto.avatar, teacher.teacherId);
     }
 
-    if (!teacher.userId && dto.loginEmail && dto.loginPassword) {
-      const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
+    const normalizedLoginEmail = dto.loginEmail?.trim().toLowerCase();
+
+    if (!teacher.userId && normalizedLoginEmail && dto.loginPassword) {
+      const existingUser = await this.userRepository.findByEmail(normalizedLoginEmail);
       if (existingUser) {
         throw new ConflictException('Email đăng nhập giáo viên đã tồn tại trên hệ thống');
       }
@@ -53,7 +58,7 @@ export class UpdateTeacherUseCase {
       const newUserId = randomUUID();
       const user = new User(
         newUserId,
-        dto.loginEmail.toLowerCase(),
+        normalizedLoginEmail,
         passwordHash,
         `${teacher.lastName} ${teacher.firstName}`.trim(),
         Role.TEACHER,
@@ -63,8 +68,45 @@ export class UpdateTeacherUseCase {
       const savedUser = await this.userRepository.save(user);
       teacher.userId = savedUser.id;
       teacher.loginEmail = savedUser.email;
+    } else if (teacher.userId) {
+      const user = await this.userRepository.findById(teacher.userId);
+      if (!user) {
+        throw new NotFoundException('Không tìm thấy tài khoản đăng nhập của giáo viên');
+      }
+
+      let shouldSaveUser = false;
+
+      if (normalizedLoginEmail && normalizedLoginEmail !== user.email.toLowerCase()) {
+        const existingUser = await this.userRepository.findByEmail(normalizedLoginEmail);
+        if (existingUser && existingUser.id !== user.id) {
+          throw new ConflictException('Email đăng nhập giáo viên đã tồn tại trên hệ thống');
+        }
+        user.email = normalizedLoginEmail;
+        shouldSaveUser = true;
+      }
+
+      if (dto.loginPassword) {
+        const salt = await bcrypt.genSalt(10);
+        user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+        user.refreshTokenHash = null;
+        shouldSaveUser = true;
+      }
+
+      if (teacher.firstName !== previousFirstName || teacher.lastName !== previousLastName) {
+        user.name = `${teacher.lastName} ${teacher.firstName}`.trim();
+        shouldSaveUser = true;
+      }
+
+      if (shouldSaveUser) {
+        const savedUser = await this.userRepository.save(user);
+        teacher.loginEmail = savedUser.email;
+      } else {
+        teacher.loginEmail = user.email;
+      }
     }
 
-    return this.teacherRepository.save(teacher);
+    const savedTeacher = await this.teacherRepository.save(teacher);
+    savedTeacher.loginEmail = teacher.loginEmail;
+    return savedTeacher;
   }
 }

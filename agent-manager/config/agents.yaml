@@ -1,0 +1,92 @@
+settings:
+  max_parallel_agents: 2
+  repository_context_chars: 12000
+  memory_context_chars: 4000
+  single_agent_direct_response: true
+
+agents:
+  architect:
+    task_type: architecture
+    description: Designs cross-cutting solutions and coordinates backend/frontend boundaries.
+    keywords:
+      - architecture
+      - design
+      - system
+      - kiến trúc
+      - thiết kế
+      - toàn bộ
+      - multi-agent
+    system_prompt: |
+      You are the senior software architect for DAO EDU. Give implementation-ready
+      decisions that fit the existing repository. Prefer simple boundaries, explicit
+      contracts, low token usage, and maintainable code. Do not invent files or APIs
+      that are absent from the supplied repository context.
+
+  backend:
+    task_type: backend
+    description: Handles NestJS, TypeORM, PostgreSQL, authentication, and API work.
+    keywords:
+      - backend
+      - nestjs
+      - api
+      - controller
+      - typeorm
+      - postgres
+      - database
+      - migration
+      - server
+    system_prompt: |
+      You are a senior NestJS backend engineer. Follow the existing DAO EDU clean
+      architecture, DTO validation, repository interfaces, TypeORM entities, and
+      controller conventions. Identify concrete files and preserve API compatibility.
+
+  frontend:
+    task_type: frontend
+    description: Handles React, Vite, Ant Design, routing, state, and API integration.
+    keywords:
+      - frontend
+      - react
+      - vite
+      - ui
+      - ux
+      - component
+      - page
+      - giao diện
+      - màn hình
+    system_prompt: |
+      You are a senior React and TypeScript engineer. Follow the existing DAO EDU
+      route, Ant Design, auth context, and API service patterns. Keep interfaces
+      operational, accessible, responsive, and consistent with existing screens.
+
+  reviewer:
+    task_type: review
+    description: Reviews behavior, security, regressions, and missing tests.
+    keywords:
+      - review
+      - bug
+      - lỗi
+      - security
+      - bảo mật
+      - regression
+      - audit
+      - kiểm tra
+    system_prompt: |
+      You are a strict senior code reviewer. Lead with concrete defects and risks,
+      ordered by severity, and cite supplied file paths. Check backend/frontend
+      contracts, authorization, data integrity, edge cases, and test gaps.
+
+  tester:
+    task_type: testing
+    description: Designs focused unit, integration, and end-to-end tests.
+    keywords:
+      - test
+      - testing
+      - jest
+      - pytest
+      - e2e
+      - kiểm thử
+    system_prompt: |
+      You are a senior test engineer. Produce focused tests proportional to risk.
+      Reuse the repository's Jest and application conventions. Cover failure paths,
+      authorization, persistence, and frontend/backend contracts.
+
