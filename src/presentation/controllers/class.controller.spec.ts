@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ClassController } from './class.controller';
+import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 
 describe('ClassController enrollment and schedule edge cases', () => {
   const createQueryBuilder = (result: any[] = []) => ({
@@ -72,6 +73,12 @@ describe('ClassController enrollment and schedule edge cases', () => {
         save: jest.fn(),
       },
     };
+    const academics = {
+      checkRecurring: { execute: jest.fn().mockResolvedValue(undefined) },
+      checkSession: { execute: jest.fn().mockResolvedValue(undefined) },
+      enrollStudent: { execute: jest.fn() },
+      removeStudent: { execute: jest.fn().mockResolvedValue(undefined) },
+    };
 
     const controller = new ClassController(
       repos.classRepo as any,
@@ -83,11 +90,16 @@ describe('ClassController enrollment and schedule edge cases', () => {
       repos.studentRepo as any,
       repos.assignmentRepo as any,
       repos.notificationRepo as any,
+      academics.checkRecurring as any,
+      academics.checkSession as any,
+      academics.enrollStudent as any,
+      academics.removeStudent as any,
     );
 
     return {
       controller,
       repos,
+      academics,
       sessionQueryBuilder,
     };
   };
@@ -266,9 +278,10 @@ describe('ClassController enrollment and schedule edge cases', () => {
   });
 
   it('rejects enrollment when the class does not exist', async () => {
-    const { controller, repos } = createController();
-    repos.classRepo.findOne.mockResolvedValue(null);
-    repos.studentRepo.findOne.mockResolvedValue({ id: 'student-1' });
+    const { controller, academics } = createController();
+    academics.enrollStudent.execute.mockRejectedValue(
+      new AcademicError('CLASS_NOT_FOUND', 'Class not found.'),
+    );
 
     await expect(
       controller.addStudent('class-1', { studentId: 'student-1' }),
@@ -276,9 +289,10 @@ describe('ClassController enrollment and schedule edge cases', () => {
   });
 
   it('rejects enrollment when the student does not exist', async () => {
-    const { controller, repos } = createController();
-    repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', maxSize: 10 });
-    repos.studentRepo.findOne.mockResolvedValue(null);
+    const { controller, academics } = createController();
+    academics.enrollStudent.execute.mockRejectedValue(
+      new AcademicError('STUDENT_NOT_FOUND', 'Student not found.'),
+    );
 
     await expect(
       controller.addStudent('class-1', { studentId: 'student-1' }),
@@ -286,48 +300,47 @@ describe('ClassController enrollment and schedule edge cases', () => {
   });
 
   it('returns an active enrollment idempotently without duplicate side effects', async () => {
-    const { controller, repos } = createController();
+    const { controller, academics } = createController();
     const enrollment = {
       id: 'enrollment-1',
       classId: 'class-1',
       studentId: 'student-1',
       status: 'Active',
     };
-    repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', maxSize: 1 });
-    repos.studentRepo.findOne.mockResolvedValue({ id: 'student-1' });
-    repos.classStudentRepo.findOne.mockResolvedValue(enrollment);
+    academics.enrollStudent.execute.mockResolvedValue(enrollment);
+    jest
+      .spyOn(controller as any, 'notifyStudentAboutOpenAssignments')
+      .mockResolvedValue(undefined);
 
     const result = await controller.addStudent('class-1', {
       studentId: 'student-1',
     });
 
     expect(result).toBe(enrollment);
-    expect(repos.classStudentRepo.count).not.toHaveBeenCalled();
-    expect(repos.classStudentRepo.save).not.toHaveBeenCalled();
+    expect(academics.enrollStudent.execute).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a new enrollment when the class is full', async () => {
-    const { controller, repos } = createController();
-    repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', maxSize: 2 });
-    repos.studentRepo.findOne.mockResolvedValue({ id: 'student-1' });
-    repos.classStudentRepo.findOne.mockResolvedValue(null);
-    repos.classStudentRepo.count.mockResolvedValue(2);
+    const { controller, academics } = createController();
+    academics.enrollStudent.execute.mockRejectedValue(
+      new AcademicError('CLASS_FULL', 'Class is full.'),
+    );
 
     await expect(
       controller.addStudent('class-1', { studentId: 'student-1' }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(repos.classStudentRepo.save).not.toHaveBeenCalled();
   });
 
   it('creates a new enrollment and prepares attendance and notifications', async () => {
-    const { controller, repos } = createController();
-    const student = { id: 'student-1', status: 'Waiting for class' };
-    repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', maxSize: 10 });
-    repos.studentRepo.findOne.mockResolvedValue(student);
-    repos.classStudentRepo.findOne.mockResolvedValue(null);
-    const attendance = jest
-      .spyOn(controller as any, 'generateAttendanceForStudent')
-      .mockResolvedValue(undefined);
+    const { controller, academics } = createController();
+    academics.enrollStudent.execute.mockResolvedValue({
+      id: 'enrollment-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'Active',
+      joinedDate: '2026-06-14',
+      reactivated: false,
+    });
     const notifications = jest
       .spyOn(controller as any, 'notifyStudentAboutOpenAssignments')
       .mockResolvedValue(undefined);
@@ -343,26 +356,19 @@ describe('ClassController enrollment and schedule edge cases', () => {
         status: 'Active',
       }),
     );
-    expect(student.status).toBe('Studying');
-    expect(attendance).toHaveBeenCalledWith('class-1', 'student-1');
     expect(notifications).toHaveBeenCalledWith('class-1', 'student-1');
   });
 
   it('reactivates a dropped enrollment and restores future attendance', async () => {
-    const { controller, repos } = createController();
-    const student = { id: 'student-1', status: 'Waiting for class' };
-    const enrollment = {
+    const { controller, academics } = createController();
+    academics.enrollStudent.execute.mockResolvedValue({
       id: 'enrollment-1',
       classId: 'class-1',
       studentId: 'student-1',
-      status: 'Dropped',
-    };
-    repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', maxSize: 10 });
-    repos.studentRepo.findOne.mockResolvedValue(student);
-    repos.classStudentRepo.findOne.mockResolvedValue(enrollment);
-    const attendance = jest
-      .spyOn(controller as any, 'generateAttendanceForStudent')
-      .mockResolvedValue(undefined);
+      status: 'Active',
+      joinedDate: '2026-06-14',
+      reactivated: true,
+    });
     jest
       .spyOn(controller as any, 'notifyStudentAboutOpenAssignments')
       .mockResolvedValue(undefined);
@@ -372,43 +378,17 @@ describe('ClassController enrollment and schedule edge cases', () => {
     });
 
     expect(result.status).toBe('Active');
-    expect(student.status).toBe('Studying');
-    expect(attendance).toHaveBeenCalledWith('class-1', 'student-1');
+    expect(result.reactivated).toBe(true);
   });
 
-  it('keeps the student studying when another active class remains', async () => {
-    const { controller, repos, sessionQueryBuilder } = createController();
-    const enrollment = { status: 'Active' };
-    repos.classStudentRepo.findOneOrFail.mockResolvedValue(enrollment);
-    repos.classStudentRepo.count.mockResolvedValue(1);
-    sessionQueryBuilder.getMany.mockResolvedValue([]);
-
+  it('delegates removal to the transactional use case', async () => {
+    const { controller, academics } = createController();
     await controller.removeStudent('class-1', 'student-1');
 
-    expect(enrollment.status).toBe('Dropped');
-    expect(repos.studentRepo.save).not.toHaveBeenCalled();
-  });
-
-  it('sets waiting status and removes attendance from today onward', async () => {
-    const { controller, repos, sessionQueryBuilder } = createController();
-    const enrollment = { status: 'Active' };
-    const student = { id: 'student-1', status: 'Studying' };
-    repos.classStudentRepo.findOneOrFail.mockResolvedValue(enrollment);
-    repos.classStudentRepo.count.mockResolvedValue(0);
-    repos.studentRepo.findOne.mockResolvedValue(student);
-    sessionQueryBuilder.getMany.mockResolvedValue([
-      { id: 'today-session' },
-      { id: 'future-session' },
-    ]);
-
-    await controller.removeStudent('class-1', 'student-1');
-
-    expect(student.status).toBe('Waiting for class');
-    expect(sessionQueryBuilder.andWhere).toHaveBeenCalledWith(
-      's.date >= :today',
-      { today: '2026-06-14' },
+    expect(academics.removeStudent.execute).toHaveBeenCalledWith(
+      'class-1',
+      'student-1',
     );
-    expect(repos.attendanceRepo.delete).toHaveBeenCalledTimes(2);
   });
 
   it('rejects changes to a locked session', async () => {

@@ -23,6 +23,15 @@ import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entit
 import { CreateClassDto, UpdateClassDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
+import {
+  CheckRecurringScheduleConflictsUseCase,
+  CheckSessionScheduleConflictUseCase,
+} from '../../modules/academics/application/use-cases/check-schedule-conflicts.use-case';
+import {
+  EnrollStudentUseCase,
+  RemoveStudentFromClassUseCase,
+} from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -108,6 +117,10 @@ export class ClassController {
     private readonly assignmentRepo: Repository<AssignmentOrmEntity>,
     @InjectRepository(NotificationOrmEntity)
     private readonly notificationRepo: Repository<NotificationOrmEntity>,
+    private readonly checkRecurringScheduleConflicts: CheckRecurringScheduleConflictsUseCase,
+    private readonly checkSessionScheduleConflict: CheckSessionScheduleConflictUseCase,
+    private readonly enrollStudentUseCase: EnrollStudentUseCase,
+    private readonly removeStudentUseCase: RemoveStudentFromClassUseCase,
   ) {}
 
   @Get()
@@ -219,6 +232,20 @@ export class ClassController {
         }
       }
     }
+
+    await this.runAcademic(() =>
+      this.checkRecurringScheduleConflicts.execute(
+        (dto.schedules ?? []).map((schedule) => ({
+          weekday: schedule.weekday,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          roomId: schedule.roomId ?? null,
+          teacherId: dto.mainTeacherId ?? null,
+          startDate: dto.startDate,
+          finishDate: dto.finishDate,
+        })),
+      ),
+    );
 
     const existsCode = await this.classRepo.createQueryBuilder('c')
       .where('LOWER(c.class_code) = LOWER(:code)', { code: dto.classCode.trim() })
@@ -341,6 +368,34 @@ export class ClassController {
       }
     }
 
+    if (
+      dto.schedules !== undefined ||
+      dto.mainTeacherId !== undefined ||
+      dto.startDate !== undefined ||
+      dto.finishDate !== undefined
+    ) {
+      const schedules =
+        dto.schedules ??
+        (await this.scheduleRepo.find({ where: { classId: id } }));
+      await this.runAcademic(() =>
+        this.checkRecurringScheduleConflicts.execute(
+          schedules.map((schedule) => ({
+            weekday: schedule.weekday,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            roomId: schedule.roomId ?? null,
+            teacherId:
+              dto.mainTeacherId !== undefined
+                ? dto.mainTeacherId || null
+                : classEntity.mainTeacherId,
+            startDate: finalStartDate,
+            finishDate: finalFinishDate,
+          })),
+          id,
+        ),
+      );
+    }
+
     if (dto.courseId !== undefined) classEntity.courseId = dto.courseId;
     if (dto.courseLevelId !== undefined) classEntity.courseLevelId = dto.courseLevelId;
     if (dto.classCode !== undefined) classEntity.classCode = dto.classCode;
@@ -417,67 +472,9 @@ export class ClassController {
   @Post(':id/students')
   @ApiOperation({ summary: 'Thêm Học sinh vào Lớp' })
   async addStudent(@Param('id') classId: string, @Body() body: { studentId: string }) {
-    const [classEntity, student] = await Promise.all([
-      this.classRepo.findOne({ where: { id: classId } }),
-      this.studentRepo.findOne({ where: { id: body.studentId } }),
-    ]);
-    if (!classEntity) {
-      throw new NotFoundException('Class not found.');
-    }
-    if (!student) {
-      throw new NotFoundException('Student not found.');
-    }
-
-    const existing = await this.classStudentRepo.findOne({
-      where: { classId, studentId: body.studentId },
-    });
-
-    const updateStudentStatusToStudying = async () => {
-      student.status = 'Studying';
-      await this.studentRepo.save(student);
-    };
-
-    if (existing?.status === 'Active') {
-      return existing;
-    }
-
-    if (classEntity.maxSize !== null && classEntity.maxSize !== undefined) {
-      const activeStudentCount = await this.classStudentRepo.count({
-        where: { classId, status: 'Active' },
-      });
-      if (activeStudentCount >= classEntity.maxSize) {
-        throw new ConflictException('Class has reached its maximum size.');
-      }
-    }
-
-    if (existing) {
-      if (existing.status === 'Dropped') {
-        existing.status = 'Active';
-        existing.joinedDate = new Date().toISOString().split('T')[0];
-        await this.classStudentRepo.save(existing);
-
-        await updateStudentStatusToStudying();
-
-        // Generate attendance for future sessions
-        await this.generateAttendanceForStudent(classId, body.studentId);
-        await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
-        return existing;
-      }
-      return existing; // already active
-    }
-
-    const cs = this.classStudentRepo.create({
-      classId,
-      studentId: body.studentId,
-      status: 'Active',
-      joinedDate: new Date().toISOString().split('T')[0],
-    });
-    const saved = await this.classStudentRepo.save(cs);
-
-    await updateStudentStatusToStudying();
-
-    // Generate attendance records for future sessions
-    await this.generateAttendanceForStudent(classId, body.studentId);
+    const saved = await this.runAcademic(() =>
+      this.enrollStudentUseCase.execute(classId, body.studentId),
+    );
     await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
 
     return saved;
@@ -486,39 +483,9 @@ export class ClassController {
   @Delete(':id/students/:studentId')
   @ApiOperation({ summary: 'Kick Học sinh khỏi Lớp (Dropped)' })
   async removeStudent(@Param('id') classId: string, @Param('studentId') studentId: string) {
-    const cs = await this.classStudentRepo.findOneOrFail({
-      where: { classId, studentId },
-    });
-    cs.status = 'Dropped';
-    await this.classStudentRepo.save(cs);
-
-    // If student has no other active classes, set global status back to 'Waiting for class'
-    const activeClasses = await this.classStudentRepo.count({
-      where: { studentId, status: 'Active' },
-    });
-    if (activeClasses === 0) {
-      const student = await this.studentRepo.findOne({ where: { id: studentId } });
-      if (student) {
-        student.status = 'Waiting for class';
-        await this.studentRepo.save(student);
-      }
-    }
-
-    // Remove future attendance (not locked ones)
-    const today = new Date().toISOString().split('T')[0];
-    const futureSessions = await this.sessionRepo
-      .createQueryBuilder('s')
-      .where('s.class_id = :classId', { classId })
-      .andWhere('s.date >= :today', { today })
-      .andWhere('s.attendance_locked = false')
-      .getMany();
-
-    for (const session of futureSessions) {
-      await this.attendanceRepo.delete({
-        classSessionId: session.id,
-        studentId,
-      });
-    }
+    await this.runAcademic(() =>
+      this.removeStudentUseCase.execute(classId, studentId),
+    );
 
     return { message: 'Học sinh đã được chuyển sang trạng thái Dropped' };
   }
@@ -695,6 +662,24 @@ export class ClassController {
     }
 
     if (scope === 'single') {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute(
+          {
+            date: body.date ?? session.date,
+            startTime: nextStartTime,
+            endTime: nextEndTime,
+            roomId:
+              body.roomId !== undefined
+                ? body.roomId || null
+                : session.roomId,
+            teacherId:
+              body.teacherId !== undefined
+                ? body.teacherId || null
+                : session.teacherId,
+          },
+          session.id,
+        ),
+      );
       if (body.date !== undefined) session.date = body.date;
       if (body.startTime !== undefined) session.startTime = body.startTime;
       if (body.endTime !== undefined) session.endTime = body.endTime;
@@ -711,6 +696,22 @@ export class ClassController {
         .getMany();
 
       for (const fs of futureSessions) {
+        await this.runAcademic(() =>
+          this.checkSessionScheduleConflict.execute(
+            {
+              date: fs.date,
+              startTime: body.startTime ?? fs.startTime,
+              endTime: body.endTime ?? fs.endTime,
+              roomId:
+                body.roomId !== undefined ? body.roomId || null : fs.roomId,
+              teacherId:
+                body.teacherId !== undefined
+                  ? body.teacherId || null
+                  : fs.teacherId,
+            },
+            fs.id,
+          ),
+        );
         if (body.startTime !== undefined) fs.startTime = body.startTime;
         if (body.endTime !== undefined) fs.endTime = body.endTime;
         if (body.roomId !== undefined) fs.roomId = body.roomId || null;
@@ -815,30 +816,6 @@ export class ClassController {
     await this.generateSessions(classId);
   }
 
-  private async generateAttendanceForStudent(classId: string, studentId: string) {
-    const today = new Date().toISOString().split('T')[0];
-    const futureSessions = await this.sessionRepo
-      .createQueryBuilder('s')
-      .where('s.class_id = :classId', { classId })
-      .andWhere('s.date >= :today', { today })
-      .andWhere('s.attendance_locked = false')
-      .getMany();
-
-    for (const session of futureSessions) {
-      const exists = await this.attendanceRepo.findOne({
-        where: { classSessionId: session.id, studentId },
-      });
-      if (!exists) {
-        const att = this.attendanceRepo.create({
-          classSessionId: session.id,
-          studentId,
-          isPresent: false,
-        });
-        await this.attendanceRepo.save(att);
-      }
-    }
-  }
-
   private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {
     const [student, assignments] = await Promise.all([
       this.studentRepo.findOne({ where: { id: studentId } }),
@@ -856,5 +833,20 @@ export class ClassController {
       message: assignment.title,
       linkPath: '/student/assignments',
     })));
+  }
+
+  private async runAcademic<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (!(error instanceof AcademicError)) throw error;
+      if (
+        error.code === 'CLASS_NOT_FOUND' ||
+        error.code === 'STUDENT_NOT_FOUND'
+      ) {
+        throw new NotFoundException(error.message);
+      }
+      throw new ConflictException(error.message);
+    }
   }
 }

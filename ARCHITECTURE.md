@@ -41,6 +41,19 @@ directories. The other contexts are registered as independent modules while
 their legacy layer files are migrated incrementally without changing API
 contracts.
 
+### Academics Consistency
+
+The `academics` context uses domain schedule policies and application use
+cases for enrollment and resource allocation.
+
+- Enrollment changes run in `SERIALIZABLE` transactions.
+- Class and student rows are locked before capacity or status changes.
+- Attendance creation/removal is committed with the enrollment change.
+- Recurring schedules are checked for room and teacher conflicts.
+- Concrete sessions are protected by PostgreSQL exclusion constraints, which
+  close the race between concurrent requests.
+- Serialization failures are retried up to three times.
+
 ## Migration Rules
 
 1. New business logic belongs in a context under `src/modules/<context>`.

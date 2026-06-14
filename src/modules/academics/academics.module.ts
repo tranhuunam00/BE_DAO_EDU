@@ -13,6 +13,17 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { ClassController } from '../../presentation/controllers/class.controller';
 import { CourseController } from '../../presentation/controllers/course.controller';
+import { AcademicsPersistencePort } from './application/ports/academics-persistence.port';
+import {
+  CheckRecurringScheduleConflictsUseCase,
+  CheckSessionScheduleConflictUseCase,
+} from './application/use-cases/check-schedule-conflicts.use-case';
+import {
+  EnrollStudentUseCase,
+  RemoveStudentFromClassUseCase,
+} from './application/use-cases/manage-enrollment.use-cases';
+import { ScheduleConflictPolicy } from './domain/services/schedule-conflict.policy';
+import { TypeOrmAcademicsPersistenceAdapter } from './infrastructure/persistence/typeorm-academics-persistence.adapter';
 
 @Module({
   imports: [
@@ -31,5 +42,40 @@ import { CourseController } from '../../presentation/controllers/course.controll
     ]),
   ],
   controllers: [CourseController, ClassController],
+  providers: [
+    ScheduleConflictPolicy,
+    {
+      provide: AcademicsPersistencePort,
+      useClass: TypeOrmAcademicsPersistenceAdapter,
+    },
+    {
+      provide: CheckRecurringScheduleConflictsUseCase,
+      useFactory: (
+        persistence: AcademicsPersistencePort,
+        policy: ScheduleConflictPolicy,
+      ) => new CheckRecurringScheduleConflictsUseCase(persistence, policy),
+      inject: [AcademicsPersistencePort, ScheduleConflictPolicy],
+    },
+    {
+      provide: CheckSessionScheduleConflictUseCase,
+      useFactory: (
+        persistence: AcademicsPersistencePort,
+        policy: ScheduleConflictPolicy,
+      ) => new CheckSessionScheduleConflictUseCase(persistence, policy),
+      inject: [AcademicsPersistencePort, ScheduleConflictPolicy],
+    },
+    {
+      provide: EnrollStudentUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new EnrollStudentUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
+    {
+      provide: RemoveStudentFromClassUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new RemoveStudentFromClassUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
+  ],
 })
 export class AcademicsModule {}
