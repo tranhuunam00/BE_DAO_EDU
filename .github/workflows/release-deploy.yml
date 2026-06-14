@@ -1,0 +1,59 @@
+name: Release deploy
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: dao-edu-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.head_commit != null &&
+      contains(github.event.head_commit.message, 'release v')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy backend with PM2
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          SSH_PORT="${SSH_PORT:-22}"
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || {
+            echo "DEPLOY_PATH must be an absolute path without spaces."
+            exit 1
+          }
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "set -e
+             cd '$DEPLOY_PATH'
+             test -d .git || {
+               echo 'Git repository not found at DEPLOY_PATH: $DEPLOY_PATH'
+               exit 1
+             }
+             git fetch --prune origin main
+             git checkout main
+             git merge --ff-only origin/main
+             bash scripts/deploy-pm2.sh main"
