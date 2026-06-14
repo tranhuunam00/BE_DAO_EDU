@@ -55,10 +55,7 @@ import { VietQrCallbackLogOrmEntity } from './infrastructure/persistence/typeorm
 import { AssignmentController } from './presentation/controllers/assignment.controller';
 import { NotificationController } from './presentation/controllers/notification.controller';
 import { PaymentsModule } from './modules/payments/payments.module';
-import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
-import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
-import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
-import { CreatePaymentPeriodUseCase } from './application/use-cases/payment-periods/create-payment-period.use-case';
+import { BillingModule } from './modules/billing/billing.module';
 import { TypeOrmTeacherRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-teacher.repository';
 import { TypeOrmCenterRepository } from './infrastructure/persistence/typeorm/repositories/typeorm-center.repository';
 import { ITeacherRepository } from './domain/repositories/teacher-repository.interface';
@@ -182,6 +179,7 @@ import { ClassController } from './presentation/controllers/class.controller';
       }),
     }),
     PaymentsModule,
+    BillingModule,
   ],
   controllers: [
     AppController,
@@ -193,7 +191,6 @@ import { ClassController } from './presentation/controllers/class.controller';
     CourseController,
     RoomController,
     ClassController,
-    PaymentPeriodController,
     AssignmentController,
     NotificationController,
   ],
@@ -202,9 +199,6 @@ import { ClassController } from './presentation/controllers/class.controller';
     GetDashboardSummaryUseCase,
     GetDashboardRevenueUseCase,
     GetDashboardActivitiesUseCase,
-    PreviewTuitionUseCase,
-    PreviewSalaryUseCase,
-    CreatePaymentPeriodUseCase,
     RegisterUseCase,
     LoginUseCase,
     RefreshTokenUseCase,
