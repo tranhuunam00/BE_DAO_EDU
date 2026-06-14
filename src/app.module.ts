@@ -54,8 +54,7 @@ import { TuitionPaymentLogOrmEntity } from './infrastructure/persistence/typeorm
 import { VietQrCallbackLogOrmEntity } from './infrastructure/persistence/typeorm/entities/vietqr-callback-log.orm-entity';
 import { AssignmentController } from './presentation/controllers/assignment.controller';
 import { NotificationController } from './presentation/controllers/notification.controller';
-import { TuitionPaymentRequestController } from './presentation/controllers/tuition-payment-request.controller';
-import { VietQrCallbackController } from './presentation/controllers/vietqr-callback.controller';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
 import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
 import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
@@ -182,6 +181,7 @@ import { ClassController } from './presentation/controllers/class.controller';
         signOptions: { expiresIn: '15m' },
       }),
     }),
+    PaymentsModule,
   ],
   controllers: [
     AppController,
@@ -196,8 +196,6 @@ import { ClassController } from './presentation/controllers/class.controller';
     PaymentPeriodController,
     AssignmentController,
     NotificationController,
-    TuitionPaymentRequestController,
-    VietQrCallbackController,
   ],
   providers: [
     AppService,
