@@ -60,7 +60,10 @@ export class CreatePaymentPeriodUseCase {
         .where('att.billId IS NULL')
         .andWhere('session.date <= :endDateStr', { endDateStr: endDate })
         .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true })
-        .andWhere('(att.isPresent = :present OR (att.isPresent = :absent AND (att.reason IS NULL OR att.reason = \\\'\\\' OR TRIM(att.reason) = \\\'\\\')))', { present: true, absent: false });
+        .andWhere(
+          '(att.isPresent = :present OR (att.isPresent = :absent AND (att.reason IS NULL OR TRIM(att.reason) = :emptyReason)))',
+          { present: true, absent: false, emptyReason: '' },
+        );
 
       if (studentIds && studentIds.length > 0) {
         qb.andWhere('att.studentId IN (:...ids)', { ids: studentIds });

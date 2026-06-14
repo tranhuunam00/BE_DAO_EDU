@@ -44,6 +44,13 @@ import { TeacherMonthlyWageOrmEntity } from './infrastructure/persistence/typeor
 import { StudentMonthlyBillItemOrmEntity } from './infrastructure/persistence/typeorm/entities/student-monthly-bill-item.orm-entity';
 import { TeacherMonthlyWageItemOrmEntity } from './infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
 import { PaymentPeriodOrmEntity } from './infrastructure/persistence/typeorm/entities/payment-period.orm-entity';
+import { AssignmentOrmEntity } from './infrastructure/persistence/typeorm/entities/assignment.orm-entity';
+import { AssignmentAttachmentOrmEntity } from './infrastructure/persistence/typeorm/entities/assignment-attachment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from './infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
+import { SubmissionAttachmentOrmEntity } from './infrastructure/persistence/typeorm/entities/submission-attachment.orm-entity';
+import { NotificationOrmEntity } from './infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { AssignmentController } from './presentation/controllers/assignment.controller';
+import { NotificationController } from './presentation/controllers/notification.controller';
 import { PaymentPeriodController } from './presentation/controllers/payment-period.controller';
 import { PreviewTuitionUseCase } from './application/use-cases/payment-periods/preview-tuition.use-case';
 import { PreviewSalaryUseCase } from './application/use-cases/payment-periods/preview-salary.use-case';
@@ -105,6 +112,11 @@ import { ClassController } from './presentation/controllers/class.controller';
           StudentMonthlyBillItemOrmEntity,
           TeacherMonthlyWageItemOrmEntity,
           PaymentPeriodOrmEntity,
+          AssignmentOrmEntity,
+          AssignmentAttachmentOrmEntity,
+          AssignmentSubmissionOrmEntity,
+          SubmissionAttachmentOrmEntity,
+          NotificationOrmEntity,
         ],
         synchronize: false, // Vô hiệu hóa tự động tạo bảng trực tiếp (Dùng migrations thay thế)
         migrationsRun: true, // Tự động chạy các file migrations chưa chạy khi start app
@@ -136,6 +148,11 @@ import { ClassController } from './presentation/controllers/class.controller';
       StudentMonthlyBillItemOrmEntity,
       TeacherMonthlyWageItemOrmEntity,
       PaymentPeriodOrmEntity,
+      AssignmentOrmEntity,
+      AssignmentAttachmentOrmEntity,
+      AssignmentSubmissionOrmEntity,
+      SubmissionAttachmentOrmEntity,
+      NotificationOrmEntity,
     ]),
 
     JwtModule.registerAsync({
@@ -159,6 +176,8 @@ import { ClassController } from './presentation/controllers/class.controller';
     RoomController,
     ClassController,
     PaymentPeriodController,
+    AssignmentController,
+    NotificationController,
   ],
   providers: [
     AppService,

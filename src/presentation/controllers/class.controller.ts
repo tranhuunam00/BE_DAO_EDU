@@ -10,6 +10,8 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { CreateClassDto, UpdateClassDto } from '../../application/dtos/class.dto';
+import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
+import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -57,6 +59,10 @@ export class ClassController {
     private readonly courseRepo: Repository<CourseOrmEntity>,
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepo: Repository<StudentOrmEntity>,
+    @InjectRepository(AssignmentOrmEntity)
+    private readonly assignmentRepo: Repository<AssignmentOrmEntity>,
+    @InjectRepository(NotificationOrmEntity)
+    private readonly notificationRepo: Repository<NotificationOrmEntity>,
   ) {}
 
   @Get()
@@ -380,6 +386,7 @@ export class ClassController {
 
         // Generate attendance for future sessions
         await this.generateAttendanceForStudent(classId, body.studentId);
+        await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
         return existing;
       }
       return existing; // already active
@@ -397,6 +404,7 @@ export class ClassController {
 
     // Generate attendance records for future sessions
     await this.generateAttendanceForStudent(classId, body.studentId);
+    await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
 
     return saved;
   }
@@ -725,5 +733,24 @@ export class ClassController {
         await this.attendanceRepo.save(att);
       }
     }
+  }
+
+  private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {
+    const [student, assignments] = await Promise.all([
+      this.studentRepo.findOne({ where: { id: studentId } }),
+      this.assignmentRepo.createQueryBuilder('assignment')
+        .where('assignment.class_id = :classId', { classId })
+        .andWhere('assignment.status = :status', { status: 'published' })
+        .andWhere('(assignment.due_at IS NULL OR assignment.due_at > :now)', { now: new Date() })
+        .getMany(),
+    ]);
+    if (!student?.userId || assignments.length === 0) return;
+    await this.notificationRepo.save(assignments.map((assignment) => this.notificationRepo.create({
+      userId: student.userId!,
+      type: 'assignment_available',
+      title: 'Bài tập đang mở trong lớp',
+      message: assignment.title,
+      linkPath: '/student/assignments',
+    })));
   }
 }

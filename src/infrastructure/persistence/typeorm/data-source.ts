@@ -25,6 +25,11 @@ import { TeacherMonthlyWageOrmEntity } from './entities/teacher-monthly-wage.orm
 import { StudentMonthlyBillItemOrmEntity } from './entities/student-monthly-bill-item.orm-entity';
 import { TeacherMonthlyWageItemOrmEntity } from './entities/teacher-monthly-wage-item.orm-entity';
 import { PaymentPeriodOrmEntity } from './entities/payment-period.orm-entity';
+import { AssignmentOrmEntity } from './entities/assignment.orm-entity';
+import { AssignmentAttachmentOrmEntity } from './entities/assignment-attachment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from './entities/assignment-submission.orm-entity';
+import { SubmissionAttachmentOrmEntity } from './entities/submission-attachment.orm-entity';
+import { NotificationOrmEntity } from './entities/notification.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -54,6 +59,11 @@ export const AppDataSource = new DataSource({
     StudentMonthlyBillItemOrmEntity,
     TeacherMonthlyWageItemOrmEntity,
     PaymentPeriodOrmEntity,
+    AssignmentOrmEntity,
+    AssignmentAttachmentOrmEntity,
+    AssignmentSubmissionOrmEntity,
+    SubmissionAttachmentOrmEntity,
+    NotificationOrmEntity,
   ],
   migrations: [
     path.join(__dirname, '/migrations/*.{ts,js}')
