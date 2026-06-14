@@ -1,6 +1,6 @@
 import { Controller, Get, UseGuards, Request } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
@@ -13,6 +13,8 @@ import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill.orm-entity';
+import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
+import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
 import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboard/get-dashboard-summary.use-case';
 import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
 import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
@@ -28,6 +30,10 @@ export class DashboardController {
     private readonly teacherRepo: Repository<TeacherOrmEntity>,
     @InjectRepository(ClassStudentOrmEntity)
     private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
+    @InjectRepository(ClassOrmEntity)
+    private readonly classRepo: Repository<ClassOrmEntity>,
+    @InjectRepository(ClassScheduleOrmEntity)
+    private readonly classScheduleRepo: Repository<ClassScheduleOrmEntity>,
     @InjectRepository(ClassSessionOrmEntity)
     private readonly sessionRepo: Repository<ClassSessionOrmEntity>,
     @InjectRepository(StudentAttendanceOrmEntity)
@@ -135,7 +141,10 @@ export class DashboardController {
     });
 
     if (!teacher) {
-      return [];
+      return {
+        summary: { totalPaid: 0, totalPending: 0, paidPeriods: 0, totalPeriods: 0 },
+        wages: [],
+      };
     }
 
     const wages = await this.teacherWageRepo.find({
@@ -144,7 +153,167 @@ export class DashboardController {
       order: { month: 'DESC' },
     });
 
-    return wages;
+    const formattedWages = wages.map((wage) => ({
+      id: wage.id,
+      month: wage.month,
+      totalAmount: Number(wage.totalAmount || 0),
+      paidAmount: Number(wage.paidAmount || 0),
+      remainingAmount: Math.max(
+        Number(wage.totalAmount || 0) - Number(wage.paidAmount || 0),
+        0,
+      ),
+      status: wage.status,
+      paymentDate: wage.paymentDate,
+      billingStartDate: wage.billingStartDate,
+      billingEndDate: wage.billingEndDate,
+      note: wage.note,
+      period: wage.period
+        ? {
+            id: wage.period.id,
+            name: wage.period.name,
+            startDate: wage.period.startDate,
+            endDate: wage.period.endDate,
+          }
+        : null,
+      items: (wage.items || []).map((item) => ({
+        id: item.id,
+        classId: item.classId,
+        className: item.className,
+        courseName: item.courseName,
+        levelName: item.levelName,
+        sessionsCount: item.sessionsCount,
+        rate: Number(item.rate || 0),
+        totalAmount: Number(item.totalAmount || 0),
+      })),
+    }));
+
+    return {
+      summary: {
+        totalPaid: formattedWages.reduce((sum, wage) => sum + wage.paidAmount, 0),
+        totalPending: formattedWages.reduce((sum, wage) => sum + wage.remainingAmount, 0),
+        paidPeriods: formattedWages.filter((wage) => wage.status === 'Paid').length,
+        totalPeriods: formattedWages.length,
+      },
+      wages: formattedWages,
+    };
+  }
+
+  @Get('teacher/classes')
+  @Roles(Role.TEACHER)
+  async getTeacherClasses(@Request() req: any) {
+    const teacher = await this.teacherRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+
+    if (!teacher) {
+      return {
+        summary: { totalClasses: 0, activeClasses: 0, totalStudents: 0 },
+        classes: [],
+      };
+    }
+
+    const sessionClasses = await this.sessionRepo
+      .createQueryBuilder('session')
+      .select('DISTINCT session.classId', 'classId')
+      .where('session.teacherId = :teacherId', { teacherId: teacher.id })
+      .getRawMany<{ classId: string }>();
+
+    const classIds = new Set(sessionClasses.map((row) => row.classId));
+    const mainTeacherClasses = await this.classRepo.find({
+      where: { mainTeacherId: teacher.id },
+      select: { id: true },
+    });
+    mainTeacherClasses.forEach((classEntity) => classIds.add(classEntity.id));
+
+    if (classIds.size === 0) {
+      return {
+        summary: { totalClasses: 0, activeClasses: 0, totalStudents: 0 },
+        classes: [],
+      };
+    }
+
+    const ids = Array.from(classIds);
+    const [classes, schedules, enrollments] = await Promise.all([
+      this.classRepo.find({
+        where: { id: In(ids) },
+        relations: { course: true, courseLevel: true, center: true },
+        order: { createdAt: 'DESC' },
+      }),
+      this.classScheduleRepo.find({
+        where: { classId: In(ids) },
+        relations: { room: true },
+        order: { weekday: 'ASC', startTime: 'ASC' },
+      }),
+      this.classStudentRepo.find({
+        where: { classId: In(ids) },
+        relations: { student: true },
+        order: { joinedDate: 'ASC' },
+      }),
+    ]);
+
+    const formattedClasses = classes.map((classEntity) => {
+      const classEnrollments = enrollments.filter(
+        (enrollment) => enrollment.classId === classEntity.id,
+      );
+      const activeStudents = classEnrollments.filter(
+        (enrollment) => enrollment.status === 'Active',
+      );
+
+      return {
+        id: classEntity.id,
+        classCode: classEntity.classCode,
+        className: classEntity.className,
+        status: classEntity.status,
+        startDate: classEntity.startDate,
+        finishDate: classEntity.finishDate,
+        maxSize: classEntity.maxSize,
+        courseName: classEntity.course?.name || '',
+        levelName: classEntity.courseLevel?.levelName || '',
+        centerName: classEntity.center?.name || '',
+        isMainTeacher: classEntity.mainTeacherId === teacher.id,
+        studentCount: activeStudents.length,
+        schedules: schedules
+          .filter((schedule) => schedule.classId === classEntity.id)
+          .map((schedule) => ({
+            id: schedule.id,
+            weekday: schedule.weekday,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            roomName: schedule.room?.name || 'Chưa xếp phòng',
+          })),
+        students: classEnrollments.map((enrollment) => ({
+          enrollmentId: enrollment.id,
+          enrollmentStatus: enrollment.status,
+          joinedDate: enrollment.joinedDate,
+          id: enrollment.student.id,
+          studentId: enrollment.student.studentId,
+          firstName: enrollment.student.firstName,
+          lastName: enrollment.student.lastName,
+          nickName: enrollment.student.nickName,
+          gender: enrollment.student.gender,
+          birthdate: enrollment.student.birthdate,
+          mobile: enrollment.student.mobile,
+          email: enrollment.student.email,
+          avatar: enrollment.student.avatar,
+          status: enrollment.student.status,
+        })),
+      };
+    });
+
+    const uniqueActiveStudentIds = new Set(
+      enrollments
+        .filter((enrollment) => enrollment.status === 'Active')
+        .map((enrollment) => enrollment.studentId),
+    );
+
+    return {
+      summary: {
+        totalClasses: formattedClasses.length,
+        activeClasses: formattedClasses.filter((item) => item.status === 'Active').length,
+        totalStudents: uniqueActiveStudentIds.size,
+      },
+      classes: formattedClasses,
+    };
   }
 
   @Get('student')
