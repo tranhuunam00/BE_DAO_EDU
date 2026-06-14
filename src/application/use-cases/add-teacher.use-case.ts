@@ -7,14 +7,14 @@ import { Role } from '../../domain/value-objects/role.enum';
 import { ITeacherRepository } from '../../domain/repositories/teacher-repository.interface';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { CreateTeacherDto } from '../dtos/teacher.dto';
-import { MinioService } from '../../infrastructure/storage/minio.service';
+import { FileStoragePort } from '../ports/file-storage.port';
 
 @Injectable()
 export class AddTeacherUseCase {
   constructor(
     private readonly teacherRepository: ITeacherRepository,
     private readonly userRepository: IUserRepository,
-    private readonly minioService: MinioService,
+    private readonly fileStorage: FileStoragePort,
   ) {}
 
   async execute(dto: CreateTeacherDto): Promise<Teacher> {
@@ -48,7 +48,7 @@ export class AddTeacherUseCase {
 
     let avatarUrl: string | undefined = undefined;
     if (dto.avatar && dto.avatar.startsWith('data:image')) {
-      avatarUrl = await this.minioService.uploadBase64Image(dto.avatar, teacherId);
+      avatarUrl = await this.fileStorage.uploadBase64Image(dto.avatar, teacherId);
     }
 
     const teacher = new Teacher(

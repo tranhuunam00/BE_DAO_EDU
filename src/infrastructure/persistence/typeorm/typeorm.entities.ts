@@ -1,0 +1,59 @@
+import { AssignmentAttachmentOrmEntity } from './entities/assignment-attachment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from './entities/assignment-submission.orm-entity';
+import { AssignmentOrmEntity } from './entities/assignment.orm-entity';
+import { CenterOrmEntity } from './entities/center.orm-entity';
+import { ClassScheduleOrmEntity } from './entities/class-schedule.orm-entity';
+import { ClassSessionOrmEntity } from './entities/class-session.orm-entity';
+import { ClassStudentOrmEntity } from './entities/class-student.orm-entity';
+import { ClassOrmEntity } from './entities/class.orm-entity';
+import { CourseLevelPricingOrmEntity } from './entities/course-level-pricing.orm-entity';
+import { CourseLevelOrmEntity } from './entities/course-level.orm-entity';
+import { CourseOrmEntity } from './entities/course.orm-entity';
+import { NotificationOrmEntity } from './entities/notification.orm-entity';
+import { PaymentPeriodOrmEntity } from './entities/payment-period.orm-entity';
+import { PermissionOrmEntity } from './entities/permission.orm-entity';
+import { RoleOrmEntity } from './entities/role.orm-entity';
+import { RoomOrmEntity } from './entities/room.orm-entity';
+import { StudentAttendanceOrmEntity } from './entities/student-attendance.orm-entity';
+import { StudentMonthlyBillItemOrmEntity } from './entities/student-monthly-bill-item.orm-entity';
+import { StudentMonthlyBillOrmEntity } from './entities/student-monthly-bill.orm-entity';
+import { StudentOrmEntity } from './entities/student.orm-entity';
+import { SubmissionAttachmentOrmEntity } from './entities/submission-attachment.orm-entity';
+import { TeacherMonthlyWageItemOrmEntity } from './entities/teacher-monthly-wage-item.orm-entity';
+import { TeacherMonthlyWageOrmEntity } from './entities/teacher-monthly-wage.orm-entity';
+import { TeacherOrmEntity } from './entities/teacher.orm-entity';
+import { TuitionPaymentLogOrmEntity } from './entities/tuition-payment-log.orm-entity';
+import { TuitionPaymentRequestOrmEntity } from './entities/tuition-payment-request.orm-entity';
+import { UserOrmEntity } from './entities/user.orm-entity';
+import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
+
+export const TYPEORM_ENTITIES = [
+  UserOrmEntity,
+  StudentOrmEntity,
+  TeacherOrmEntity,
+  RoleOrmEntity,
+  PermissionOrmEntity,
+  CenterOrmEntity,
+  RoomOrmEntity,
+  CourseOrmEntity,
+  CourseLevelOrmEntity,
+  CourseLevelPricingOrmEntity,
+  ClassOrmEntity,
+  ClassScheduleOrmEntity,
+  ClassSessionOrmEntity,
+  ClassStudentOrmEntity,
+  StudentAttendanceOrmEntity,
+  StudentMonthlyBillOrmEntity,
+  TeacherMonthlyWageOrmEntity,
+  StudentMonthlyBillItemOrmEntity,
+  TeacherMonthlyWageItemOrmEntity,
+  PaymentPeriodOrmEntity,
+  AssignmentOrmEntity,
+  AssignmentAttachmentOrmEntity,
+  AssignmentSubmissionOrmEntity,
+  SubmissionAttachmentOrmEntity,
+  NotificationOrmEntity,
+  TuitionPaymentRequestOrmEntity,
+  TuitionPaymentLogOrmEntity,
+  VietQrCallbackLogOrmEntity,
+];

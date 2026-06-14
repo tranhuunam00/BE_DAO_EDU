@@ -7,14 +7,14 @@ import { Role } from '../../domain/value-objects/role.enum';
 import { IStudentRepository } from '../../domain/repositories/student-repository.interface';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { CreateStudentDto } from '../dtos/student.dto';
-import { MinioService } from '../../infrastructure/storage/minio.service';
+import { FileStoragePort } from '../ports/file-storage.port';
 
 @Injectable()
 export class AddStudentUseCase {
   constructor(
     private readonly studentRepository: IStudentRepository,
     private readonly userRepository: IUserRepository,
-    private readonly minioService: MinioService,
+    private readonly fileStorage: FileStoragePort,
   ) {}
 
   async execute(dto: CreateStudentDto): Promise<Student> {
@@ -52,7 +52,7 @@ export class AddStudentUseCase {
     // 3. Upload avatar to MinIO if provided as base64
     let avatarUrl = dto.avatar;
     if (avatarUrl && avatarUrl.startsWith('data:image')) {
-      avatarUrl = await this.minioService.uploadBase64Image(avatarUrl, 'avatars');
+      avatarUrl = await this.fileStorage.uploadBase64Image(avatarUrl, 'avatars');
     }
 
     // 4. Khởi tạo đối tượng domain Student

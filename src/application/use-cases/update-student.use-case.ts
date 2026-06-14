@@ -8,14 +8,14 @@ import { Role } from '../../domain/value-objects/role.enum';
 import { Student } from '../../domain/entities/student.entity';
 import { randomUUID } from 'crypto';
 import { ConflictException } from '@nestjs/common';
-import { MinioService } from '../../infrastructure/storage/minio.service';
+import { FileStoragePort } from '../ports/file-storage.port';
 
 @Injectable()
 export class UpdateStudentUseCase {
   constructor(
     private readonly studentRepository: IStudentRepository,
     private readonly userRepository: IUserRepository,
-    private readonly minioService: MinioService,
+    private readonly fileStorage: FileStoragePort,
   ) {}
 
   async execute(id: string, dto: UpdateStudentDto): Promise<Student> {
@@ -50,7 +50,10 @@ export class UpdateStudentUseCase {
     if (dto.status !== undefined) student.status = dto.status;
     if (dto.avatar !== undefined) {
       if (dto.avatar && dto.avatar.startsWith('data:image')) {
-        student.avatar = await this.minioService.uploadBase64Image(dto.avatar, 'avatars');
+        student.avatar = await this.fileStorage.uploadBase64Image(
+          dto.avatar,
+          'avatars',
+        );
       } else {
         student.avatar = dto.avatar;
       }

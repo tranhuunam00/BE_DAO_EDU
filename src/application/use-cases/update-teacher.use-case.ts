@@ -7,14 +7,14 @@ import { Teacher } from '../../domain/entities/teacher.entity';
 import { ITeacherRepository } from '../../domain/repositories/teacher-repository.interface';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { UpdateTeacherDto } from '../dtos/teacher.dto';
-import { MinioService } from '../../infrastructure/storage/minio.service';
+import { FileStoragePort } from '../ports/file-storage.port';
 
 @Injectable()
 export class UpdateTeacherUseCase {
   constructor(
     private readonly teacherRepository: ITeacherRepository,
     private readonly userRepository: IUserRepository,
-    private readonly minioService: MinioService,
+    private readonly fileStorage: FileStoragePort,
   ) {}
 
   async execute(id: string, dto: UpdateTeacherDto): Promise<Teacher> {
@@ -41,7 +41,10 @@ export class UpdateTeacherUseCase {
     if (dto.status !== undefined) teacher.status = dto.status;
 
     if (dto.avatar && dto.avatar.startsWith('data:image')) {
-      teacher.avatar = await this.minioService.uploadBase64Image(dto.avatar, teacher.teacherId);
+      teacher.avatar = await this.fileStorage.uploadBase64Image(
+        dto.avatar,
+        teacher.teacherId,
+      );
     }
 
     const normalizedLoginEmail = dto.loginEmail?.trim().toLowerCase();

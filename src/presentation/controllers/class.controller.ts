@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ConflictException } from '@nestjs/common';
+import {
+  Body,
+  ConflictException,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -39,6 +50,40 @@ function hasScheduleOverlap(schedules: { weekday: string; startTime: string; end
     }
   }
   return false;
+}
+
+function validateSchedules(
+  schedules: { weekday: string; startTime: string; endTime: string }[],
+): void {
+  if (schedules.length === 0) {
+    throw new ConflictException(
+      'Lop hoc phai co it nhat mot lich hoc co dinh.',
+    );
+  }
+
+  const weekdays = new Set(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+  for (const schedule of schedules) {
+    if (!weekdays.has(schedule.weekday)) {
+      throw new ConflictException('Thu trong tuan khong hop le.');
+    }
+    if (
+      !timePattern.test(schedule.startTime) ||
+      !timePattern.test(schedule.endTime)
+    ) {
+      throw new ConflictException('Gio hoc phai co dinh dang HH:mm.');
+    }
+    if (schedule.startTime >= schedule.endTime) {
+      throw new ConflictException('Gio ket thuc phai sau gio bat dau.');
+    }
+  }
+
+  if (hasScheduleOverlap(schedules)) {
+    throw new ConflictException(
+      'Lich hoc dinh ky bi trung thoi gian tren cung mot thu.',
+    );
+  }
 }
 
 @ApiTags('Classes')
@@ -144,6 +189,7 @@ export class ClassController {
   @Post()
   @ApiOperation({ summary: 'Tạo Lớp học mới' })
   async create(@Body() dto: CreateClassDto) {
+    validateSchedules(dto.schedules ?? []);
     if (!dto.schedules || dto.schedules.length === 0) {
       throw new ConflictException('Lớp học phải có ít nhất một lịch học cố định.');
     }
@@ -238,6 +284,11 @@ export class ClassController {
   @ApiOperation({ summary: 'Cập nhật Lớp học' })
   async update(@Param('id') id: string, @Body() dto: UpdateClassDto) {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id } });
+    const previousStatus = classEntity.status;
+
+    if (dto.schedules !== undefined) {
+      validateSchedules(dto.schedules);
+    }
 
     // Validate unique classCode and className
     if (dto.classCode !== undefined) {
@@ -310,6 +361,10 @@ export class ClassController {
     if (dto.centerId !== undefined) classEntity.centerId = dto.centerId || null;
 
     await this.classRepo.save(classEntity);
+    const hasExistingSessions =
+      (await this.sessionRepo.count({ where: { classId: id } })) > 0;
+    const statusChanged =
+      dto.status !== undefined && previousStatus !== classEntity.status;
 
     // Sync teacher to all future unlocked sessions if mainTeacherId is updated
     if (dto.mainTeacherId !== undefined) {
@@ -343,15 +398,13 @@ export class ClassController {
       await this.regenerateFutureSessions(id);
     } else {
       // If schedules weren't updated, but status/startDate/finishDate/skipHolidays changed, regenerate future sessions
-      const statusChangedToActive = dto.status === 'Active' && classEntity.status !== 'Active';
-      const hasExistingSessions = (await this.sessionRepo.count({ where: { classId: id } })) > 0;
       const dateOrHolidayChanged = (classEntity.status === 'Active' || hasExistingSessions) && (
         dto.startDate !== undefined ||
         dto.finishDate !== undefined ||
         dto.skipHolidays !== undefined
       );
 
-      if (statusChangedToActive || dateOrHolidayChanged) {
+      if (statusChanged || dateOrHolidayChanged) {
         await this.regenerateFutureSessions(id);
       }
     }
@@ -364,17 +417,38 @@ export class ClassController {
   @Post(':id/students')
   @ApiOperation({ summary: 'Thêm Học sinh vào Lớp' })
   async addStudent(@Param('id') classId: string, @Body() body: { studentId: string }) {
+    const [classEntity, student] = await Promise.all([
+      this.classRepo.findOne({ where: { id: classId } }),
+      this.studentRepo.findOne({ where: { id: body.studentId } }),
+    ]);
+    if (!classEntity) {
+      throw new NotFoundException('Class not found.');
+    }
+    if (!student) {
+      throw new NotFoundException('Student not found.');
+    }
+
     const existing = await this.classStudentRepo.findOne({
       where: { classId, studentId: body.studentId },
     });
 
     const updateStudentStatusToStudying = async () => {
-      const student = await this.studentRepo.findOne({ where: { id: body.studentId } });
-      if (student) {
-        student.status = 'Studying';
-        await this.studentRepo.save(student);
-      }
+      student.status = 'Studying';
+      await this.studentRepo.save(student);
     };
+
+    if (existing?.status === 'Active') {
+      return existing;
+    }
+
+    if (classEntity.maxSize !== null && classEntity.maxSize !== undefined) {
+      const activeStudentCount = await this.classStudentRepo.count({
+        where: { classId, status: 'Active' },
+      });
+      if (activeStudentCount >= classEntity.maxSize) {
+        throw new ConflictException('Class has reached its maximum size.');
+      }
+    }
 
     if (existing) {
       if (existing.status === 'Dropped') {
@@ -435,7 +509,7 @@ export class ClassController {
     const futureSessions = await this.sessionRepo
       .createQueryBuilder('s')
       .where('s.class_id = :classId', { classId })
-      .andWhere('s.date > :today', { today })
+      .andWhere('s.date >= :today', { today })
       .andWhere('s.attendance_locked = false')
       .getMany();
 
@@ -587,6 +661,12 @@ export class ClassController {
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
 
+    if (session.attendanceLocked) {
+      throw new ConflictException(
+        'Completed or attendance-locked sessions cannot be changed.',
+      );
+    }
+
     // "không được đổi quá khứ"
     const today = new Date().toISOString().split('T')[0];
     if (session.date < today) {
@@ -598,6 +678,21 @@ export class ClassController {
     }
 
     const scope = body.scope || 'single';
+    const nextStartTime = body.startTime ?? session.startTime;
+    const nextEndTime = body.endTime ?? session.endTime;
+    validateSchedules([
+      {
+        weekday: 'Mon',
+        startTime: nextStartTime,
+        endTime: nextEndTime,
+      },
+    ]);
+
+    if (scope === 'all-future' && body.date !== undefined) {
+      throw new ConflictException(
+        'A date change can only be applied to one session.',
+      );
+    }
 
     if (scope === 'single') {
       if (body.date !== undefined) session.date = body.date;
@@ -616,8 +711,11 @@ export class ClassController {
         .getMany();
 
       for (const fs of futureSessions) {
+        if (body.startTime !== undefined) fs.startTime = body.startTime;
+        if (body.endTime !== undefined) fs.endTime = body.endTime;
         if (body.roomId !== undefined) fs.roomId = body.roomId || null;
         if (body.teacherId !== undefined) fs.teacherId = body.teacherId || null;
+        if (body.status !== undefined) fs.status = body.status;
         await this.sessionRepo.save(fs);
       }
     }
@@ -631,7 +729,13 @@ export class ClassController {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
-    if (!classEntity.startDate || schedules.length === 0) return;
+    if (
+      classEntity.status !== 'Active' ||
+      !classEntity.startDate ||
+      schedules.length === 0
+    ) {
+      return;
+    }
 
     const todayStr = new Date().toISOString().split('T')[0];
     const startFromStr = classEntity.startDate > todayStr ? classEntity.startDate : todayStr;

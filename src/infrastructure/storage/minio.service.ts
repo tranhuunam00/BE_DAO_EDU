@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
+import { FileStoragePort } from '../../application/ports/file-storage.port';
 
 export interface StorageFile {
   originalname: string;
@@ -10,12 +11,13 @@ export interface StorageFile {
 }
 
 @Injectable()
-export class MinioService {
+export class MinioService extends FileStoragePort {
   private minioClient: Minio.Client;
   private bucketName: string;
   private readonly logger = new Logger(MinioService.name);
 
   constructor(private configService: ConfigService) {
+    super();
     this.bucketName = this.configService.get<string>(
       'MINIO_BUCKET_NAME',
       'edu',
