@@ -17,7 +17,9 @@ async function bootstrap() {
   // Configure Swagger Documentation
   const config = new DocumentBuilder()
     .setTitle('DAO EDU API')
-    .setDescription('Tài liệu hướng dẫn sử dụng API cho hệ thống quản lý giáo dục DAO EDU')
+    .setDescription(
+      'Tài liệu hướng dẫn sử dụng API cho hệ thống quản lý giáo dục DAO EDU',
+    )
     .setVersion('1.0')
     .addBearerAuth({
       type: 'http',
@@ -28,7 +30,6 @@ async function bootstrap() {
       in: 'header',
     })
     .build();
-  
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document, {
     swaggerOptions: {
@@ -55,6 +56,8 @@ async function bootstrap() {
   const port = process.env.PORT ?? 5000;
   await app.listen(port);
   console.log(`NestJS application running on: http://localhost:${port}/api`);
-  console.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
+  console.log(
+    `Swagger documentation available at: http://localhost:${port}/api/docs`,
+  );
 }
 bootstrap();
