@@ -26,6 +26,7 @@ import { TuitionPaymentLogOrmEntity } from './entities/tuition-payment-log.orm-e
 import { TuitionPaymentRequestOrmEntity } from './entities/tuition-payment-request.orm-entity';
 import { UserOrmEntity } from './entities/user.orm-entity';
 import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
+import { LeaveRequestOrmEntity } from './entities/leave-request.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -56,4 +57,5 @@ export const TYPEORM_ENTITIES = [
   TuitionPaymentRequestOrmEntity,
   TuitionPaymentLogOrmEntity,
   VietQrCallbackLogOrmEntity,
+  LeaveRequestOrmEntity,
 ];

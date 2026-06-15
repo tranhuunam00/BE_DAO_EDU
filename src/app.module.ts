@@ -12,6 +12,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PaymentsModule } from './modules/payments/payments.module';
 import { StudentsModule } from './modules/students/students.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
+import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TeachersModule } from './modules/teachers/teachers.module';
     DashboardModule,
     BillingModule,
     PaymentsModule,
+    LeaveRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
