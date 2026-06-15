@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { UserOrmEntity } from './user.orm-entity';
+import type { NotificationPriority } from '../../../../modules/notifications/domain/entities/notification';
 
 @Entity('notifications')
 export class NotificationOrmEntity {
@@ -28,8 +29,21 @@ export class NotificationOrmEntity {
   @Column({ type: 'varchar', name: 'link_path', nullable: true })
   linkPath!: string | null;
 
+  @Column({ type: 'varchar', default: 'normal' })
+  priority!: NotificationPriority;
+
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+  metadata!: Record<string, unknown>;
+
   @Column({ type: 'timestamp with time zone', name: 'read_at', nullable: true })
   readAt!: Date | null;
+
+  @Column({
+    type: 'timestamp with time zone',
+    name: 'archived_at',
+    nullable: true,
+  })
+  archivedAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

@@ -488,6 +488,11 @@ export class AssignmentController {
           title: 'Bài tập đã được chấm',
           message: `${submission.assignment.title}: ${dto.score}/${submission.assignment.maxScore} điểm`,
           linkPath: '/student/assignments',
+          priority: 'important',
+          metadata: {
+            assignmentId: submission.assignmentId,
+            submissionId: submission.id,
+          },
         }),
       );
     }
@@ -610,6 +615,8 @@ export class AssignmentController {
           title: 'Có bài tập mới',
           message: assignment.title,
           linkPath: '/student/assignments',
+          priority: 'important',
+          metadata: { assignmentId: assignment.id, classId: assignment.classId },
         }),
       );
     if (notifications.length) await this.notificationRepo.save(notifications);

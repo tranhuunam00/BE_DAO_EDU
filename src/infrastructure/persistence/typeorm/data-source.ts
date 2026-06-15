@@ -30,6 +30,7 @@ import { AssignmentAttachmentOrmEntity } from './entities/assignment-attachment.
 import { AssignmentSubmissionOrmEntity } from './entities/assignment-submission.orm-entity';
 import { SubmissionAttachmentOrmEntity } from './entities/submission-attachment.orm-entity';
 import { NotificationOrmEntity } from './entities/notification.orm-entity';
+import { NotificationLogOrmEntity } from './entities/notification-log.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from './entities/tuition-payment-request.orm-entity';
 import { TuitionPaymentLogOrmEntity } from './entities/tuition-payment-log.orm-entity';
 import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
@@ -68,6 +69,7 @@ export const AppDataSource = new DataSource({
     AssignmentSubmissionOrmEntity,
     SubmissionAttachmentOrmEntity,
     NotificationOrmEntity,
+    NotificationLogOrmEntity,
     TuitionPaymentRequestOrmEntity,
     TuitionPaymentLogOrmEntity,
     VietQrCallbackLogOrmEntity,

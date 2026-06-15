@@ -75,6 +75,8 @@ export class SendTuitionPaymentRequestUseCase {
         title: 'Yêu cầu đóng học phí',
         message: `${bill.periodName || `Học phí tháng ${bill.month}`}: ${bill.totalAmount.toLocaleString('vi-VN')} đ`,
         linkPath: '/student/tuition',
+        priority: 'urgent',
+        metadata: { billId, paymentRequestId: saved.id },
       });
       return presentPaymentRequest(saved);
     });

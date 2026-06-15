@@ -56,6 +56,8 @@ export interface PaymentTransactionContext {
     title: string;
     message: string;
     linkPath: string | null;
+    priority?: 'normal' | 'important' | 'urgent';
+    metadata?: Record<string, unknown>;
   }): Promise<void>;
 }
 

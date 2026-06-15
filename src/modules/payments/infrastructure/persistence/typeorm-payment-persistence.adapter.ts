@@ -199,9 +199,18 @@ class TypeOrmPaymentTransactionContext implements PaymentTransactionContext {
     title: string;
     message: string;
     linkPath: string | null;
+    priority?: 'normal' | 'important' | 'urgent';
+    metadata?: Record<string, unknown>;
   }) {
     const repository = this.manager.getRepository(NotificationOrmEntity);
-    await repository.save(repository.create({ ...input, readAt: null }));
+    await repository.save(
+      repository.create({
+        ...input,
+        priority: input.priority ?? 'normal',
+        metadata: input.metadata ?? {},
+        readAt: null,
+      }),
+    );
   }
 }
 

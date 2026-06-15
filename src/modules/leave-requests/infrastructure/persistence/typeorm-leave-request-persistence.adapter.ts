@@ -326,6 +326,11 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
           title: 'Có đơn xin nghỉ mới',
           message: `${session.className} - ${session.date}`,
           linkPath: '/teacher/leave-requests',
+          priority: 'important',
+          metadata: {
+            leaveRequestId: request.id,
+            classSessionId: request.classSessionId,
+          },
         }),
       ),
     );
@@ -351,6 +356,12 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
           : 'Đơn xin nghỉ đã bị từ chối',
         message: `${session.className} - ${session.date}`,
         linkPath: '/student/leave-requests',
+        priority: 'important',
+        metadata: {
+          leaveRequestId: request.id,
+          classSessionId: request.classSessionId,
+          decision: request.status,
+        },
       }),
     );
   }

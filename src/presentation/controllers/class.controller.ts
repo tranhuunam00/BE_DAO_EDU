@@ -832,6 +832,8 @@ export class ClassController {
       title: 'Bài tập đang mở trong lớp',
       message: assignment.title,
       linkPath: '/student/assignments',
+      priority: 'important',
+      metadata: { assignmentId: assignment.id, classId },
     })));
   }
 

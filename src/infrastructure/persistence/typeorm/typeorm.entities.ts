@@ -10,6 +10,7 @@ import { CourseLevelPricingOrmEntity } from './entities/course-level-pricing.orm
 import { CourseLevelOrmEntity } from './entities/course-level.orm-entity';
 import { CourseOrmEntity } from './entities/course.orm-entity';
 import { NotificationOrmEntity } from './entities/notification.orm-entity';
+import { NotificationLogOrmEntity } from './entities/notification-log.orm-entity';
 import { PaymentPeriodOrmEntity } from './entities/payment-period.orm-entity';
 import { PermissionOrmEntity } from './entities/permission.orm-entity';
 import { RoleOrmEntity } from './entities/role.orm-entity';
@@ -54,6 +55,7 @@ export const TYPEORM_ENTITIES = [
   AssignmentSubmissionOrmEntity,
   SubmissionAttachmentOrmEntity,
   NotificationOrmEntity,
+  NotificationLogOrmEntity,
   TuitionPaymentRequestOrmEntity,
   TuitionPaymentLogOrmEntity,
   VietQrCallbackLogOrmEntity,
