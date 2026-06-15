@@ -90,6 +90,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
       repos.studentRepo as any,
       repos.assignmentRepo as any,
       repos.notificationRepo as any,
+      { execute: jest.fn().mockResolvedValue([]) } as any,
       academics.checkRecurring as any,
       academics.checkSession as any,
       academics.enrollStudent as any,

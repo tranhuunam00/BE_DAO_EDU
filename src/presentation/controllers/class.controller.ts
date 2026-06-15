@@ -23,6 +23,7 @@ import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entit
 import { CreateClassDto, UpdateClassDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { GetHolidayDatesUseCase } from '../../modules/academics/application/use-cases/manage-holidays.use-cases';
 import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 import {
   CheckRecurringScheduleConflictsUseCase,
@@ -117,6 +118,7 @@ export class ClassController {
     private readonly assignmentRepo: Repository<AssignmentOrmEntity>,
     @InjectRepository(NotificationOrmEntity)
     private readonly notificationRepo: Repository<NotificationOrmEntity>,
+    private readonly getHolidayDates: GetHolidayDatesUseCase,
     private readonly checkRecurringScheduleConflicts: CheckRecurringScheduleConflictsUseCase,
     private readonly checkSessionScheduleConflict: CheckSessionScheduleConflictUseCase,
     private readonly enrollStudentUseCase: EnrollStudentUseCase,
@@ -754,13 +756,21 @@ export class ClassController {
     const activeStudents = await this.classStudentRepo.find({
       where: { classId, status: 'Active' },
     });
+    const holidayDates = classEntity.skipHolidays
+      ? new Set(
+          await this.getHolidayDates.execute(
+            startFromStr,
+            endDate.toISOString().split('T')[0],
+          ),
+        )
+      : new Set<string>();
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dayOfWeek = d.getDay();
+      const dateStr = d.toISOString().split('T')[0];
+      if (holidayDates.has(dateStr)) continue;
       for (const schedule of schedules) {
         if (weekdayMap[schedule.weekday] === dayOfWeek) {
-          const dateStr = d.toISOString().split('T')[0];
-
           // Check if session already exists
           const exists = await this.sessionRepo.findOne({
             where: { classId, date: dateStr, startTime: schedule.startTime },

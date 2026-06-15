@@ -18,6 +18,7 @@ import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm
 import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboard/get-dashboard-summary.use-case';
 import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
 import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
+import { GetAdminOperationsUseCase } from '../../modules/dashboard/application/use-cases/get-admin-operations.use-case';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -45,6 +46,7 @@ export class DashboardController {
     private readonly getSummaryUseCase: GetDashboardSummaryUseCase,
     private readonly getRevenueUseCase: GetDashboardRevenueUseCase,
     private readonly getActivitiesUseCase: GetDashboardActivitiesUseCase,
+    private readonly getAdminOperationsUseCase: GetAdminOperationsUseCase,
   ) {}
 
   @Get('profile')
@@ -76,6 +78,12 @@ export class DashboardController {
   @Roles(Role.ADMIN)
   async getAdminActivities() {
     return this.getActivitiesUseCase.execute();
+  }
+
+  @Get('admin/operations')
+  @Roles(Role.ADMIN)
+  getAdminOperations() {
+    return this.getAdminOperationsUseCase.execute();
   }
 
   @Get('teacher')

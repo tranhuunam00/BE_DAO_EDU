@@ -24,6 +24,16 @@ import {
 } from './application/use-cases/manage-enrollment.use-cases';
 import { ScheduleConflictPolicy } from './domain/services/schedule-conflict.policy';
 import { TypeOrmAcademicsPersistenceAdapter } from './infrastructure/persistence/typeorm-academics-persistence.adapter';
+import { HolidayOrmEntity } from '../../infrastructure/persistence/typeorm/entities/holiday.orm-entity';
+import { HolidayController } from '../../presentation/controllers/holiday.controller';
+import { HolidayPersistencePort } from './application/ports/holiday-persistence.port';
+import {
+  DeleteHolidayUseCase,
+  GetHolidayDatesUseCase,
+  ListHolidaysUseCase,
+  SaveHolidayUseCase,
+} from './application/use-cases/manage-holidays.use-cases';
+import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/typeorm-holiday-persistence.adapter';
 
 @Module({
   imports: [
@@ -39,9 +49,10 @@ import { TypeOrmAcademicsPersistenceAdapter } from './infrastructure/persistence
       StudentOrmEntity,
       AssignmentOrmEntity,
       NotificationOrmEntity,
+      HolidayOrmEntity,
     ]),
   ],
-  controllers: [CourseController, ClassController],
+  controllers: [CourseController, ClassController, HolidayController],
   providers: [
     ScheduleConflictPolicy,
     {
@@ -75,6 +86,34 @@ import { TypeOrmAcademicsPersistenceAdapter } from './infrastructure/persistence
       useFactory: (persistence: AcademicsPersistencePort) =>
         new RemoveStudentFromClassUseCase(persistence),
       inject: [AcademicsPersistencePort],
+    },
+    {
+      provide: HolidayPersistencePort,
+      useClass: TypeOrmHolidayPersistenceAdapter,
+    },
+    {
+      provide: ListHolidaysUseCase,
+      useFactory: (persistence: HolidayPersistencePort) =>
+        new ListHolidaysUseCase(persistence),
+      inject: [HolidayPersistencePort],
+    },
+    {
+      provide: GetHolidayDatesUseCase,
+      useFactory: (persistence: HolidayPersistencePort) =>
+        new GetHolidayDatesUseCase(persistence),
+      inject: [HolidayPersistencePort],
+    },
+    {
+      provide: SaveHolidayUseCase,
+      useFactory: (persistence: HolidayPersistencePort) =>
+        new SaveHolidayUseCase(persistence),
+      inject: [HolidayPersistencePort],
+    },
+    {
+      provide: DeleteHolidayUseCase,
+      useFactory: (persistence: HolidayPersistencePort) =>
+        new DeleteHolidayUseCase(persistence),
+      inject: [HolidayPersistencePort],
     },
   ],
 })

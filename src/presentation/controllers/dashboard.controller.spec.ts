@@ -38,6 +38,7 @@ describe('DashboardController teacher views', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     return { controller, repositories, sessionQueryBuilder };

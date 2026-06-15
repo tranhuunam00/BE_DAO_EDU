@@ -16,6 +16,11 @@ import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/ty
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { DashboardController } from '../../presentation/controllers/dashboard.controller';
 import { IdentityModule } from '../identity/identity.module';
+import { OperationsQueryPort } from './application/ports/operations-query.port';
+import { GetAdminOperationsUseCase } from './application/use-cases/get-admin-operations.use-case';
+import { ClassRecommendationPolicy } from './domain/services/class-recommendation.policy';
+import { StudentRiskPolicy } from './domain/services/student-risk.policy';
+import { TypeOrmOperationsQueryAdapter } from './infrastructure/persistence/typeorm-operations-query.adapter';
 
 @Module({
   imports: [
@@ -39,6 +44,18 @@ import { IdentityModule } from '../identity/identity.module';
     GetDashboardSummaryUseCase,
     GetDashboardRevenueUseCase,
     GetDashboardActivitiesUseCase,
+    StudentRiskPolicy,
+    ClassRecommendationPolicy,
+    { provide: OperationsQueryPort, useClass: TypeOrmOperationsQueryAdapter },
+    {
+      provide: GetAdminOperationsUseCase,
+      useFactory: (
+        query: OperationsQueryPort,
+        riskPolicy: StudentRiskPolicy,
+        recommendationPolicy: ClassRecommendationPolicy,
+      ) => new GetAdminOperationsUseCase(query, riskPolicy, recommendationPolicy),
+      inject: [OperationsQueryPort, StudentRiskPolicy, ClassRecommendationPolicy],
+    },
   ],
 })
 export class DashboardModule {}

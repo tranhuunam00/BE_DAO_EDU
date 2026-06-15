@@ -29,6 +29,7 @@ import { UserOrmEntity } from './entities/user.orm-entity';
 import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
 import { LeaveRequestOrmEntity } from './entities/leave-request.orm-entity';
 import { BillingAuditLogOrmEntity } from './entities/billing-audit-log.orm-entity';
+import { HolidayOrmEntity } from './entities/holiday.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -62,4 +63,5 @@ export const TYPEORM_ENTITIES = [
   VietQrCallbackLogOrmEntity,
   LeaveRequestOrmEntity,
   BillingAuditLogOrmEntity,
+  HolidayOrmEntity,
 ];
