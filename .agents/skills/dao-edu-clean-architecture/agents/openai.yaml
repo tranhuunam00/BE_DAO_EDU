@@ -1,0 +1,4 @@
+interface:
+  display_name: "DAO EDU Clean Architecture"
+  short_description: "Preserve backend dependency boundaries"
+  default_prompt: "Use $dao-edu-clean-architecture to implement this backend feature."

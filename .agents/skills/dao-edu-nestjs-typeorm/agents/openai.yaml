@@ -1,0 +1,4 @@
+interface:
+  display_name: "DAO EDU NestJS TypeORM"
+  short_description: "Build NestJS and TypeORM backend features"
+  default_prompt: "Use $dao-edu-nestjs-typeorm to add this persistence-backed feature."

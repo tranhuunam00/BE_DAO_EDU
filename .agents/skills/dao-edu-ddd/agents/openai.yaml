@@ -1,0 +1,4 @@
+interface:
+  display_name: "DAO EDU DDD"
+  short_description: "Model backend business rules with DDD"
+  default_prompt: "Use $dao-edu-ddd to implement this backend domain change."
