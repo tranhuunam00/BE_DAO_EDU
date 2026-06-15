@@ -33,7 +33,7 @@ export class GetPaymentPeriodUseCase {
 
 export class UpdatePaymentPeriodStatusUseCase {
   constructor(private readonly persistence: BillingPersistencePort) {}
-  execute(id: string, status: PaymentPeriodStatus) {
+  execute(id: string, status: PaymentPeriodStatus, actorId?: string) {
     return this.persistence.transaction(async (context) => {
       const current = await context.findPeriod(id);
       if (!current) {
@@ -45,6 +45,12 @@ export class UpdatePaymentPeriodStatusUseCase {
       const period = PaymentPeriod.restore(current);
       period.changeStatus(status);
       await context.savePeriodStatus(id, period.status);
+      await context.saveAudit({
+        event: status === 'Closed' ? 'PERIOD_CLOSED' : 'PERIOD_REOPENED',
+        periodId: id,
+        actorId,
+        metadata: { previousStatus: current.status, status },
+      });
       return { message: 'Cập nhật trạng thái thành công' };
     });
   }
@@ -84,6 +90,9 @@ export class UpdateBillingOrderUseCase {
     orderId: string;
     status: BillingOrderStatus;
     paidAmount?: number;
+    paymentDate?: string;
+    paymentMethod?: string;
+    actorId: string;
     note?: string;
   }) {
     if (input.type !== 'tuition' && input.type !== 'salary') {
@@ -106,13 +115,60 @@ export class UpdateBillingOrderUseCase {
           'Không tìm thấy đơn thanh toán',
         );
       }
+      const period = await context.findPeriod(found.periodId);
+      if (!period) {
+        throw new BillingError(
+          'PERIOD_NOT_FOUND',
+          'Không tìm thấy đợt thanh toán',
+        );
+      }
+      if (period.status === 'Closed') {
+        throw new BillingError(
+          'CLOSED_PERIOD_CANNOT_BE_CHANGED',
+          'Không thể thay đổi giao dịch trong đợt đã khóa',
+        );
+      }
       const order = BillingOrder.restore(found);
       if (input.status === 'Paid') {
-        order.markPaid(input.paidAmount, input.note, this.now());
+        const paymentMethod = input.paymentMethod?.trim();
+        if (!paymentMethod) {
+          throw new BillingError(
+            'INVALID_REQUEST',
+            'Phải chọn phương thức thanh toán',
+          );
+        }
+        const paymentDate = input.paymentDate
+          ? new Date(input.paymentDate)
+          : this.now();
+        if (Number.isNaN(paymentDate.getTime())) {
+          throw new BillingError(
+            'INVALID_PAYMENT_DATE',
+            'Ngày giao dịch không hợp lệ',
+          );
+        }
+        order.markPaid(
+          input.paidAmount,
+          input.note,
+          paymentDate,
+          paymentMethod,
+          input.actorId,
+        );
       } else {
-        order.markUnpaid(input.note);
+        order.markUnpaid(input.note, input.actorId);
       }
       await context.saveOrder(order.toPrimitives());
+      await context.saveAudit({
+        event: input.status === 'Paid' ? 'PAYMENT_CONFIRMED' : 'PAYMENT_CANCELLED',
+        orderType: input.type,
+        orderId: input.orderId,
+        periodId: found.periodId,
+        actorId: input.actorId,
+        metadata: {
+          before: found,
+          after: order.toPrimitives(),
+          reason: input.note?.trim() || null,
+        },
+      });
       if (input.type === 'tuition' && input.status === 'Unpaid') {
         await context.resetPaymentRequest(input.orderId);
       }
@@ -142,6 +198,19 @@ export class DeleteBillingOrderUseCase {
         throw new BillingError(
           'PAID_ORDER_CANNOT_BE_DELETED',
           'Không thể xóa đơn đã thanh toán',
+        );
+      }
+      const period = await context.findPeriod(order.periodId);
+      if (!period) {
+        throw new BillingError(
+          'PERIOD_NOT_FOUND',
+          'Không tìm thấy đợt thanh toán',
+        );
+      }
+      if (period.status === 'Closed') {
+        throw new BillingError(
+          'CLOSED_PERIOD_CANNOT_BE_CHANGED',
+          'Không thể xóa giao dịch khỏi đợt đã khóa',
         );
       }
       await context.deleteOrder(type, orderId);

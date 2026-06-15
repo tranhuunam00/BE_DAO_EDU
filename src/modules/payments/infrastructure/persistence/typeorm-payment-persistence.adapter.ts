@@ -6,6 +6,7 @@ import { StudentMonthlyBillOrmEntity } from '../../../../infrastructure/persiste
 import { TuitionPaymentLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-log.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 import { VietQrCallbackLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/vietqr-callback-log.orm-entity';
+import { BillingAuditLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
 import {
   CallbackAudit,
   PaymentPersistencePort,
@@ -87,12 +88,18 @@ class TypeOrmPaymentTransactionContext implements PaymentTransactionContext {
       status: entity.status,
       paymentDate: entity.paymentDate,
       note: entity.note,
+      paymentMethod: entity.paymentMethod,
+      receiptCode: entity.receiptCode,
       studentUserId: entity.student?.userId ?? null,
       periodName: entity.period?.name ?? null,
     };
   }
 
   async saveBill(bill: TuitionBill): Promise<void> {
+    const receiptCode =
+      bill.status === 'Paid' && !bill.receiptCode
+        ? createReceiptCode(bill.id)
+        : bill.receiptCode;
     await this.manager.getRepository(StudentMonthlyBillOrmEntity).update(
       { id: bill.id },
       {
@@ -100,8 +107,22 @@ class TypeOrmPaymentTransactionContext implements PaymentTransactionContext {
         status: bill.status,
         paymentDate: bill.paymentDate,
         note: bill.note,
+        paymentMethod: bill.paymentMethod,
+        receiptCode,
       },
     );
+    await this.manager.getRepository(BillingAuditLogOrmEntity).save({
+      event: 'PAYMENT_CONFIRMED',
+      orderType: 'tuition',
+      orderId: bill.id,
+      periodId: null,
+      actorId: null,
+      metadata: {
+        source: 'vietqr_callback',
+        paymentMethod: bill.paymentMethod,
+        receiptCode,
+      },
+    });
   }
 
   async findRequestByBillId(billId: string, lock = false) {
@@ -245,6 +266,12 @@ function toAudit(entity: VietQrCallbackLogOrmEntity): CallbackAudit {
     processedAt: entity.processedAt,
     createdAt: entity.createdAt,
   };
+}
+
+function createReceiptCode(orderId: string) {
+  const date = new Date();
+  const day = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  return `PT-${day}-${orderId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
 function applyAudit(

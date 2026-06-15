@@ -590,11 +590,20 @@ export class StudentController {
       );
     }
 
+    if (status !== 'Paid' && status !== 'Unpaid') {
+      throw new BadRequestException('Trạng thái thanh toán không hợp lệ');
+    }
+
     if (status === 'Unpaid') {
       const bill = await this.monthlyBillRepo.findOne({
         where: { studentId, month },
       });
       if (bill) {
+        if (bill.periodId) {
+          throw new BadRequestException(
+            'Hóa đơn thuộc đợt thanh toán phải được cập nhật tại màn Kế toán',
+          );
+        }
         await this.monthlyBillRepo.remove(bill); // CASCADE will delete items
       }
       return { success: true, message: 'Đã hủy chốt hóa đơn thành công' };
@@ -654,6 +663,11 @@ export class StudentController {
     let bill = await this.monthlyBillRepo.findOne({
       where: { studentId, month },
     });
+    if (bill?.periodId) {
+      throw new BadRequestException(
+        'Hóa đơn thuộc đợt thanh toán phải được cập nhật tại màn Kế toán',
+      );
+    }
     if (!bill) {
       bill = new StudentMonthlyBillOrmEntity();
       bill.studentId = studentId;

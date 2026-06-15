@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import {
   BillingPersistencePort,
   BillingTransactionContext,
+  BillingAuditInput,
   PaymentPeriodDetails,
   PeriodSummary,
 } from '../../application/ports/billing-persistence.port';
@@ -29,6 +30,7 @@ import { StudentMonthlyBillOrmEntity } from '../../../../infrastructure/persiste
 import { TeacherMonthlyWageItemOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
 import { TeacherMonthlyWageOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
+import { BillingAuditLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
 
 @Injectable()
 export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
@@ -86,13 +88,28 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       .getRepository(PaymentPeriodOrmEntity)
       .findOne({ where: { id } });
     if (!period) return null;
+    const periodAuditLogs = await this.dataSource
+      .getRepository(BillingAuditLogOrmEntity)
+      .find({
+        where: { periodId: id, orderId: IsNull() },
+        relations: { actor: true },
+        order: { createdAt: 'DESC' },
+      });
+    const periodView = {
+      ...period,
+      auditLogs: periodAuditLogs.map(mapAuditLog),
+    } as unknown as PaymentPeriodProps & { id: string };
 
     if (period.type === 'tuition') {
       const bills = await this.dataSource
         .getRepository(StudentMonthlyBillOrmEntity)
         .find({
           where: { periodId: id },
-          relations: { student: true, paymentRequest: { logs: true } },
+          relations: {
+            student: true,
+            processedBy: true,
+            paymentRequest: { logs: true },
+          },
           order: { student: { lastName: 'ASC', firstName: 'ASC' } },
         });
       const items = bills.length
@@ -101,8 +118,16 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
             .find({ where: { billId: In(bills.map((bill) => bill.id)) } })
         : [];
       const byBill = groupItems(items, 'billId');
+      const auditLogs = await this.dataSource
+        .getRepository(BillingAuditLogOrmEntity)
+        .find({
+          where: { periodId: id },
+          relations: { actor: true },
+          order: { createdAt: 'DESC' },
+        });
+      const logsByOrder = groupItems(auditLogs, 'orderId');
       return {
-        period: period as unknown as PaymentPeriodProps & { id: string },
+        period: periodView,
         orders: bills.map((bill) => ({
           id: bill.id,
           studentId: bill.studentId,
@@ -115,6 +140,12 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           status: bill.status,
           paymentDate: bill.paymentDate,
           note: bill.note,
+          paymentMethod: bill.paymentMethod,
+          processedBy: bill.processedBy
+            ? { id: bill.processedBy.id, name: bill.processedBy.name }
+            : null,
+          receiptCode: bill.receiptCode,
+          auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
           paymentRequest: bill.paymentRequest,
           items: (byBill.get(bill.id) ?? []).map(mapItem),
         })),
@@ -125,7 +156,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       .getRepository(TeacherMonthlyWageOrmEntity)
       .find({
         where: { periodId: id },
-        relations: { teacher: true },
+        relations: { teacher: true, processedBy: true },
         order: { teacher: { lastName: 'ASC', firstName: 'ASC' } },
       });
     const items = wages.length
@@ -134,8 +165,16 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           .find({ where: { wageId: In(wages.map((wage) => wage.id)) } })
       : [];
     const byWage = groupItems(items, 'wageId');
+    const auditLogs = await this.dataSource
+      .getRepository(BillingAuditLogOrmEntity)
+      .find({
+        where: { periodId: id },
+        relations: { actor: true },
+        order: { createdAt: 'DESC' },
+      });
+    const logsByOrder = groupItems(auditLogs, 'orderId');
     return {
-      period: period as unknown as PaymentPeriodProps & { id: string },
+      period: periodView,
       orders: wages.map((wage) => ({
         id: wage.id,
         teacherId: wage.teacherId,
@@ -148,6 +187,11 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         status: wage.status,
         paymentDate: wage.paymentDate,
         note: wage.note,
+        paymentMethod: wage.paymentMethod,
+        processedBy: wage.processedBy
+          ? { id: wage.processedBy.id, name: wage.processedBy.name }
+          : null,
+        auditLogs: (logsByOrder.get(wage.id) ?? []).map(mapAuditLog),
         items: (byWage.get(wage.id) ?? []).map(mapItem),
       })),
     };
@@ -229,7 +273,13 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
         await this.manager
           .getRepository(StudentAttendanceOrmEntity)
           .update(
-            { id: In(order.lines.map((line) => line.sourceId)) },
+            {
+              id: In(
+                order.lines
+                  .filter((line) => line.sessionsCount > 0)
+                  .map((line) => line.sourceId),
+              ),
+            },
             { billId: bill.id },
           );
       }
@@ -264,7 +314,13 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       await this.manager
         .getRepository(ClassSessionOrmEntity)
         .update(
-          { id: In(order.lines.map((line) => line.sourceId)) },
+          {
+            id: In(
+              order.lines
+                .filter((line) => line.sessionsCount > 0)
+                .map((line) => line.sourceId),
+            ),
+          },
           { wageId: wage.id },
         );
     }
@@ -349,17 +405,28 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       status: order.status as 'Paid' | 'Unpaid',
       paymentDate: order.paymentDate,
       note: order.note,
+      paymentMethod: order.paymentMethod,
+      processedByUserId: order.processedByUserId,
+      receiptCode:
+        type === 'tuition'
+          ? (order as StudentMonthlyBillOrmEntity).receiptCode
+          : null,
     };
   }
 
   async saveOrder(order: BillingOrderProps) {
-    const values = {
+    const values: Record<string, unknown> = {
       status: order.status,
       paidAmount: order.paidAmount,
       paymentDate: order.paymentDate,
       note: order.note,
+      paymentMethod: order.paymentMethod,
+      processedByUserId: order.processedByUserId,
     };
     if (order.type === 'tuition') {
+      if (order.status === 'Paid' && !order.receiptCode) {
+        values['receiptCode'] = createReceiptCode(order.id!);
+      }
       await this.manager
         .getRepository(StudentMonthlyBillOrmEntity)
         .update(order.id!, values);
@@ -368,6 +435,17 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
         .getRepository(TeacherMonthlyWageOrmEntity)
         .update(order.id!, values);
     }
+  }
+
+  async saveAudit(input: BillingAuditInput) {
+    await this.manager.getRepository(BillingAuditLogOrmEntity).save({
+      event: input.event,
+      orderType: input.orderType ?? null,
+      orderId: input.orderId ?? null,
+      periodId: input.periodId ?? null,
+      actorId: input.actorId ?? null,
+      metadata: input.metadata ?? {},
+    });
   }
 
   async resetPaymentRequest(billId: string) {
@@ -558,4 +636,20 @@ function mapItem(
 
 function toDateString(value: Date) {
   return value.toISOString().slice(0, 10);
+}
+
+function createReceiptCode(orderId: string) {
+  const date = new Date();
+  const day = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  return `PT-${day}-${orderId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
+function mapAuditLog(log: BillingAuditLogOrmEntity) {
+  return {
+    id: log.id,
+    event: log.event,
+    actor: log.actor ? { id: log.actor.id, name: log.actor.name } : null,
+    metadata: log.metadata,
+    createdAt: log.createdAt,
+  };
 }

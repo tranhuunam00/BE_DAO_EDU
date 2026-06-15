@@ -35,6 +35,7 @@ import { TuitionPaymentRequestOrmEntity } from './entities/tuition-payment-reque
 import { TuitionPaymentLogOrmEntity } from './entities/tuition-payment-log.orm-entity';
 import { VietQrCallbackLogOrmEntity } from './entities/vietqr-callback-log.orm-entity';
 import { LeaveRequestOrmEntity } from './entities/leave-request.orm-entity';
+import { BillingAuditLogOrmEntity } from './entities/billing-audit-log.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -74,6 +75,7 @@ export const AppDataSource = new DataSource({
     TuitionPaymentLogOrmEntity,
     VietQrCallbackLogOrmEntity,
     LeaveRequestOrmEntity,
+    BillingAuditLogOrmEntity,
   ],
   migrations: [path.join(__dirname, '/migrations/*.{ts,js}')],
   synchronize: false, // Turn off synchronize when using migrations

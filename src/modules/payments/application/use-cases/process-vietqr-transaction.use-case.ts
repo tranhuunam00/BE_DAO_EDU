@@ -108,11 +108,19 @@ export class ProcessVietQrTransactionUseCase {
           throw new PaymentError('BILL_NOT_FOUND', 'Không tìm thấy hóa đơn');
         }
 
+        if (bill.status === 'Paid') {
+          throw new PaymentError(
+            'PAYMENT_ALREADY_RECONCILED',
+            'Hóa đơn đã được thanh toán trước đó',
+          );
+        }
+
         const transactionDate = new Date(transaction.transactiontime);
         request.reconcile(transactionDate);
         bill.status = 'Paid';
         bill.paidAmount = transaction.amount;
         bill.paymentDate = transactionDate;
+        bill.paymentMethod = 'bank_transfer';
         bill.note = `Đối soát tự động qua VietQR - ${transaction.referencenumber}`;
         await context.saveBill(bill);
         await context.saveRequest(request);

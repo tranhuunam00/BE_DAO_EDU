@@ -9,6 +9,7 @@ import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/ty
 import { TeacherMonthlyWageItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage-item.orm-entity';
 import { TeacherMonthlyWageOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from '../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
+import { BillingAuditLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
 import { PaymentPeriodController } from '../../presentation/controllers/payment-period.controller';
 import { BillingPersistencePort } from './application/ports/billing-persistence.port';
 import { CreatePaymentPeriodUseCase } from './application/use-cases/create-payment-period.use-case';
@@ -50,6 +51,7 @@ const useCases = [
       ClassSessionOrmEntity,
       CourseLevelPricingOrmEntity,
       TuitionPaymentRequestOrmEntity,
+      BillingAuditLogOrmEntity,
     ]),
   ],
   controllers: [PaymentPeriodController],

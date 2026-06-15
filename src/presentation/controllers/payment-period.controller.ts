@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -77,17 +78,22 @@ export class PaymentPeriodController {
 
   @Post()
   @ApiOperation({ summary: 'Tạo đợt thanh toán và chốt các đơn bên trong' })
-  create(@Body() body: any) {
-    return this.run(() => this.createPeriod.execute(body));
+  create(@Request() req: { user: { sub: string } }, @Body() body: any) {
+    return this.run(() =>
+      this.createPeriod.execute({ ...body, actorId: req.user.sub }),
+    );
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Cập nhật trạng thái đợt thanh toán' })
   updateStatus(
+    @Request() req: { user: { sub: string } },
     @Param('id') id: string,
     @Body('status') status: 'Active' | 'Closed',
   ) {
-    return this.run(() => this.updatePeriodStatus.execute(id, status));
+    return this.run(() =>
+      this.updatePeriodStatus.execute(id, status, req.user.sub),
+    );
   }
 
   @Delete(':id')
@@ -99,14 +105,26 @@ export class PaymentPeriodController {
   @Patch('orders/:type/:orderId')
   @ApiOperation({ summary: 'Cập nhật trạng thái thanh toán của một đơn' })
   updateOrderStatus(
+    @Request() req: { user: { sub: string } },
     @Param('type') type: 'tuition' | 'salary',
     @Param('orderId') orderId: string,
     @Body('status') status: 'Paid' | 'Unpaid',
     @Body('paidAmount') paidAmount?: number,
+    @Body('paymentDate') paymentDate?: string,
+    @Body('paymentMethod') paymentMethod?: string,
     @Body('note') note?: string,
   ) {
     return this.run(() =>
-      this.updateOrder.execute({ type, orderId, status, paidAmount, note }),
+      this.updateOrder.execute({
+        type,
+        orderId,
+        status,
+        paidAmount,
+        paymentDate,
+        paymentMethod,
+        actorId: req.user.sub,
+        note,
+      }),
     );
   }
 

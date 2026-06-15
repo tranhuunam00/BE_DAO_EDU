@@ -339,9 +339,18 @@ export class TeacherController {
       throw new BadRequestException('Dữ liệu không hợp lệ. Yêu cầu teacherId và month (YYYY-MM)');
     }
 
+    if (status !== 'Paid' && status !== 'Unpaid') {
+      throw new BadRequestException('Trạng thái thanh toán không hợp lệ');
+    }
+
     if (status === 'Unpaid') {
       const wage = await this.monthlyWageRepo.findOne({ where: { teacherId, month } });
       if (wage) {
+        if (wage.periodId) {
+          throw new BadRequestException(
+            'Kỳ lương thuộc đợt thanh toán phải được cập nhật tại màn Kế toán',
+          );
+        }
         await this.monthlyWageRepo.remove(wage); // CASCADE will delete items
       }
       return { success: true, message: 'Đã hủy thanh toán lương thành công' };
@@ -389,6 +398,11 @@ export class TeacherController {
     );
 
     let wage = await this.monthlyWageRepo.findOne({ where: { teacherId, month } });
+    if (wage?.periodId) {
+      throw new BadRequestException(
+        'Kỳ lương thuộc đợt thanh toán phải được cập nhật tại màn Kế toán',
+      );
+    }
     if (!wage) {
       wage = new TeacherMonthlyWageOrmEntity();
       wage.teacherId = teacherId;

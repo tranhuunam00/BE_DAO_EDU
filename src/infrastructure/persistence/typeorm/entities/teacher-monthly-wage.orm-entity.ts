@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { TeacherOrmEntity } from './teacher.orm-entity';
 import { PaymentPeriodOrmEntity } from './payment-period.orm-entity';
 import { TeacherMonthlyWageItemOrmEntity } from './teacher-monthly-wage-item.orm-entity';
+import { UserOrmEntity } from './user.orm-entity';
 
 @Entity('teacher_monthly_wages')
 export class TeacherMonthlyWageOrmEntity {
@@ -38,6 +39,12 @@ export class TeacherMonthlyWageOrmEntity {
   @Column({ type: 'text', nullable: true })
   note!: string | null;
 
+  @Column({ type: 'varchar', name: 'payment_method', nullable: true })
+  paymentMethod!: string | null;
+
+  @Column({ type: 'uuid', name: 'processed_by_user_id', nullable: true })
+  processedByUserId!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
@@ -54,4 +61,8 @@ export class TeacherMonthlyWageOrmEntity {
 
   @OneToMany(() => TeacherMonthlyWageItemOrmEntity, (item) => item.wage)
   items!: TeacherMonthlyWageItemOrmEntity[];
+
+  @ManyToOne(() => UserOrmEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'processed_by_user_id' })
+  processedBy!: UserOrmEntity | null;
 }

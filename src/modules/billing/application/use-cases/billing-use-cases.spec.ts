@@ -32,12 +32,21 @@ function makePersistence() {
       id: 'period-1',
     })),
     saveOrders: jest.fn().mockResolvedValue(undefined),
-    findPeriod: jest.fn(),
+    findPeriod: jest.fn().mockResolvedValue({
+      id: 'period-1',
+      name: 'June',
+      type: 'tuition',
+      month: '2026-06',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      status: 'Active',
+    }),
     savePeriodStatus: jest.fn().mockResolvedValue(undefined),
     hasPaidOrders: jest.fn().mockResolvedValue(false),
     deletePeriod: jest.fn().mockResolvedValue(undefined),
     findOrder: jest.fn(),
     saveOrder: jest.fn().mockResolvedValue(undefined),
+    saveAudit: jest.fn().mockResolvedValue(undefined),
     resetPaymentRequest: jest.fn().mockResolvedValue(undefined),
     deleteOrder: jest.fn().mockResolvedValue(undefined),
   };
@@ -189,11 +198,78 @@ describe('Billing use cases', () => {
       type: 'tuition',
       orderId: 'bill-1',
       status: 'Unpaid',
+      actorId: 'admin-1',
+      note: 'Hủy xác nhận sai giao dịch',
     });
     expect(context.saveOrder).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'Unpaid', paidAmount: 0 }),
     );
     expect(context.resetPaymentRequest).toHaveBeenCalledWith('bill-1');
+  });
+
+  it('applies a documented adjustment before creating the period', async () => {
+    const { persistence, context } = makePersistence();
+    context.findTuitionSources.mockResolvedValue([attendance]);
+    await new CreatePaymentPeriodUseCase(persistence).execute({
+      name: 'June tuition',
+      type: 'tuition',
+      month: '2026-06',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      studentIds: ['student-1'],
+      adjustments: [
+        {
+          ownerId: 'student-1',
+          adjustedAmount: 80000,
+          reason: 'Discount approved',
+        },
+      ],
+    });
+    expect(context.saveOrders).toHaveBeenCalledWith(
+      'tuition',
+      expect.anything(),
+      [
+        expect.objectContaining({
+          totalAmount: 80000,
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              sessionsCount: 0,
+              totalAmount: -20000,
+            }),
+          ]),
+        }),
+      ],
+    );
+  });
+
+  it('uses the supplied payment date when marking an order paid', async () => {
+    const { persistence, context } = makePersistence();
+    context.findOrder.mockResolvedValue({
+      id: 'bill-1',
+      type: 'tuition',
+      ownerId: 'student-1',
+      periodId: 'period-1',
+      totalAmount: 100000,
+      paidAmount: 0,
+      status: 'Unpaid',
+      actorId: 'admin-1',
+      paymentDate: null,
+      note: null,
+    });
+    await new UpdateBillingOrderUseCase(persistence).execute({
+      type: 'tuition',
+      orderId: 'bill-1',
+      status: 'Paid',
+      paymentDate: '2026-06-10T08:30:00.000Z',
+      paymentMethod: 'cash',
+      actorId: 'admin-1',
+    });
+    expect(context.saveOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paidAmount: 100000,
+        paymentDate: new Date('2026-06-10T08:30:00.000Z'),
+      }),
+    );
   });
 
   it('does not reset a payment request for salary orders', async () => {
@@ -213,6 +289,8 @@ describe('Billing use cases', () => {
       type: 'salary',
       orderId: 'wage-1',
       status: 'Unpaid',
+      actorId: 'admin-1',
+      note: 'Hủy xác nhận sai giao dịch',
     });
     expect(context.resetPaymentRequest).not.toHaveBeenCalled();
   });
@@ -242,5 +320,43 @@ describe('Billing use cases', () => {
     });
     await useCase.execute('tuition', 'bill-1');
     expect(context.deleteOrder).toHaveBeenCalledWith('tuition', 'bill-1');
+  });
+
+  it('blocks updates and deletion inside a closed period', async () => {
+    const { persistence, context } = makePersistence();
+    context.findOrder.mockResolvedValue({
+      id: 'bill-1',
+      type: 'tuition',
+      ownerId: 'student-1',
+      periodId: 'period-1',
+      totalAmount: 100000,
+      paidAmount: 0,
+      status: 'Unpaid',
+      actorId: 'admin-1',
+      paymentDate: null,
+      note: null,
+    });
+    context.findPeriod.mockResolvedValue({
+      id: 'period-1',
+      name: 'June',
+      type: 'tuition',
+      month: '2026-06',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      status: 'Closed',
+    });
+
+    await expect(
+      new UpdateBillingOrderUseCase(persistence).execute({
+        type: 'tuition',
+        orderId: 'bill-1',
+        status: 'Paid',
+        paymentMethod: 'cash',
+        actorId: 'admin-1',
+      }),
+    ).rejects.toThrow('Không thể thay đổi giao dịch trong đợt đã khóa');
+    await expect(
+      new DeleteBillingOrderUseCase(persistence).execute('tuition', 'bill-1'),
+    ).rejects.toThrow('Không thể xóa giao dịch khỏi đợt đã khóa');
   });
 });

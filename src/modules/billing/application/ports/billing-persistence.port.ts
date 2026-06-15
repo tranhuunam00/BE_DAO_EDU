@@ -25,6 +25,15 @@ export interface PaymentPeriodDetails {
   orders: Record<string, unknown>[];
 }
 
+export interface BillingAuditInput {
+  event: string;
+  orderType?: BillingOrderType;
+  orderId?: string;
+  periodId?: string;
+  actorId?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface BillingTransactionContext {
   loadPricings(): Promise<PricingRule[]>;
   findTuitionSources(
@@ -52,6 +61,7 @@ export interface BillingTransactionContext {
     id: string,
   ): Promise<BillingOrderProps | null>;
   saveOrder(order: BillingOrderProps): Promise<void>;
+  saveAudit(input: BillingAuditInput): Promise<void>;
   resetPaymentRequest(billId: string): Promise<void>;
   deleteOrder(type: BillingOrderType, id: string): Promise<void>;
 }

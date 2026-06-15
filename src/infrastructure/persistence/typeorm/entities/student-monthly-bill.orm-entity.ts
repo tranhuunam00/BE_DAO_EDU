@@ -13,6 +13,7 @@ import { StudentOrmEntity } from './student.orm-entity';
 import { PaymentPeriodOrmEntity } from './payment-period.orm-entity';
 import { StudentMonthlyBillItemOrmEntity } from './student-monthly-bill-item.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from './tuition-payment-request.orm-entity';
+import { UserOrmEntity } from './user.orm-entity';
 
 @Entity('student_monthly_bills')
 export class StudentMonthlyBillOrmEntity {
@@ -61,6 +62,15 @@ export class StudentMonthlyBillOrmEntity {
   @Column({ type: 'text', nullable: true })
   note!: string | null;
 
+  @Column({ type: 'varchar', name: 'payment_method', nullable: true })
+  paymentMethod!: string | null;
+
+  @Column({ type: 'uuid', name: 'processed_by_user_id', nullable: true })
+  processedByUserId!: string | null;
+
+  @Column({ type: 'varchar', name: 'receipt_code', nullable: true, unique: true })
+  receiptCode!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
@@ -83,4 +93,8 @@ export class StudentMonthlyBillOrmEntity {
 
   @OneToOne(() => TuitionPaymentRequestOrmEntity, (request) => request.bill)
   paymentRequest!: TuitionPaymentRequestOrmEntity | null;
+
+  @ManyToOne(() => UserOrmEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'processed_by_user_id' })
+  processedBy!: UserOrmEntity | null;
 }

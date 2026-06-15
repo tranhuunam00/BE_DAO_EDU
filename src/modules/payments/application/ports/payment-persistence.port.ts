@@ -12,6 +12,8 @@ export interface TuitionBill {
   status: string;
   paymentDate: Date | null;
   note: string | null;
+  paymentMethod?: string | null;
+  receiptCode?: string | null;
   studentUserId: string | null;
   periodName: string | null;
 }
