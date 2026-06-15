@@ -1,0 +1,4 @@
+interface:
+  display_name: "DAO EDU Security"
+  short_description: "Secure and review DAO EDU backend features"
+  default_prompt: "Use $dao-edu-security to review and secure this backend feature."

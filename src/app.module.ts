@@ -13,6 +13,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { StudentsModule } from './modules/students/students.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
+import { ContactRequestsModule } from './modules/contact-requests/contact-requests.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.mod
     BillingModule,
     PaymentsModule,
     LeaveRequestsModule,
+    ContactRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
