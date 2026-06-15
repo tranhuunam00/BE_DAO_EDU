@@ -1,5 +1,18 @@
-import { IsNotEmpty, IsOptional, IsString, IsEmail } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+const STUDENT_STATUSES = [
+  'Waiting for class',
+  'Studying',
+  'Suspended',
+  'Graduated',
+] as const;
 
 export class CreateStudentDto {
   @ApiProperty({ description: 'Tên của học sinh', example: 'Minh' })
@@ -115,6 +128,7 @@ export class CreateStudentDto {
   @ApiProperty({ description: 'Trạng thái học tập', example: 'Waiting for class', enum: ['Waiting for class', 'Studying', 'Suspended', 'Graduated'] })
   @IsString({ message: 'Trạng thái học tập không được để trống' })
   @IsNotEmpty({ message: 'Trạng thái học tập không được để trống' })
+  @IsIn(STUDENT_STATUSES)
   status!: string;
 
   // Hỗ trợ tạo tài khoản đăng nhập cho học sinh
@@ -157,7 +171,7 @@ export class UpdateStudentDto {
   @IsString() @IsOptional() districtWard?: string;
   @IsString() @IsOptional() primaryAddress?: string;
   @IsString() @IsOptional() oldAddress?: string;
-  @IsString() @IsOptional() status?: string;
+  @IsString() @IsIn(STUDENT_STATUSES) @IsOptional() status?: string;
   @IsString() @IsOptional() avatar?: string;
   @IsEmail({}, { message: 'Email đăng nhập không hợp lệ' }) @IsOptional() loginEmail?: string;
   @IsString() @IsOptional() loginPassword?: string;

@@ -96,6 +96,10 @@ export class TypeOrmAcademicsPersistenceAdapter
         lock: { mode: 'pessimistic_write' },
       });
       if (enrollment?.status === 'Active') {
+        if (student.status !== 'Studying') {
+          student.status = 'Studying';
+          await manager.save(student);
+        }
         return this.toEnrollmentResult(enrollment, false);
       }
 

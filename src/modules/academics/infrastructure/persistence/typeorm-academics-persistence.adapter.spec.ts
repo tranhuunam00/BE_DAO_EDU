@@ -93,4 +93,31 @@ describe('TypeOrmAcademicsPersistenceAdapter transactions', () => {
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(2);
   });
+
+  it('repairs the student status when the enrollment is already active', async () => {
+    const { manager, enrollmentRepo } = createManager();
+    const student = { id: 'student-1', status: 'Active' };
+    manager.findOne
+      .mockResolvedValueOnce({ id: 'class-1', maxSize: null })
+      .mockResolvedValueOnce(student);
+    enrollmentRepo.findOne.mockResolvedValue({
+      id: 'enrollment-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'Active',
+      joinedDate: '2026-06-01',
+    });
+    const dataSource = {
+      transaction: jest.fn(
+        async (_isolation: string, work: (value: typeof manager) => unknown) =>
+          work(manager),
+      ),
+    };
+    const adapter = new TypeOrmAcademicsPersistenceAdapter(dataSource as any);
+
+    await adapter.enrollStudent('class-1', 'student-1', '2026-06-14');
+
+    expect(student.status).toBe('Studying');
+    expect(manager.save).toHaveBeenCalledWith(student);
+  });
 });
