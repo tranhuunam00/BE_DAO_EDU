@@ -28,6 +28,7 @@ import {
 
 @Controller('facebook-lead-scans')
 export class FacebookLeadScanController {
+  constructor(
     private readonly submitScan: SubmitFacebookLeadScanUseCase,
     private readonly listScans: ListFacebookLeadScansUseCase,
     private readonly getScan: GetFacebookLeadScanUseCase,

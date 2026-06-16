@@ -4,6 +4,7 @@ import { FacebookLeadItemOrmEntity } from '../../infrastructure/persistence/type
 import { FacebookLeadScanOrmEntity } from '../../infrastructure/persistence/typeorm/entities/facebook-lead-scan.orm-entity';
 import { FacebookLeadScanController } from '../../presentation/controllers/facebook-lead-scan.controller';
 import { FacebookLeadScanPersistencePort } from './application/ports/facebook-lead-scan-persistence.port';
+import {
   GetFacebookLeadScanUseCase,
   ListFacebookLeadScansUseCase,
   SubmitFacebookLeadScanUseCase,
