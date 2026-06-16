@@ -30,65 +30,98 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
     input: SaveFacebookLeadScanInput,
   ): Promise<FacebookLeadScanRecord> {
     const meta = input.meta || {};
-    const firstItem = input.items[0];
-    const groupUrl = stringValue(meta.groupUrl) || firstItem?.groupUrl || '';
-    const postUrl =
-      stringValue(meta.postUrl) ||
-      stringValue(meta.pageUrl) ||
-      firstItem?.pageUrl ||
-      firstItem?.sourceUrl ||
-      '';
-    const postId = stringValue(meta.postId) || firstItem?.postId || '';
+    
+    if (!input.items || !input.items.length) {
+      throw new Error('FACEBOOK_LEAD_SCAN_EMPTY');
+    }
 
-    let scan = await this.scanRepository.findOne({
-      where: { scanSessionId: input.scanSessionId },
-    });
-    if (!scan) {
-      scan = this.scanRepository.create({
-        scanSessionId: input.scanSessionId,
-        source: input.source,
+    // Group items by post_id
+    const itemsByPost = new Map<string, FacebookLeadScanItem[]>();
+    for (const item of input.items) {
+      const pId = item.postId || 'unknown';
+      if (!itemsByPost.has(pId)) {
+        itemsByPost.set(pId, []);
+      }
+      itemsByPost.get(pId)!.push(item);
+    }
+
+    let firstScanRecord: FacebookLeadScanRecord | null = null;
+    let index = 0;
+
+    for (const [pId, postItems] of itemsByPost.entries()) {
+      const firstItem = postItems[0];
+      const groupUrl = stringValue(meta.groupUrl) || firstItem?.groupUrl || '';
+      
+      // If we have meta.postUrl but are processing multiple posts, use the item's pageUrl
+      const postUrl = (itemsByPost.size === 1 && stringValue(meta.postUrl))
+        ? stringValue(meta.postUrl)
+        : (firstItem?.pageUrl || firstItem?.sourceUrl || '');
+      
+      const postId = pId === 'unknown' ? '' : pId;
+      
+      // Use unique scanSessionId per post to avoid duplicate key constraint if it is a split session
+      const scanSessionId = itemsByPost.size === 1
+        ? input.scanSessionId
+        : `${input.scanSessionId}_${index}`;
+      
+      index++;
+
+      let scan = await this.scanRepository.findOne({
+        where: { scanSessionId },
       });
-    }
+      if (!scan) {
+        scan = this.scanRepository.create({
+          scanSessionId,
+          source: input.source,
+        });
+      }
 
-    scan.source = input.source;
-    scan.groupUrl = groupUrl;
-    scan.postUrl = postUrl;
-    scan.postId = postId;
-    scan.scannedAt = parseDate(meta.scannedAt);
-    scan.exportedAt = parseDate(input.exportedAt);
-    scan.itemCount = input.items.length;
-    scan.meta = input.meta || null;
-    scan.localAnalysis = input.localAnalysis || null;
-    scan.detection = input.detection as unknown as Record<string, unknown>;
-    scan = await this.scanRepository.save(scan);
-    const scanId = scan.id;
+      scan.source = input.source;
+      scan.groupUrl = groupUrl;
+      scan.postUrl = postUrl;
+      scan.postId = postId;
+      scan.scannedAt = parseDate(meta.scannedAt);
+      scan.exportedAt = parseDate(input.exportedAt);
+      scan.itemCount = postItems.length;
+      scan.meta = { ...meta, postId, postUrl, groupUrl };
+      scan.localAnalysis = input.localAnalysis || null;
+      scan.detection = input.detection as unknown as Record<string, unknown>;
+      scan = await this.scanRepository.save(scan);
+      const scanId = scan.id;
 
-    const fingerprints = [
-      ...new Set(input.items.map((item) => item.fingerprint).filter(Boolean)),
-    ];
-    const existing = fingerprints.length
-      ? await this.itemRepository.find({
-          where: { fingerprint: In(fingerprints) },
-          select: { fingerprint: true },
-        })
-      : [];
-    const existingFingerprints = new Set(
-      existing.map((item) => item.fingerprint),
-    );
-    const newItems = input.items.filter(
-      (item) => item.fingerprint && !existingFingerprints.has(item.fingerprint),
-    );
-
-    if (newItems.length) {
-      await this.itemRepository.save(
-        newItems.map((item) => this.toItemEntity(scanId, item)),
+      const fingerprints = [
+        ...new Set(postItems.map((item) => item.fingerprint).filter(Boolean)),
+      ];
+      const existing = fingerprints.length
+        ? await this.itemRepository.find({
+            where: { fingerprint: In(fingerprints) },
+            select: { fingerprint: true },
+          })
+        : [];
+      const existingFingerprints = new Set(
+        existing.map((item) => item.fingerprint),
       );
+      const newItems = postItems.filter(
+        (item) => item.fingerprint && !existingFingerprints.has(item.fingerprint),
+      );
+
+      if (newItems.length) {
+        await this.itemRepository.save(
+          newItems.map((item) => this.toItemEntity(scanId, item)),
+        );
+      }
+
+      scan.acceptedItems = newItems.length;
+      scan.duplicateItems = postItems.length - newItems.length;
+      scan = await this.scanRepository.save(scan);
+      
+      const record = this.toScanRecord(scan);
+      if (!firstScanRecord) {
+        firstScanRecord = record;
+      }
     }
 
-    scan.acceptedItems = newItems.length;
-    scan.duplicateItems = input.items.length - newItems.length;
-    scan = await this.scanRepository.save(scan);
-    return this.toScanRecord(scan);
+    return firstScanRecord || this.toScanRecord(null as any);
   }
 
   async list(input: {
