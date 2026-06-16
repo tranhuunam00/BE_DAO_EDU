@@ -14,6 +14,7 @@ import { StudentsModule } from './modules/students/students.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
 import { ContactRequestsModule } from './modules/contact-requests/contact-requests.module';
+import { FacebookLeadScansModule } from './modules/facebook-lead-scans/facebook-lead-scans.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ContactRequestsModule } from './modules/contact-requests/contact-reques
     PaymentsModule,
     LeaveRequestsModule,
     ContactRequestsModule,
+    FacebookLeadScansModule,
   ],
   controllers: [AppController],
   providers: [AppService],
