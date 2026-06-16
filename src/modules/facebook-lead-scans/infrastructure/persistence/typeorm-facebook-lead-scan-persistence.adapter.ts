@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, In, Repository } from 'typeorm';
 import { FacebookLeadItemOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/facebook-lead-item.orm-entity';
@@ -43,10 +43,12 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
     let scan = await this.scanRepository.findOne({
       where: { scanSessionId: input.scanSessionId },
     });
-    scan ??= this.scanRepository.create({
-      scanSessionId: input.scanSessionId,
-      source: input.source,
-    });
+    if (!scan) {
+      scan = this.scanRepository.create({
+        scanSessionId: input.scanSessionId,
+        source: input.source,
+      });
+    }
 
     scan.source = input.source;
     scan.groupUrl = groupUrl;
@@ -59,6 +61,7 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
     scan.localAnalysis = input.localAnalysis || null;
     scan.detection = input.detection as unknown as Record<string, unknown>;
     scan = await this.scanRepository.save(scan);
+    const scanId = scan.id;
 
     const fingerprints = [
       ...new Set(input.items.map((item) => item.fingerprint).filter(Boolean)),
@@ -78,7 +81,7 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
 
     if (newItems.length) {
       await this.itemRepository.save(
-        newItems.map((item) => this.toItemEntity(scan.id, item)),
+        newItems.map((item) => this.toItemEntity(scanId, item)),
       );
     }
 
@@ -210,3 +213,5 @@ function nullableString(value: unknown): string | null {
 function numberOrNull(value: unknown): number | null {
   return Number.isFinite(Number(value)) ? Number(value) : null;
 }
+
+

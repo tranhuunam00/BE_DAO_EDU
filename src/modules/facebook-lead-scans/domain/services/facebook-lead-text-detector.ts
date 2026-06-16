@@ -1,4 +1,4 @@
-export type FacebookLeadClassification =
+﻿export type FacebookLeadClassification =
   | 'POTENTIAL_PARENT'
   | 'TEACHER_AD'
   | 'COMPETITOR_SALE'
@@ -9,18 +9,27 @@ export type FacebookLeadClassification =
 export type FacebookLeadLevel = 'HOT' | 'WARM' | 'COLD' | 'NONE';
 
 export interface FacebookLeadScanItem {
+  parserVersion?: number;
   kind?: string;
+  source?: string;
+  groupUrl?: string;
+  pageUrl?: string;
+  sourceUrl?: string;
+  parentFingerprint?: string | null;
+  postId?: string;
+  commentId?: string | null;
+  parentCommentId?: string | null;
+  depth?: number;
+  treePath?: string;
+  contextTexts?: string[];
+  replyToAuthor?: string;
   authorName?: string;
   authorUrl?: string;
   text?: string;
-  pageUrl?: string;
-  sourceUrl?: string;
-  postId?: string;
-  commentId?: string;
-  depth?: number;
-  contextTexts?: string[];
-  fingerprint?: string;
+  capturedAt?: string;
   lastSeenAt?: string;
+  fingerprint?: string;
+  missingPostContent?: boolean;
 }
 
 export interface FacebookLeadEvidence {
@@ -412,8 +421,8 @@ function normalizeText(value: unknown): string {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
+    .replace(/Ä‘/g, 'd')
+    .replace(/Ä/g, 'D')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s:+./-]/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -437,3 +446,4 @@ function normalizeProfileUrl(value: unknown): string {
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
+
