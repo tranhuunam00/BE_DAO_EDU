@@ -23,14 +23,15 @@ import {
   GetFacebookLeadScanUseCase,
   ListFacebookLeadScansUseCase,
   SubmitFacebookLeadScanUseCase,
+  GetScannedPostIdsUseCase,
 } from '../../modules/facebook-lead-scans/application/use-cases/manage-facebook-lead-scans.use-cases';
 
 @Controller('facebook-lead-scans')
 export class FacebookLeadScanController {
-  constructor(
     private readonly submitScan: SubmitFacebookLeadScanUseCase,
     private readonly listScans: ListFacebookLeadScansUseCase,
     private readonly getScan: GetFacebookLeadScanUseCase,
+    private readonly getScannedPostIds: GetScannedPostIdsUseCase,
   ) {}
 
   @Post()
@@ -59,6 +60,19 @@ export class FacebookLeadScanController {
       }
       throw error;
     }
+  }
+
+  @Get('sync/scanned-posts')
+  async getScannedPosts(
+    @Query('groupUrl') groupUrl: string,
+    @Headers('x-dao-edu-scanner-token') scannerToken?: string,
+  ) {
+    this.assertScannerToken(scannerToken);
+    if (!groupUrl) {
+      throw new BadRequestException('groupUrl is required');
+    }
+    const postIds = await this.getScannedPostIds.execute(groupUrl);
+    return { ok: true, postIds };
   }
 
   @Get()

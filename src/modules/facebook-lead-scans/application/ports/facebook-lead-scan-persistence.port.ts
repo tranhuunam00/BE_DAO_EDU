@@ -51,4 +51,5 @@ export abstract class FacebookLeadScanPersistencePort {
   }): Promise<FacebookLeadScanListResult>;
 
   abstract findById(id: string): Promise<FacebookLeadScanDetail | null>;
+  abstract getScannedPostIds(groupUrl: string): Promise<string[]>;
 }

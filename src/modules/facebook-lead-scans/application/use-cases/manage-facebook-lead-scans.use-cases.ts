@@ -56,6 +56,15 @@ export class GetFacebookLeadScanUseCase {
   }
 }
 
+export class GetScannedPostIdsUseCase {
+  constructor(private readonly persistence: FacebookLeadScanPersistencePort) {}
+
+  execute(groupUrl: string): Promise<string[]> {
+    if (!groupUrl) return Promise.resolve([]);
+    return this.persistence.getScannedPostIds(groupUrl);
+  }
+}
+
 function dedupeItems(items: FacebookLeadScanItem[]): FacebookLeadScanItem[] {
   const map = new Map<string, FacebookLeadScanItem>();
   for (const item of items) {

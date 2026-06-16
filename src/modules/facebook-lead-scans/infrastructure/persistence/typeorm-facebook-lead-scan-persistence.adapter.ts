@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, In, Repository } from 'typeorm';
 import { FacebookLeadItemOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/facebook-lead-item.orm-entity';
@@ -119,6 +119,16 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
       ...this.toScanRecord(scan),
       items: (scan.items || []).map((item) => this.toScanItem(item)),
     };
+  }
+
+  async getScannedPostIds(groupUrl: string): Promise<string[]> {
+    const rows = await this.scanRepository
+      .createQueryBuilder('scan')
+      .select('DISTINCT scan.postId', 'postId')
+      .where('scan.groupUrl = :groupUrl', { groupUrl })
+      .andWhere('scan.postId != :empty', { empty: '' })
+      .getRawMany();
+    return rows.map((r) => r.postId);
   }
 
   private toItemEntity(

@@ -4,10 +4,10 @@ import { FacebookLeadItemOrmEntity } from '../../infrastructure/persistence/type
 import { FacebookLeadScanOrmEntity } from '../../infrastructure/persistence/typeorm/entities/facebook-lead-scan.orm-entity';
 import { FacebookLeadScanController } from '../../presentation/controllers/facebook-lead-scan.controller';
 import { FacebookLeadScanPersistencePort } from './application/ports/facebook-lead-scan-persistence.port';
-import {
   GetFacebookLeadScanUseCase,
   ListFacebookLeadScansUseCase,
   SubmitFacebookLeadScanUseCase,
+  GetScannedPostIdsUseCase,
 } from './application/use-cases/manage-facebook-lead-scans.use-cases';
 import { TypeOrmFacebookLeadScanPersistenceAdapter } from './infrastructure/persistence/typeorm-facebook-lead-scan-persistence.adapter';
 
@@ -40,6 +40,12 @@ import { TypeOrmFacebookLeadScanPersistenceAdapter } from './infrastructure/pers
       provide: GetFacebookLeadScanUseCase,
       useFactory: (persistence: FacebookLeadScanPersistencePort) =>
         new GetFacebookLeadScanUseCase(persistence),
+      inject: [FacebookLeadScanPersistencePort],
+    },
+    {
+      provide: GetScannedPostIdsUseCase,
+      useFactory: (persistence: FacebookLeadScanPersistencePort) =>
+        new GetScannedPostIdsUseCase(persistence),
       inject: [FacebookLeadScanPersistencePort],
     },
   ],
