@@ -72,7 +72,13 @@ export class FacebookLeadScanController {
       throw new BadRequestException('groupUrl is required');
     }
     const postIds = await this.getScannedPostIds.execute(groupUrl);
-    return { ok: true, postIds };
+    const recent = await this.listScans.execute({ groupUrl, limit: 100, page: 1 });
+    const recentScans = recent.items.map(scan => ({
+      postUrl: scan.postUrl,
+      comments: scan.itemCount,
+      status: 'SUCCESS'
+    }));
+    return { ok: true, postIds, recentScans };
   }
 
   @Get()
