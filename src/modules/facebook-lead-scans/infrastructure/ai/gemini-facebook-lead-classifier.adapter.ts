@@ -151,16 +151,14 @@ ${formattedTreeText}
 
       // Map back to retrieve evidence items from input items
       const leadProfilesMapped = profiles.map((p) => {
-        // Try mapping by URL first if Gemini returned a URL, otherwise fall back to matching by name
+        // Match strictly by authorName because profile URLs are not sent to Gemini,
+        // which means any authorUrl returned by Gemini is hallucinated/fake.
         const authorItems = items.filter((item) => {
-          if (p.authorUrl && item.authorUrl) {
-            return normalizeProfileUrl(p.authorUrl) === normalizeProfileUrl(item.authorUrl);
-          }
           return normalizeText(p.authorName) === normalizeText(item.authorName);
         });
 
-        // Crucial: Use the actual author profile URL captured by the scraper extension, if available
-        const originalAuthorUrl = authorItems[0]?.authorUrl || p.authorUrl || '';
+        // Crucial: Use the actual, correct profile URL captured by the scraper extension
+        const originalAuthorUrl = authorItems[0]?.authorUrl || '';
 
         const profileKey = originalAuthorUrl
           ? normalizeProfileUrl(originalAuthorUrl)
