@@ -255,12 +255,13 @@ function formatItemsAsTreeText(items: FacebookLeadScanItem[]): string {
   let text = '';
 
   function renderNode(item: FacebookLeadScanItem, indent: string) {
-    const author = item.authorName || 'Không tên';
+    const author = item.authorName || 'Ẩn danh';
     const cleanText = (item.text || '').replace(/\n/g, ' ');
     const truncatedText = cleanText.length > 300 ? cleanText.substring(0, 300) + '...' : cleanText;
     const kindLabel = item.kind === 'POST' ? 'Bài viết gốc' : 'Bình luận';
 
-    text += `${indent}● Tác giả: ${author} (${kindLabel})\n`;
+    text += `${indent}● Tác giả: ${author}\n`;
+    text += `${indent}  Vai trò: ${kindLabel}\n`;
     text += `${indent}  Nội dung: "${truncatedText}"\n`;
 
     const itemId = item.commentId || item.fingerprint;
