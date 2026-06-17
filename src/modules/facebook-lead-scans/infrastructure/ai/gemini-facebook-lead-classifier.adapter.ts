@@ -61,7 +61,7 @@ export class GeminiFacebookLeadClassifierAdapter implements FacebookLeadClassifi
     const { postContent, commentsText } = formatItemsAsFlatList(items);
 
     const prompt = `
-Bạn là một trợ lý AI phân tích bán hàng và tuyển sinh chuyên nghiệp cho trung tâm giáo dục cấp 2.
+Bạn là một trợ lý AI phân tích bán hàng và tuyển sinh chuyên nghiệp cho trung tâm giáo dục cấp 2 tại Hoàng Mai nhớ là không có môm nghệ thuật và thể thao.
 Dưới đây là thông tin Bài viết gốc (Post Content) làm ngữ cảnh nền:
 ---
 [BÀI VIẾT GỐC]
@@ -332,9 +332,9 @@ function formatItemsAsFlatList(items: FacebookLeadScanItem[]): { postContent: st
     const contextStr =
       contextList.length > 0
         ? contextList
-            .map((t) => t.replace(/\n/g, ' ').trim())
-            .filter(Boolean)
-            .join(' -> ')
+          .map((t) => t.replace(/\n/g, ' ').trim())
+          .filter(Boolean)
+          .join(' -> ')
         : 'Không có';
 
     commentsText += `---\n`;

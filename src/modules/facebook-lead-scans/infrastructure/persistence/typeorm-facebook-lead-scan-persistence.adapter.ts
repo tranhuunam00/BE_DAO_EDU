@@ -231,6 +231,8 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
       pageUrl: item.pageUrl,
       postId: item.postId,
       commentId: item.commentId || '',
+      parentCommentId: item.parentCommentId || null,
+      parentFingerprint: item.parentFingerprint || null,
       depth: item.depth,
       contextTexts: item.contextTexts,
       authorName: item.authorName,
