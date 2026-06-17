@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { FacebookLeadScanPersistencePort } from '../ports/facebook-lead-scan-persistence.port';
 import { FacebookLeadClassifierPort } from '../ports/facebook-lead-classifier.port';
+import { LeadCrmPersistencePort } from '../ports/lead-crm-persistence.port';
 import type {
   FacebookLeadDetectionResult,
   FacebookLeadScanItem,
@@ -12,6 +13,7 @@ export class ProcessPendingFacebookLeadScansUseCase {
   constructor(
     private readonly persistence: FacebookLeadScanPersistencePort,
     private readonly classifier: FacebookLeadClassifierPort,
+    private readonly leadCrmPersistence: LeadCrmPersistencePort,
   ) {}
 
   async execute(): Promise<void> {
@@ -66,6 +68,35 @@ export class ProcessPendingFacebookLeadScansUseCase {
       // 7. Update final success results in DB
       await this.persistence.updateAiAnalysisResult(scan.id, 'COMPLETED', finalResult);
       this.logger.log(`AI classification successfully completed for scan ID: ${scan.id}. Total profiles: ${finalResult.leadProfiles.length}`);
+
+      // 8. Sync potential leads to CRM
+      const potentialLeads = finalResult.leadProfiles.filter(
+        (p) => p.classification === 'POTENTIAL_PARENT',
+      );
+      this.logger.log(`Found ${potentialLeads.length} potential leads to sync into CRM.`);
+      for (const lead of potentialLeads) {
+        try {
+          await this.leadCrmPersistence.upsertLeadFromScan(
+            'facebook',
+            lead.profileKey,
+            lead.authorName,
+            lead.authorUrl,
+            scan.id,
+            scan.postId || '',
+            scan.postUrl || '',
+            lead.classification,
+            lead.leadScore,
+            lead.leadLevel,
+            lead.reasons,
+            lead.evidence,
+          );
+        } catch (crmErr) {
+          this.logger.error(
+            `Failed to sync lead ${lead.authorName} (${lead.profileKey}) to CRM`,
+            crmErr,
+          );
+        }
+      }
 
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
