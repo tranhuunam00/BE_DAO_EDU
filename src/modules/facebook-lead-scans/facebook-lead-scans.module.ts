@@ -18,6 +18,7 @@ import {
   SubmitFacebookLeadScanUseCase,
   GetScannedPostIdsUseCase,
 } from './application/use-cases/manage-facebook-lead-scans.use-cases';
+
 import { ListLeadsUseCase } from './application/use-cases/list-leads.use-case';
 import { GetLeadDetailsUseCase } from './application/use-cases/get-lead-details.use-case';
 import { AddLeadInteractionUseCase } from './application/use-cases/add-lead-interaction.use-case';
@@ -112,4 +113,4 @@ import { FacebookLeadAiScheduler } from './infrastructure/scheduler/facebook-lea
     FacebookLeadAiScheduler,
   ],
 })
-export class FacebookLeadScansModule {}
+export class FacebookLeadScansModule { }
