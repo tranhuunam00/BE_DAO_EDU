@@ -55,6 +55,15 @@ export class FacebookLeadScanOrmEntity {
   @Column({ name: 'detection', type: 'jsonb', default: () => "'{}'::jsonb" })
   detection!: Record<string, unknown>;
 
+  @Column({ name: 'ai_analysis_status', type: 'varchar', length: 30, default: 'PENDING' })
+  aiAnalysisStatus!: string;
+
+  @Column({ name: 'ai_analysis_retry_count', type: 'int', default: 0 })
+  aiAnalysisRetryCount!: number;
+
+  @Column({ name: 'ai_analysis_error', type: 'text', nullable: true })
+  aiAnalysisError!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

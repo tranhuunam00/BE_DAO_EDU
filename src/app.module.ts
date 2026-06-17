@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
@@ -18,6 +19,7 @@ import { FacebookLeadScansModule } from './modules/facebook-lead-scans/facebook-
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     InfrastructureModule,
     IdentityModule,
     StudentsModule,

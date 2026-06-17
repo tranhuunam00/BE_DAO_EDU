@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, In, Repository } from 'typeorm';
+import { FindOptionsWhere, In, Repository, LessThan } from 'typeorm';
 import { FacebookLeadItemOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/facebook-lead-item.orm-entity';
 import { FacebookLeadScanOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/facebook-lead-scan.orm-entity';
 import type {
@@ -216,6 +216,9 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
       meta: scan.meta,
       localAnalysis: scan.localAnalysis,
       detection: scan.detection as unknown as FacebookLeadDetectionResult,
+      aiAnalysisStatus: scan.aiAnalysisStatus,
+      aiAnalysisRetryCount: scan.aiAnalysisRetryCount,
+      aiAnalysisError: scan.aiAnalysisError,
       createdAt: scan.createdAt,
       updatedAt: scan.updatedAt,
     };
@@ -236,6 +239,94 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
       fingerprint: item.fingerprint,
       lastSeenAt: item.lastSeenAt?.toISOString(),
     };
+  }
+
+  async findPendingScans(limit: number): Promise<FacebookLeadScanDetail[]> {
+    return this.scanRepository.manager.transaction(async (manager) => {
+      const scans = await manager.find(FacebookLeadScanOrmEntity, {
+        where: {
+          aiAnalysisStatus: 'PENDING',
+          aiAnalysisRetryCount: LessThan(3),
+        },
+        order: { createdAt: 'ASC' },
+        take: limit,
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!scans.length) return [];
+
+      const result: FacebookLeadScanDetail[] = [];
+      for (const scan of scans) {
+        const items = await manager.find(FacebookLeadItemOrmEntity, {
+          where: { scanId: scan.id },
+          order: { capturedAt: 'ASC' },
+        });
+
+        result.push({
+          ...this.toScanRecord(scan),
+          items: items.map((item) => this.toScanItem(item)),
+        });
+      }
+
+      return result;
+    });
+  }
+
+  async markAsProcessing(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    await this.scanRepository.update(ids, {
+      aiAnalysisStatus: 'PROCESSING',
+    });
+  }
+
+  async updateAiAnalysisResult(
+    id: string,
+    status: string,
+    detection: FacebookLeadDetectionResult,
+    error?: string,
+  ): Promise<void> {
+    await this.scanRepository.update(id, {
+      aiAnalysisStatus: status,
+      detection: detection as any,
+      aiAnalysisError: error || null,
+    });
+  }
+
+  async incrementRetryCount(id: string, error: string): Promise<void> {
+    const scan = await this.scanRepository.findOne({ where: { id } });
+    if (!scan) return;
+
+    const newRetryCount = scan.aiAnalysisRetryCount + 1;
+    const newStatus = newRetryCount >= 3 ? 'FAILED' : 'PENDING';
+
+    await this.scanRepository.update(id, {
+      aiAnalysisRetryCount: newRetryCount,
+      aiAnalysisStatus: newStatus,
+      aiAnalysisError: error,
+    });
+  }
+
+  async recoverStaleProcessingScans(timeoutMs: number): Promise<void> {
+    const staleTime = new Date(Date.now() - timeoutMs);
+    const staleScans = await this.scanRepository.find({
+      where: {
+        aiAnalysisStatus: 'PROCESSING',
+        updatedAt: LessThan(staleTime),
+      },
+    });
+
+    if (!staleScans.length) return;
+
+    for (const scan of staleScans) {
+      const newRetryCount = scan.aiAnalysisRetryCount + 1;
+      const newStatus = newRetryCount >= 3 ? 'FAILED' : 'PENDING';
+
+      await this.scanRepository.update(scan.id, {
+        aiAnalysisRetryCount: newRetryCount,
+        aiAnalysisStatus: newStatus,
+        aiAnalysisError: 'PROCESSING_TIMEOUT: Stuck in PROCESSING state too long.',
+      });
+    }
   }
 }
 

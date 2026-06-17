@@ -28,6 +28,9 @@ export interface FacebookLeadScanRecord {
   meta: Record<string, unknown> | null;
   localAnalysis: Record<string, unknown> | null;
   detection: FacebookLeadDetectionResult;
+  aiAnalysisStatus: string;
+  aiAnalysisRetryCount: number;
+  aiAnalysisError: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,4 +55,15 @@ export abstract class FacebookLeadScanPersistencePort {
 
   abstract findById(id: string): Promise<FacebookLeadScanDetail | null>;
   abstract getScannedPostIds(groupUrl: string): Promise<string[]>;
+
+  abstract findPendingScans(limit: number): Promise<FacebookLeadScanDetail[]>;
+  abstract markAsProcessing(ids: string[]): Promise<void>;
+  abstract updateAiAnalysisResult(
+    id: string,
+    status: string,
+    detection: FacebookLeadDetectionResult,
+    error?: string,
+  ): Promise<void>;
+  abstract incrementRetryCount(id: string, error: string): Promise<void>;
+  abstract recoverStaleProcessingScans(timeoutMs: number): Promise<void>;
 }
