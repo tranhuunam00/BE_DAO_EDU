@@ -4,6 +4,8 @@ export interface ListLeadsInput {
   status?: string;
   search?: string;
   platform?: string;
+  excludeAnonymous?: boolean;
+  leadLevel?: string;
 }
 
 export interface LeadRecord {

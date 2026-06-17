@@ -25,6 +25,9 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
   async listLeads(query: ListLeadsInput): Promise<{ items: LeadRecord[]; total: number }> {
     const qb = this.leadRepository.createQueryBuilder('lead');
 
+    // Left join demands to fetch score and level information
+    qb.leftJoinAndSelect('lead.demands', 'demand');
+
     if (query.platform) {
       qb.andWhere('lead.platform = :platform', { platform: query.platform });
     }
@@ -33,15 +36,22 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
       qb.andWhere('lead.contactStatus = :status', { status: query.status });
     }
 
+    if (query.excludeAnonymous) {
+      qb.andWhere(
+        "lead.authorName NOT IN ('Ẩn danh', 'Không tên') AND lead.authorName NOT ILIKE '%ẩn danh%'"
+      );
+    }
+
+    if (query.leadLevel) {
+      qb.andWhere('demand.leadLevel = :leadLevel', { leadLevel: query.leadLevel });
+    }
+
     if (query.search) {
       qb.andWhere(
         '(lead.authorName ILIKE :search OR lead.authorUrl ILIKE :search OR lead.profileKey ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }
-
-    // Left join demands to fetch score and level information
-    qb.leftJoinAndSelect('lead.demands', 'demand');
     
     qb.orderBy('lead.createdAt', 'DESC');
     qb.addOrderBy('demand.createdAt', 'DESC');

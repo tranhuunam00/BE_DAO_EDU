@@ -32,6 +32,14 @@ export class ListLeadsDto {
   @IsString()
   @IsOptional()
   platform?: string;
+
+  @IsString()
+  @IsOptional()
+  excludeAnonymous?: string;
+
+  @IsString()
+  @IsOptional()
+  leadLevel?: string;
 }
 
 export class AddLeadInteractionDto {

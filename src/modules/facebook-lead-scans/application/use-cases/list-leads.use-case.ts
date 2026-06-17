@@ -9,6 +9,8 @@ export class ListLeadsUseCase {
     status?: string;
     search?: string;
     platform?: string;
+    excludeAnonymous?: string;
+    leadLevel?: string;
   }) {
     const page = Math.max(1, input.page ?? 1);
     const limit = Math.min(100, Math.max(1, input.limit ?? 20));
@@ -18,6 +20,8 @@ export class ListLeadsUseCase {
       status: input.status,
       search: input.search,
       platform: input.platform,
+      excludeAnonymous: input.excludeAnonymous === 'true',
+      leadLevel: input.leadLevel,
     });
   }
 }
