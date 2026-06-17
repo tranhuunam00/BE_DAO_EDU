@@ -49,9 +49,37 @@ export class ProcessPendingFacebookLeadScansUseCase {
     }
 
     try {
-      // 4. Divide items into chunks of thread trees (30 comments per chunk for faster response and lower timeout risk)
-      const chunks = chunkItemsByTree(scan.items, 30);
-      this.logger.log(`Comments partitioned into ${chunks.length} chunks.`);
+      // 4. Enforce 1-post-per-Gemini-session rule:
+      //    Filter items to only include those matching this scan's postId.
+      //    Multiple postIds in one Gemini call causes cross-contamination (ghost profiles).
+      const scanPostId = scan.postId || '';
+      const uniquePostIds = [...new Set(scan.items.map((i) => i.postId || ''))];
+      if (uniquePostIds.length > 1) {
+        this.logger.warn(
+          `Scan ${scan.id} contains items from ${uniquePostIds.length} different postIds: [${uniquePostIds.join(', ')}]. ` +
+          `Only items matching postId "${scanPostId}" will be sent to Gemini.`
+        );
+      }
+      const itemsForThisScan = scanPostId
+        ? scan.items.filter((i) => (i.postId || '') === scanPostId)
+        : scan.items;
+
+      if (itemsForThisScan.length === 0) {
+        this.logger.warn(`Scan ${scan.id}: no items found for postId "${scanPostId}". Marking as COMPLETED with empty result.`);
+        await this.persistence.updateAiAnalysisResult(scan.id, 'COMPLETED', {
+          detectorVersion: 'gemini-2.5-flash-v1',
+          generatedAt: new Date().toISOString(),
+          summary: {},
+          aiCandidates: [],
+          leadProfiles: [],
+        });
+        return;
+      }
+
+      // 5. Divide items into chunks of thread trees (30 comments per chunk for faster response and lower timeout risk)
+      //    All chunks are from the SAME postId — guaranteed by the filter above.
+      const chunks = chunkItemsByTree(itemsForThisScan, 30);
+      this.logger.log(`Post ${scanPostId}: ${itemsForThisScan.length} items → ${chunks.length} chunk(s) for Gemini.`);
 
       const chunkResults: FacebookLeadDetectionResult[] = [];
       

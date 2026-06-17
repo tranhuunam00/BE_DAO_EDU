@@ -150,44 +150,55 @@ ${formattedTreeText}
       this.logger.log(`Gemini API responded successfully with ${profiles.length} profiles classified.`);
 
       // Map back to retrieve evidence items from input items
-      const leadProfilesMapped = profiles.map((p) => {
-        // Match strictly by authorName because profile URLs are not sent to Gemini,
-        // which means any authorUrl returned by Gemini is hallucinated/fake.
-        const authorItems = items.filter((item) => {
-          return normalizeText(p.authorName) === normalizeText(item.authorName);
-        });
+      const leadProfilesMapped = profiles
+        .map((p) => {
+          // Match strictly by authorName because profile URLs are not sent to Gemini,
+          // which means any authorUrl returned by Gemini is hallucinated/fake.
+          const authorItems = items.filter((item) => {
+            return normalizeText(p.authorName) === normalizeText(item.authorName);
+          });
 
-        // Crucial: Use the actual, correct profile URL captured by the scraper extension
-        const originalAuthorUrl = authorItems[0]?.authorUrl || '';
+          // GUARD: If no items match this authorName in the actual input,
+          // Gemini hallucinated this person from a name mentioned inside contextTexts
+          // (e.g. "Thu Ha Tran dạ c..." — a name quoted inside someone else's reply).
+          // Skip these ghost profiles entirely to prevent cross-post contamination.
+          if (authorItems.length === 0) {
+            this.logger.warn(`[Ghost profile filtered] Gemini returned author "${p.authorName}" but no matching item found in input. Skipping.`);
+            return null;
+          }
 
-        const profileKey = originalAuthorUrl
-          ? normalizeProfileUrl(originalAuthorUrl)
-          : `name:${normalizeText(p.authorName)}`;
+          // Crucial: Use the actual, correct profile URL captured by the scraper extension
+          const originalAuthorUrl = authorItems[0]?.authorUrl || '';
 
-        const evidence = authorItems.map((item) => ({
-          kind: item.kind || 'COMMENT',
-          text: item.text || '',
-          sourceUrl: item.sourceUrl || '',
-          pageUrl: item.pageUrl || '',
-          postId: item.postId || '',
-          commentId: item.commentId || '',
-          depth: item.depth || 0,
-          itemLeadScore: p.leadScore,
-          authorName: item.authorName || '',
-        }));
+          const profileKey = originalAuthorUrl
+            ? normalizeProfileUrl(originalAuthorUrl)
+            : `name:${normalizeText(p.authorName)}`;
 
-        return {
-          profileKey,
-          authorName: p.authorName,
-          authorUrl: originalAuthorUrl,
-          classification: p.classification as any,
-          leadScore: p.leadScore,
-          leadLevel: p.leadLevel as any,
-          promotionScore: p.classification === 'COMPETITOR_SALE' || p.classification === 'TEACHER_AD' ? 70 : 0,
-          reasons: p.reasons || [],
-          evidence,
-        };
-      });
+          const evidence = authorItems.map((item) => ({
+            kind: item.kind || 'COMMENT',
+            text: item.text || '',
+            sourceUrl: item.sourceUrl || '',
+            pageUrl: item.pageUrl || '',
+            postId: item.postId || '',
+            commentId: item.commentId || '',
+            depth: item.depth || 0,
+            itemLeadScore: p.leadScore,
+            authorName: item.authorName || '',
+          }));
+
+          return {
+            profileKey,
+            authorName: p.authorName,
+            authorUrl: originalAuthorUrl,
+            classification: p.classification as any,
+            leadScore: p.leadScore,
+            leadLevel: p.leadLevel as any,
+            promotionScore: p.classification === 'COMPETITOR_SALE' || p.classification === 'TEACHER_AD' ? 70 : 0,
+            reasons: p.reasons || [],
+            evidence,
+          };
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null);
 
       // Compute summary
       const summary: Record<string, number> = {
