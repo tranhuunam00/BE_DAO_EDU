@@ -151,6 +151,7 @@ ${formattedTreeText}
 
       // Map back to retrieve evidence items from input items
       const leadProfilesMapped = profiles.map((p) => {
+        // Try mapping by URL first if Gemini returned a URL, otherwise fall back to matching by name
         const authorItems = items.filter((item) => {
           if (p.authorUrl && item.authorUrl) {
             return normalizeProfileUrl(p.authorUrl) === normalizeProfileUrl(item.authorUrl);
@@ -158,8 +159,11 @@ ${formattedTreeText}
           return normalizeText(p.authorName) === normalizeText(item.authorName);
         });
 
-        const profileKey = p.authorUrl
-          ? normalizeProfileUrl(p.authorUrl)
+        // Crucial: Use the actual author profile URL captured by the scraper extension, if available
+        const originalAuthorUrl = authorItems[0]?.authorUrl || p.authorUrl || '';
+
+        const profileKey = originalAuthorUrl
+          ? normalizeProfileUrl(originalAuthorUrl)
           : `name:${normalizeText(p.authorName)}`;
 
         const evidence = authorItems.map((item) => ({
@@ -171,12 +175,13 @@ ${formattedTreeText}
           commentId: item.commentId || '',
           depth: item.depth || 0,
           itemLeadScore: p.leadScore,
+          authorName: item.authorName || '',
         }));
 
         return {
           profileKey,
           authorName: p.authorName,
-          authorUrl: p.authorUrl || '',
+          authorUrl: originalAuthorUrl,
           classification: p.classification as any,
           leadScore: p.leadScore,
           leadLevel: p.leadLevel as any,

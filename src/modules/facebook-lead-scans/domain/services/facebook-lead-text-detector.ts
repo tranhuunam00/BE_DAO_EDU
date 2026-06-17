@@ -1,4 +1,4 @@
-﻿export type FacebookLeadClassification =
+export type FacebookLeadClassification =
   | 'POTENTIAL_PARENT'
   | 'TEACHER_AD'
   | 'COMPETITOR_SALE'
@@ -41,6 +41,7 @@ export interface FacebookLeadEvidence {
   commentId: string;
   depth: number;
   itemLeadScore: number;
+  authorName?: string;
 }
 
 export interface FacebookLeadProfile {
@@ -393,6 +394,7 @@ function toEvidence(analysis: ItemAnalysis): FacebookLeadEvidence {
     commentId: String(analysis.item.commentId || ''),
     depth: Number(analysis.item.depth || 0),
     itemLeadScore: Math.round(analysis.leadScore),
+    authorName: String(analysis.item.authorName || ''),
   };
 }
 
