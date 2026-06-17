@@ -256,13 +256,24 @@ function formatItemsAsTreeText(items: FacebookLeadScanItem[]): string {
 
   function renderNode(item: FacebookLeadScanItem, indent: string) {
     const author = item.authorName || 'Ẩn danh';
-    const cleanText = (item.text || '').replace(/\n/g, ' ');
-    const truncatedText = cleanText.length > 300 ? cleanText.substring(0, 300) + '...' : cleanText;
     const kindLabel = item.kind === 'POST' ? 'Bài viết gốc' : 'Bình luận';
+
+    // Dùng contextTexts (mảng toàn bộ chuỗi hội thoại: bài viết gốc → comment cha → comment này)
+    // để Gemini hiểu đúng ngữ cảnh. Fallback về item.text nếu không có.
+    const rawTexts: string[] =
+      item.contextTexts && item.contextTexts.length > 0
+        ? item.contextTexts
+        : [item.text || ''];
+    const combinedText = rawTexts
+      .map((t) => t.replace(/\n/g, ' ').trim())
+      .filter(Boolean)
+      .join(' → ');
+    const truncatedText =
+      combinedText.length > 500 ? combinedText.substring(0, 500) + '...' : combinedText;
 
     text += `${indent}● Tác giả: ${author}\n`;
     text += `${indent}  Vai trò: ${kindLabel}\n`;
-    text += `${indent}  Nội dung: "${truncatedText}"\n`;
+    text += `${indent}  Nội dung (ngữ cảnh): "${truncatedText}"\n`;
 
     const itemId = item.commentId || item.fingerprint;
     if (itemId && childrenMap.has(itemId)) {
