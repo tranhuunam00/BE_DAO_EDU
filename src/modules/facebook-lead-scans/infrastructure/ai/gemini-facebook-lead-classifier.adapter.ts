@@ -36,15 +36,41 @@ export class GeminiFacebookLeadClassifierAdapter implements FacebookLeadClassifi
       };
     }
 
-    const formattedTreeText = formatItemsAsTreeText(items);
+    const comments = items.filter((x) => x.kind === 'COMMENT');
+    if (!comments.length) {
+      return {
+        detectorVersion: 'gemini-2.5-flash-v1',
+        generatedAt: new Date().toISOString(),
+        summary: {
+          totalProfiles: 0,
+          POTENTIAL_PARENT: 0,
+          TEACHER_AD: 0,
+          COMPETITOR_SALE: 0,
+          RECOMMENDATION: 0,
+          NEUTRAL: 0,
+          SPAM: 0,
+          HOT: 0,
+          WARM: 0,
+          COLD: 0,
+        },
+        aiCandidates: [],
+        leadProfiles: [],
+      };
+    }
+
+    const { postContent, commentsText } = formatItemsAsFlatList(items);
 
     const prompt = `
-Bạn là một trợ lý AI phân tích bán hàng và tuyển sinh chuyên nghiệp cho trung tâm giáo dục DAO EDU.
-Dưới đây là một cuộc hội thoại (hoặc một số cuộc hội thoại) trên Facebook được thu thập theo cấu trúc phân cấp (cây) để hiểu rõ ngữ cảnh.
+Bạn là một trợ lý AI phân tích bán hàng và tuyển sinh chuyên nghiệp cho trung tâm giáo dục cấp 2.
+Dưới đây là thông tin Bài viết gốc (Post Content) làm ngữ cảnh nền:
+---
+[BÀI VIẾT GỐC]
+Nội dung: "${postContent}"
+---
 
-Nhiệm vụ của bạn là phân tích nội dung bình luận của từng tác giả (tập hợp tất cả bình luận của một người trong các hội thoại được cung cấp) để phân loại họ vào các nhóm phù hợp và đánh giá mức độ tiềm năng thành học viên (lead).
+Nhiệm vụ của bạn là phân tích danh sách các bình luận bên dưới bài viết gốc. Đối với mỗi bình luận, hãy phân loại tác giả và đánh giá mức độ tiềm năng thành học viên (lead) của trung tâm giáo dục cấp 2.
 
-Hãy phân loại các tác giả (profile) thành một trong các nhóm sau:
+Hãy phân loại các tác giả (profile) theo bình luận thành một trong các nhóm sau:
 - POTENTIAL_PARENT: Phụ huynh hoặc học sinh thực sự có nhu cầu tìm lớp học, học thêm, gia sư, luyện thi, tư vấn học tập hoặc xin tài liệu.
 - TEACHER_AD: Giáo viên, gia sư, sinh viên tự quảng cáo nhận dạy học hoặc mời chào học viên tham gia lớp/khóa học của họ.
 - COMPETITOR_SALE: Nhân viên tư vấn, đại diện tuyển sinh của trung tâm đối thủ khác vào chèo kéo, quảng bá khóa học của họ.
@@ -64,8 +90,8 @@ Quy tắc xếp hạng tiềm năng (leadLevel):
 
 Hãy viết lý do phân loại (reasons) bằng tiếng Việt ngắn gọn, súc tích, tối đa 3 lý do.
 
-Dưới đây là dữ liệu các cuộc hội thoại:
-${formattedTreeText}
+Dưới đây là danh sách bình luận cần phân tích:
+${commentsText}
 `;
 
     const requestBody = {
@@ -77,13 +103,12 @@ ${formattedTreeText}
         responseSchema: {
           type: 'OBJECT',
           properties: {
-            leadProfiles: {
+            classifiedComments: {
               type: 'ARRAY',
               items: {
                 type: 'OBJECT',
                 properties: {
-                  authorName: { type: 'STRING' },
-                  authorUrl: { type: 'STRING' },
+                  id: { type: 'STRING' },
                   classification: {
                     type: 'STRING',
                     enum: ['POTENTIAL_PARENT', 'TEACHER_AD', 'COMPETITOR_SALE', 'RECOMMENDATION', 'NEUTRAL', 'SPAM']
@@ -98,11 +123,11 @@ ${formattedTreeText}
                     items: { type: 'STRING' }
                   }
                 },
-                required: ['authorName', 'authorUrl', 'classification', 'leadScore', 'leadLevel', 'reasons']
+                required: ['id', 'classification', 'leadScore', 'leadLevel', 'reasons']
               }
             }
           },
-          required: ['leadProfiles']
+          required: ['classifiedComments']
         }
       }
     };
@@ -111,7 +136,7 @@ ${formattedTreeText}
     const timeout = setTimeout(() => controller.abort(), 90000); // 90 seconds timeout
 
     try {
-      this.logger.log(`Calling Gemini API for ${items.length} items (Tree Size: ${formattedTreeText.length} chars)...`);
+      this.logger.log(`Calling Gemini API for ${comments.length} comments (Prompt list size: ${commentsText.length} chars)...`);
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
@@ -136,9 +161,8 @@ ${formattedTreeText}
       }
 
       const parsed = JSON.parse(textResponse) as {
-        leadProfiles: Array<{
-          authorName: string;
-          authorUrl: string;
+        classifiedComments: Array<{
+          id: string;
           classification: string;
           leadScore: number;
           leadLevel: string;
@@ -146,60 +170,112 @@ ${formattedTreeText}
         }>;
       };
 
-      const profiles = parsed.leadProfiles || [];
-      this.logger.log(`Gemini API responded successfully with ${profiles.length} profiles classified.`);
+      const classifiedList = parsed.classifiedComments || [];
+      this.logger.log(`Gemini API responded successfully with ${classifiedList.length} comments classified.`);
 
       // Map back to retrieve evidence items from input items
-      const leadProfilesMapped = profiles
-        .map((p) => {
-          // Match strictly by authorName because profile URLs are not sent to Gemini,
-          // which means any authorUrl returned by Gemini is hallucinated/fake.
-          const authorItems = items.filter((item) => {
-            return normalizeText(p.authorName) === normalizeText(item.authorName);
-          });
+      const itemMap = new Map<string, FacebookLeadScanItem>();
+      for (const item of items) {
+        const key = item.commentId || item.fingerprint;
+        if (key) {
+          itemMap.set(key, item);
+        }
+      }
 
-          // GUARD: If no items match this authorName in the actual input,
-          // Gemini hallucinated this person from a name mentioned inside contextTexts
-          // (e.g. "Thu Ha Tran dạ c..." — a name quoted inside someone else's reply).
-          // Skip these ghost profiles entirely to prevent cross-post contamination.
-          if (authorItems.length === 0) {
-            this.logger.warn(`[Ghost profile filtered] Gemini returned author "${p.authorName}" but no matching item found in input. Skipping.`);
-            return null;
+      const profileGroups = new Map<
+        string,
+        {
+          profileKey: string;
+          authorName: string;
+          authorUrl: string;
+          classification: string;
+          leadScore: number;
+          leadLevel: string;
+          reasons: string[];
+          evidence: any[];
+        }
+      >();
+
+      for (const c of classifiedList) {
+        const matchedItem = itemMap.get(c.id);
+        if (!matchedItem) {
+          this.logger.warn(`[Invalid ID filtered] Gemini returned classification for comment ID "${c.id}" but no matching item was found in the input. Skipping.`);
+          continue;
+        }
+
+        const originalAuthorUrl = matchedItem.authorUrl || '';
+        const profileKey = originalAuthorUrl
+          ? normalizeProfileUrl(originalAuthorUrl)
+          : `name:${normalizeText(matchedItem.authorName)}`;
+
+        const evidenceItem = {
+          kind: matchedItem.kind || 'COMMENT',
+          text: matchedItem.text || '',
+          sourceUrl: matchedItem.sourceUrl || '',
+          pageUrl: matchedItem.pageUrl || '',
+          postId: matchedItem.postId || '',
+          commentId: matchedItem.commentId || '',
+          depth: matchedItem.depth || 0,
+          itemLeadScore: c.leadScore,
+          authorName: matchedItem.authorName || '',
+          threadPath: getCommentThreadPath(matchedItem, items),
+        };
+
+        const existingGroup = profileGroups.get(profileKey);
+        if (!existingGroup) {
+          profileGroups.set(profileKey, {
+            profileKey,
+            authorName: matchedItem.authorName || 'Ẩn danh',
+            authorUrl: originalAuthorUrl,
+            classification: c.classification,
+            leadScore: c.leadScore,
+            leadLevel: c.leadLevel,
+            reasons: [...c.reasons],
+            evidence: [evidenceItem],
+          });
+        } else {
+          // Priority rankings: POTENTIAL_PARENT > RECOMMENDATION > TEACHER_AD > COMPETITOR_SALE > NEUTRAL > SPAM
+          const rank = (cls: string) => {
+            if (cls === 'POTENTIAL_PARENT') return 1;
+            if (cls === 'RECOMMENDATION') return 2;
+            if (cls === 'TEACHER_AD') return 3;
+            if (cls === 'COMPETITOR_SALE') return 4;
+            if (cls === 'NEUTRAL') return 5;
+            return 6;
+          };
+
+          if (rank(c.classification) < rank(existingGroup.classification)) {
+            existingGroup.classification = c.classification;
           }
 
-          // Crucial: Use the actual, correct profile URL captured by the scraper extension
-          const originalAuthorUrl = authorItems[0]?.authorUrl || '';
+          existingGroup.leadScore = Math.max(existingGroup.leadScore, c.leadScore);
 
-          const profileKey = originalAuthorUrl
-            ? normalizeProfileUrl(originalAuthorUrl)
-            : `name:${normalizeText(p.authorName)}`;
-
-          const evidence = authorItems.map((item) => ({
-            kind: item.kind || 'COMMENT',
-            text: item.text || '',
-            sourceUrl: item.sourceUrl || '',
-            pageUrl: item.pageUrl || '',
-            postId: item.postId || '',
-            commentId: item.commentId || '',
-            depth: item.depth || 0,
-            itemLeadScore: p.leadScore,
-            authorName: item.authorName || '',
-            threadPath: getCommentThreadPath(item, items),
-          }));
-
-          return {
-            profileKey,
-            authorName: p.authorName,
-            authorUrl: originalAuthorUrl,
-            classification: p.classification as any,
-            leadScore: p.leadScore,
-            leadLevel: p.leadLevel as any,
-            promotionScore: p.classification === 'COMPETITOR_SALE' || p.classification === 'TEACHER_AD' ? 70 : 0,
-            reasons: p.reasons || [],
-            evidence,
+          const levelRank = (lvl: string) => {
+            if (lvl === 'HOT') return 1;
+            if (lvl === 'WARM') return 2;
+            if (lvl === 'COLD') return 3;
+            return 4;
           };
-        })
-        .filter((p): p is NonNullable<typeof p> => p !== null);
+          if (levelRank(c.leadLevel) < levelRank(existingGroup.leadLevel)) {
+            existingGroup.leadLevel = c.leadLevel;
+          }
+
+          existingGroup.reasons = [...new Set([...existingGroup.reasons, ...c.reasons])];
+          existingGroup.evidence.push(evidenceItem);
+        }
+      }
+
+      const leadProfilesMapped = Array.from(profileGroups.values()).map((g) => ({
+        profileKey: g.profileKey,
+        authorName: g.authorName,
+        authorUrl: g.authorUrl,
+        classification: g.classification as any,
+        leadScore: g.leadScore,
+        leadLevel: g.leadLevel as any,
+        promotionScore: g.classification === 'COMPETITOR_SALE' || g.classification === 'TEACHER_AD' ? 70 : 0,
+        reasons: g.reasons || [],
+        evidence: g.evidence,
+      }));
 
       // Compute summary
       const summary: Record<string, number> = {
@@ -240,68 +316,36 @@ ${formattedTreeText}
   }
 }
 
-function formatItemsAsTreeText(items: FacebookLeadScanItem[]): string {
-  const itemMap = new Map<string, FacebookLeadScanItem>();
-  const childrenMap = new Map<string, FacebookLeadScanItem[]>();
-  const roots: FacebookLeadScanItem[] = [];
+function formatItemsAsFlatList(items: FacebookLeadScanItem[]): { postContent: string; commentsText: string } {
+  const postItem = items.find((x) => x.kind === 'POST');
+  const postContent = postItem?.text || '(Không có nội dung bài viết gốc)';
 
-  for (const item of items) {
-    const key = item.commentId || item.fingerprint;
-    if (key) {
-      itemMap.set(key, item);
-    }
-  }
+  const comments = items.filter((x) => x.kind === 'COMMENT');
+  let commentsText = '';
 
-  for (const item of items) {
-    const parentId = item.parentCommentId;
-    if (parentId && itemMap.has(parentId)) {
-      if (!childrenMap.has(parentId)) {
-        childrenMap.set(parentId, []);
-      }
-      childrenMap.get(parentId)!.push(item);
-    } else {
-      roots.push(item);
-    }
-  }
-
-  let text = '';
-
-  function renderNode(item: FacebookLeadScanItem, indent: string) {
+  for (let i = 0; i < comments.length; i++) {
+    const item = comments[i];
+    const key = item.commentId || item.fingerprint || `idx-${i}`;
     const author = item.authorName || 'Ẩn danh';
-    const kindLabel = item.kind === 'POST' ? 'Bài viết gốc' : 'Bình luận';
 
-    // Dùng contextTexts (mảng toàn bộ chuỗi hội thoại: bài viết gốc → comment cha → comment này)
-    // để Gemini hiểu đúng ngữ cảnh. Fallback về item.text nếu không có.
-    const rawTexts: string[] =
-      item.contextTexts && item.contextTexts.length > 0
-        ? item.contextTexts
-        : [item.text || ''];
-    const combinedText = rawTexts
-      .map((t) => t.replace(/\n/g, ' ').trim())
-      .filter(Boolean)
-      .join(' → ');
-    const truncatedText =
-      combinedText.length > 500 ? combinedText.substring(0, 500) + '...' : combinedText;
+    const contextList = item.contextTexts || [];
+    const contextStr =
+      contextList.length > 0
+        ? contextList
+            .map((t) => t.replace(/\n/g, ' ').trim())
+            .filter(Boolean)
+            .join(' -> ')
+        : 'Không có';
 
-    text += `${indent}● Tác giả: ${author}\n`;
-    text += `${indent}  Vai trò: ${kindLabel}\n`;
-    text += `${indent}  Nội dung (ngữ cảnh): "${truncatedText}"\n`;
-
-    const itemId = item.commentId || item.fingerprint;
-    if (itemId && childrenMap.has(itemId)) {
-      const children = childrenMap.get(itemId)!;
-      for (const child of children) {
-        renderNode(child, indent + '  └── ');
-      }
-    }
+    commentsText += `---\n`;
+    commentsText += `[Bình luận #${i + 1}]\n`;
+    commentsText += `ID: "${key}"\n`;
+    commentsText += `Người viết: "${author}"\n`;
+    commentsText += `Nội dung: "${(item.text || '').replace(/\n/g, ' ').trim()}"\n`;
+    commentsText += `Ngữ cảnh hội thoại trước đó: "${contextStr}"\n\n`;
   }
 
-  for (const root of roots) {
-    renderNode(root, '');
-    text += '\n';
-  }
-
-  return text;
+  return { postContent, commentsText };
 }
 
 function normalizeText(value: unknown): string {
@@ -333,7 +377,7 @@ function normalizeProfileUrl(value: unknown): string {
 function getCommentThreadPath(item: FacebookLeadScanItem, allItems: FacebookLeadScanItem[]): any[] {
   const path: FacebookLeadScanItem[] = [];
   let current: FacebookLeadScanItem | undefined = item;
-  
+
   const itemMap = new Map<string, FacebookLeadScanItem>();
   for (const x of allItems) {
     const key = x.commentId || x.fingerprint;
