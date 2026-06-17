@@ -55,6 +55,7 @@ export interface LeadDetailsResult {
 }
 
 export abstract class LeadCrmPersistencePort {
+  abstract deleteDemandsByScanId(scanId: string): Promise<void>;
   abstract listLeads(query: ListLeadsInput): Promise<{ items: LeadRecord[]; total: number }>;
   abstract getLeadDetails(id: string): Promise<LeadDetailsResult | null>;
   abstract upsertLeadFromScan(

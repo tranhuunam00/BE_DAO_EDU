@@ -22,6 +22,10 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
     private readonly interactionRepository: Repository<LeadInteractionOrmEntity>,
   ) {}
 
+  async deleteDemandsByScanId(scanId: string): Promise<void> {
+    await this.demandRepository.delete({ scanId });
+  }
+
   async listLeads(query: ListLeadsInput): Promise<{ items: LeadRecord[]; total: number }> {
     const qb = this.leadRepository.createQueryBuilder('lead');
 

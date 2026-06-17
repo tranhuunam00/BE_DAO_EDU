@@ -98,6 +98,13 @@ export class ProcessPendingFacebookLeadScansUseCase {
       await this.persistence.updateAiAnalysisResult(scan.id, 'COMPLETED', finalResult);
       this.logger.log(`AI classification successfully completed for scan ID: ${scan.id}. Total profiles: ${finalResult.leadProfiles.length}`);
 
+      // Clear old demands for this scan session before syncing new results to avoid duplicates
+      try {
+        await this.leadCrmPersistence.deleteDemandsByScanId(scan.id);
+      } catch (err) {
+        this.logger.error(`Failed to clear old demands for scan ID ${scan.id}`, err);
+      }
+
       // 8. Sync potential leads to CRM
       const potentialLeads = finalResult.leadProfiles.filter(
         (p) => p.classification === 'POTENTIAL_PARENT',

@@ -66,14 +66,27 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
       
       index++;
 
-      let scan = await this.scanRepository.findOne({
-        where: { scanSessionId },
-      });
+      let scan = null;
+      if (postId) {
+        scan = await this.scanRepository.findOne({
+          where: { postId },
+        });
+      } else {
+        scan = await this.scanRepository.findOne({
+          where: { scanSessionId },
+        });
+      }
+
       if (!scan) {
         scan = this.scanRepository.create({
           scanSessionId,
           source: input.source,
         });
+      } else {
+        scan.scanSessionId = scanSessionId;
+        scan.aiAnalysisStatus = 'PENDING';
+        scan.aiAnalysisRetryCount = 0;
+        scan.aiAnalysisError = null;
       }
 
       scan.source = input.source;
