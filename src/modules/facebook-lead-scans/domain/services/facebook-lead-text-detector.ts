@@ -484,7 +484,7 @@ function getCommentThreadPath(item: FacebookLeadScanItem, allItems: FacebookLead
   }
 
   // Prepend the POST item if found and not already in the path
-  const postItem = allItems.find(x => x.kind === 'POST');
+  const postItem = allItems.find(x => x.kind === 'POST' && x.postId === item.postId);
   if (postItem && !path.includes(postItem)) {
     path.unshift(postItem);
   }
