@@ -14,7 +14,7 @@ export class ProcessPendingFacebookLeadScansUseCase {
     private readonly persistence: FacebookLeadScanPersistencePort,
     private readonly classifier: FacebookLeadClassifierPort,
     private readonly leadCrmPersistence: LeadCrmPersistencePort,
-  ) {}
+  ) { }
 
   async execute(): Promise<void> {
     // 1. Recover stale PROCESSING scans (timed out over 10 minutes ago)
@@ -53,6 +53,7 @@ export class ProcessPendingFacebookLeadScansUseCase {
       //    Filter items to only include those matching this scan's postId.
       //    Multiple postIds in one Gemini call causes cross-contamination (ghost profiles).
       const scanPostId = scan.postId || '';
+
       const uniquePostIds = [...new Set(scan.items.map((i) => i.postId || ''))];
       if (uniquePostIds.length > 1) {
         this.logger.warn(
@@ -82,7 +83,7 @@ export class ProcessPendingFacebookLeadScansUseCase {
       this.logger.log(`Post ${scanPostId}: ${itemsForThisScan.length} items → ${chunks.length} chunk(s) for Gemini.`);
 
       const chunkResults: FacebookLeadDetectionResult[] = [];
-      
+
       // 5. Call Gemini API sequentially for each chunk
       for (let i = 0; i < chunks.length; i++) {
         this.logger.log(`Classifying chunk ${i + 1}/${chunks.length} (${chunks[i].length} comments)...`);
@@ -129,7 +130,7 @@ export class ProcessPendingFacebookLeadScansUseCase {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(`AI classification failed for scan ID ${scan.id}: ${errMsg}`);
-      
+
       try {
         await this.persistence.incrementRetryCount(scan.id, errMsg);
       } catch (dbErr) {
@@ -222,7 +223,7 @@ function mergeDetectionResults(results: FacebookLeadDetectionResult[]): Facebook
         profileMap.set(key, { ...profile, reasons: [...profile.reasons], evidence: [...profile.evidence] });
       } else {
         const existing = profileMap.get(key);
-        
+
         const rank = (c: string) => {
           if (c === 'POTENTIAL_PARENT') return 1;
           if (c === 'RECOMMENDATION') return 2;
