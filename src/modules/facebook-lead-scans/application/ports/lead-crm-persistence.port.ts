@@ -15,6 +15,8 @@ export interface LeadRecord {
   authorName: string;
   authorUrl: string;
   contactStatus: string;
+  leadLevel: string;
+  leadScore: number;
   createdAt: Date;
   updatedAt: Date;
 }

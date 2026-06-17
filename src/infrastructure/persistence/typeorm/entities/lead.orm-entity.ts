@@ -33,6 +33,12 @@ export class LeadOrmEntity {
   @Column({ name: 'contact_status', type: 'varchar', length: 50, default: 'NEW' })
   contactStatus!: string;
 
+  @Column({ name: 'lead_level', type: 'varchar', length: 50, default: 'NONE' })
+  leadLevel!: string;
+
+  @Column({ name: 'lead_score', type: 'int', default: 0 })
+  leadScore!: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

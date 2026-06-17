@@ -43,7 +43,7 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
     }
 
     if (query.leadLevel) {
-      qb.andWhere('demand.leadLevel = :leadLevel', { leadLevel: query.leadLevel });
+      qb.andWhere('lead.leadLevel = :leadLevel', { leadLevel: query.leadLevel });
     }
 
     if (query.search) {
@@ -139,10 +139,14 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
           authorName,
           authorUrl,
           contactStatus: 'NEW',
+          leadLevel,
+          leadScore,
         });
       } else {
         lead.authorName = authorName;
         lead.authorUrl = authorUrl;
+        lead.leadLevel = leadLevel;
+        lead.leadScore = leadScore;
         // If the lead was previously marked as LOST, reset them to NEW because there is a new scan inquiry
         if (lead.contactStatus === 'LOST') {
           lead.contactStatus = 'NEW';
@@ -215,6 +219,8 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
       authorName: entity.authorName,
       authorUrl: entity.authorUrl,
       contactStatus: entity.contactStatus,
+      leadLevel: entity.leadLevel || 'NONE',
+      leadScore: entity.leadScore || 0,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       // Pass raw related entity arrays if they were fetched
