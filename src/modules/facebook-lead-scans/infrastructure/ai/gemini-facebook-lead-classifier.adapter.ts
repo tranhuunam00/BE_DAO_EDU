@@ -184,6 +184,7 @@ ${formattedTreeText}
             depth: item.depth || 0,
             itemLeadScore: p.leadScore,
             authorName: item.authorName || '',
+            threadPath: getCommentThreadPath(item, items),
           }));
 
           return {
@@ -327,4 +328,54 @@ function normalizeProfileUrl(value: unknown): string {
   } catch {
     return '';
   }
+}
+
+function getCommentThreadPath(item: FacebookLeadScanItem, allItems: FacebookLeadScanItem[]): any[] {
+  const path: FacebookLeadScanItem[] = [];
+  let current: FacebookLeadScanItem | undefined = item;
+  
+  const itemMap = new Map<string, FacebookLeadScanItem>();
+  for (const x of allItems) {
+    const key = x.commentId || x.fingerprint;
+    if (key) {
+      itemMap.set(key, x);
+    }
+  }
+
+  const visited = new Set<string>();
+
+  while (current) {
+    path.unshift(current);
+    const key = current.commentId || current.fingerprint;
+    if (key) {
+      if (visited.has(key)) {
+        break; // break cycle
+      }
+      visited.add(key);
+    }
+
+    const parentId = current.parentCommentId || current.parentFingerprint;
+    if (parentId && itemMap.has(parentId)) {
+      current = itemMap.get(parentId);
+    } else {
+      current = undefined;
+    }
+  }
+
+  // Prepend the POST item if found and not already in the path
+  const postItem = allItems.find(x => x.kind === 'POST');
+  if (postItem && !path.includes(postItem)) {
+    path.unshift(postItem);
+  }
+
+  // Map to simple JSON structure to store in DB
+  return path.map(x => ({
+    kind: x.kind || 'COMMENT',
+    text: x.text || '',
+    depth: x.depth || 0,
+    authorName: x.authorName || 'Ẩn danh',
+    authorUrl: x.authorUrl || '',
+    commentId: x.commentId || '',
+    sourceUrl: x.sourceUrl || '',
+  }));
 }

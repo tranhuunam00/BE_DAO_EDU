@@ -42,6 +42,7 @@ export interface FacebookLeadEvidence {
   depth: number;
   itemLeadScore: number;
   authorName?: string;
+  threadPath?: Record<string, unknown>[];
 }
 
 export interface FacebookLeadProfile {
@@ -157,7 +158,7 @@ export class FacebookLeadTextDetector {
     }
 
     const leadProfiles = [...groups.values()]
-      .map((group) => this.classifyProfile(group))
+      .map((group) => this.classifyProfile(group, items))
       .sort((a, b) => b.leadScore - a.leadScore);
 
     const summary: Record<string, number> = {
@@ -192,7 +193,7 @@ export class FacebookLeadTextDetector {
     };
   }
 
-  private classifyProfile(group: ProfileGroup): FacebookLeadProfile {
+  private classifyProfile(group: ProfileGroup, allItems: FacebookLeadScanItem[]): FacebookLeadProfile {
     const analyses = group.items.map((item) => this.analyzeItem(item));
     const ownTexts = group.items.map((item) => normalizeText(item.text));
     const uniqueTexts = [...new Set(ownTexts)];
@@ -287,7 +288,7 @@ export class FacebookLeadTextDetector {
       evidence: analyses
         .sort((a, b) => b.leadScore - a.leadScore)
         .slice(0, 5)
-        .map((analysis) => toEvidence(analysis)),
+        .map((analysis) => toEvidence(analysis, allItems)),
     };
   }
 
@@ -384,7 +385,7 @@ function getLeadLevel(
   return 'NONE';
 }
 
-function toEvidence(analysis: ItemAnalysis): FacebookLeadEvidence {
+function toEvidence(analysis: ItemAnalysis, allItems: FacebookLeadScanItem[]): FacebookLeadEvidence {
   return {
     kind: String(analysis.item.kind || ''),
     text: String(analysis.item.text || ''),
@@ -395,6 +396,7 @@ function toEvidence(analysis: ItemAnalysis): FacebookLeadEvidence {
     depth: Number(analysis.item.depth || 0),
     itemLeadScore: Math.round(analysis.leadScore),
     authorName: String(analysis.item.authorName || ''),
+    threadPath: getCommentThreadPath(analysis.item, allItems),
   };
 }
 
@@ -447,5 +449,55 @@ function normalizeProfileUrl(value: unknown): string {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function getCommentThreadPath(item: FacebookLeadScanItem, allItems: FacebookLeadScanItem[]): any[] {
+  const path: FacebookLeadScanItem[] = [];
+  let current: FacebookLeadScanItem | undefined = item;
+  
+  const itemMap = new Map<string, FacebookLeadScanItem>();
+  for (const x of allItems) {
+    const key = x.commentId || x.fingerprint;
+    if (key) {
+      itemMap.set(key, x);
+    }
+  }
+
+  const visited = new Set<string>();
+
+  while (current) {
+    path.unshift(current);
+    const key = current.commentId || current.fingerprint;
+    if (key) {
+      if (visited.has(key)) {
+        break; // break cycle
+      }
+      visited.add(key);
+    }
+
+    const parentId = current.parentCommentId || current.parentFingerprint;
+    if (parentId && itemMap.has(parentId)) {
+      current = itemMap.get(parentId);
+    } else {
+      current = undefined;
+    }
+  }
+
+  // Prepend the POST item if found and not already in the path
+  const postItem = allItems.find(x => x.kind === 'POST');
+  if (postItem && !path.includes(postItem)) {
+    path.unshift(postItem);
+  }
+
+  // Map to simple JSON structure to store in DB
+  return path.map(x => ({
+    kind: x.kind || 'COMMENT',
+    text: x.text || '',
+    depth: x.depth || 0,
+    authorName: x.authorName || 'Ẩn danh',
+    authorUrl: x.authorUrl || '',
+    commentId: x.commentId || '',
+    sourceUrl: x.sourceUrl || '',
+  }));
 }
 
