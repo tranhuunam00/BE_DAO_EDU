@@ -38,8 +38,8 @@ async function verify() {
 
   // 1. Login
   const loginRes = await request('POST', '/auth/login', {
-    email: 'admin@class.com',
-    password: 'admin123',
+    email: 'admin@dao.edu.vn',
+    password: '123456',
   });
   if (loginRes.status !== 200 && loginRes.status !== 201) {
     console.error('Login failed:', loginRes.status, loginRes.data);
@@ -79,6 +79,24 @@ async function verify() {
   const courseId = courseRes.data.id;
   const levelId = courseRes.data.levels[0].id;
   console.log(`Created Course Level pricing testing, Level ID: ${levelId}`);
+
+  // 2.5 Test adding a level to the course (should succeed)
+  console.log('Testing adding a Level to existing course...');
+  const addLevelRes = await request('POST', `/courses/${courseId}/levels`, {
+    levelName: 'Second Level',
+    levelCode: `LV_SEC_${randSuffix}`,
+    totalHours: 120,
+  }, token);
+  console.log('  Status:', addLevelRes.status);
+  if (addLevelRes.status !== 201 && addLevelRes.status !== 200) {
+    console.error('ERROR: Failed to add Level to existing course:', addLevelRes.data);
+    process.exit(1);
+  }
+  if (addLevelRes.data.levels.length !== 2) {
+    console.error('ERROR: Expected exactly 2 levels after addLevel, got:', addLevelRes.data.levels.length);
+    process.exit(1);
+  }
+  console.log('SUCCESS: Level added to existing course verified!');
 
   // 3. Add Level Pricing (Price: 150000, Wage: 80000, effectiveFrom: 2026-06-01)
   console.log('Adding first pricing level...');
@@ -141,6 +159,37 @@ async function verify() {
     process.exit(1);
   }
   console.log('SUCCESS: Level pricing auto-capping verified!');
+
+  // 5.5 Test updating the active pricing with the same start date (should overwrite/update)
+  console.log('Testing updating active pricing with same effectiveFrom date (2026-07-01)...');
+  const updateSameDateRes = await request('POST', `/courses/levels/${levelId}/pricing`, {
+    pricePerSession: 220000,
+    teacherWagePerSession: 110000,
+    effectiveFrom: '2026-07-01',
+  }, token);
+
+  console.log('  Status:', updateSameDateRes.status);
+  if (updateSameDateRes.status !== 200 && updateSameDateRes.status !== 201) {
+    console.error('ERROR: Failed to update pricing for the same date:', updateSameDateRes.data);
+    process.exit(1);
+  }
+
+  // Fetch pricing history again to verify overwrite
+  const historyAfterUpdateRes = await request('GET', `/courses/levels/${levelId}/pricing`, null, token);
+  console.log('Pricing history after update:');
+  console.table(historyAfterUpdateRes.data);
+
+  if (historyAfterUpdateRes.data.length !== 2) {
+    console.error('ERROR: Expected exactly 2 pricing records, got:', historyAfterUpdateRes.data.length);
+    process.exit(1);
+  }
+
+  const updatedItem = historyAfterUpdateRes.data.find(h => h.effectiveFrom === '2026-07-01');
+  if (!updatedItem || Number(updatedItem.pricePerSession) !== 220000 || Number(updatedItem.teacherWagePerSession) !== 110000) {
+    console.error('ERROR: Overwrite failed. Expected price 220000 and wage 110000, got:', updatedItem);
+    process.exit(1);
+  }
+  console.log('SUCCESS: Updating active pricing for the same date verified!');
 
   // 6. Test isEndingSoon flag for classes
   console.log('Creating class ending in 5 days...');
