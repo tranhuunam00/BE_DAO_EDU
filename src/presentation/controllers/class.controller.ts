@@ -519,6 +519,22 @@ export class ClassController {
   @Post(':id/generate-sessions')
   @ApiOperation({ summary: 'Sinh danh sách buổi học từ lịch cố định' })
   async generateSessionsEndpoint(@Param('id') classId: string) {
+    const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
+    if (classEntity.status !== 'Active') {
+      throw new ConflictException(
+        'Chỉ có thể sinh các buổi học khi lớp học ở trạng thái "Hoạt động". Vui lòng cập nhật trạng thái lớp sang "Hoạt động" trước.'
+      );
+    }
+    const schedules = await this.scheduleRepo.find({ where: { classId } });
+    if (schedules.length === 0) {
+      throw new ConflictException(
+        'Lớp học chưa có lịch học cố định. Vui lòng cấu hình lịch học trước.'
+      );
+    }
+    if (!classEntity.startDate) {
+      throw new ConflictException('Lớp học chưa cấu hình ngày khai giảng.');
+    }
+
     await this.regenerateFutureSessions(classId);
     return { message: 'Đã sinh buổi học thành công' };
   }
