@@ -129,3 +129,17 @@ export class UpdateCourseDto {
   @IsOptional()
   levels?: CourseLevelDto[];
 }
+
+export class AddCourseLevelDto extends CourseLevelDto {
+  @ApiProperty({ example: 150000, description: 'Đơn giá theo buổi cho học sinh' })
+  @IsNumber()
+  pricePerSession!: number;
+
+  @ApiProperty({ example: 80000, description: 'Đơn giá theo buổi cho giáo viên' })
+  @IsNumber()
+  teacherWagePerSession!: number;
+
+  @ApiProperty({ example: '2026-01-01', description: 'Ngày bắt đầu áp dụng' })
+  @IsDateString()
+  effectiveFrom!: string;
+}

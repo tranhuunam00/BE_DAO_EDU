@@ -86,6 +86,9 @@ async function verify() {
     levelName: 'Second Level',
     levelCode: `LV_SEC_${randSuffix}`,
     totalHours: 120,
+    pricePerSession: 150000,
+    teacherWagePerSession: 80000,
+    effectiveFrom: '2026-06-01',
   }, token);
   console.log('  Status:', addLevelRes.status);
   if (addLevelRes.status !== 201 && addLevelRes.status !== 200) {
@@ -179,12 +182,12 @@ async function verify() {
   console.log('Pricing history after update:');
   console.table(historyAfterUpdateRes.data);
 
-  if (historyAfterUpdateRes.data.length !== 2) {
-    console.error('ERROR: Expected exactly 2 pricing records, got:', historyAfterUpdateRes.data.length);
+  if (historyAfterUpdateRes.data.length !== 3) {
+    console.error('ERROR: Expected exactly 3 pricing records, got:', historyAfterUpdateRes.data.length);
     process.exit(1);
   }
 
-  const updatedItem = historyAfterUpdateRes.data.find(h => h.effectiveFrom === '2026-07-01');
+  const updatedItem = historyAfterUpdateRes.data.find(h => h.effectiveFrom === '2026-07-01' && h.effectiveTo === null);
   if (!updatedItem || Number(updatedItem.pricePerSession) !== 220000 || Number(updatedItem.teacherWagePerSession) !== 110000) {
     console.error('ERROR: Overwrite failed. Expected price 220000 and wage 110000, got:', updatedItem);
     process.exit(1);

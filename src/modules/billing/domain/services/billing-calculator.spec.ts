@@ -100,4 +100,46 @@ describe('BillingCalculator', () => {
     );
     expect(result[0].totalAmount).toBe(220000);
   });
+
+  it('calculates mid-month price change correctly for students with sessions on both old and new prices', () => {
+    const midMonthPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 100000,
+        teacherWagePerSession: 60000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: '2026-06-15',
+      },
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 150000,
+        teacherWagePerSession: 90000,
+        effectiveFrom: '2026-06-16',
+        effectiveTo: null,
+      },
+    ];
+
+    const result = BillingCalculator.calculate(
+      [
+        source('att-1', 'student-1', '2026-06-10'), // Before change -> 100,000
+        source('att-2', 'student-1', '2026-06-12'), // Before change -> 100,000
+        source('att-3', 'student-1', '2026-06-17'), // After change -> 150,000
+        source('att-4', 'student-1', '2026-06-24'), // After change -> 150,000
+      ],
+      midMonthPricing,
+      'pricePerSession',
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].totalSessions).toBe(4);
+    expect(result[0].totalAmount).toBe(500000); // 100k*2 + 150k*2
+
+    // Check individual line items have the correct prices mapped
+    const lines = result[0].lines;
+    expect(lines).toHaveLength(4);
+    expect(lines.find(l => l.sourceId === 'att-1')?.rate).toBe(100000);
+    expect(lines.find(l => l.sourceId === 'att-2')?.rate).toBe(100000);
+    expect(lines.find(l => l.sourceId === 'att-3')?.rate).toBe(150000);
+    expect(lines.find(l => l.sourceId === 'att-4')?.rate).toBe(150000);
+  });
 });

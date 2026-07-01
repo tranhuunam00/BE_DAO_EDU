@@ -5,7 +5,7 @@ import { Repository, IsNull } from 'typeorm';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { CourseLevelOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level.orm-entity';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
-import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto } from '../../application/dtos/course.dto';
+import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto, AddCourseLevelDto } from '../../application/dtos/course.dto';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -155,7 +155,7 @@ export class CourseController {
 
   @Post(':id/levels')
   @ApiOperation({ summary: 'Thêm Level cho Chương trình học' })
-  async addLevel(@Param('id') id: string, @Body() dto: CourseLevelDto) {
+  async addLevel(@Param('id') id: string, @Body() dto: AddCourseLevelDto) {
     const course = await this.courseRepo.findOneOrFail({ where: { id } });
 
     const exists = await this.levelRepo.findOne({
@@ -175,7 +175,18 @@ export class CourseController {
       gradebookSetting: dto.gradebookSetting || null,
     });
 
-    await this.levelRepo.save(level);
+    const savedLevel = await this.levelRepo.save(level);
+
+    // Save initial level pricing
+    const pricing = this.pricingRepo.create({
+      courseLevelId: savedLevel.id,
+      pricePerSession: dto.pricePerSession,
+      teacherWagePerSession: dto.teacherWagePerSession,
+      effectiveFrom: dto.effectiveFrom,
+      effectiveTo: null,
+    });
+    await this.pricingRepo.save(pricing);
+
     return this.findOne(id);
   }
 
@@ -201,33 +212,9 @@ export class CourseController {
     });
 
     if (activePricing) {
-      if (newFrom === activePricing.effectiveFrom) {
-        // If the new effective date is the same as the active pricing's start date,
-        // update the existing active pricing instead of throwing an error or capping it.
-        activePricing.pricePerSession = dto.pricePerSession;
-        activePricing.teacherWagePerSession = dto.teacherWagePerSession;
-        activePricing.effectiveTo = newTo;
-
-        // Perform overlap validation against all OTHER records (excluding activePricing itself)
-        for (const p of pricingList) {
-          if (p.id === activePricing.id) {
-            continue;
-          }
-          const pFrom = p.effectiveFrom;
-          const pTo = p.effectiveTo;
-
-          const overlap = (pTo === null || newFrom <= pTo) && (newTo === null || pFrom <= newTo);
-          if (overlap) {
-            throw new ConflictException(`Khoảng thời gian áp dụng trùng lặp với bảng giá đã cấu hình (${pFrom} - ${pTo || 'nay'}).`);
-          }
-        }
-
-        return this.pricingRepo.save(activePricing);
-      }
-
       if (newFrom < activePricing.effectiveFrom) {
         throw new ConflictException(
-          `Ngày bắt đầu áp dụng mới (${newFrom}) phải sau ngày bắt đầu của giá hiện hành (${activePricing.effectiveFrom}).`
+          `Ngày bắt đầu áp dụng mới (${newFrom}) phải từ ngày bắt đầu của giá hiện hành (${activePricing.effectiveFrom}) trở đi.`
         );
       }
 
