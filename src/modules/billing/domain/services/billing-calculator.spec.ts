@@ -73,14 +73,20 @@ describe('BillingCalculator', () => {
     expect(result.totalAmount).toBe(70000);
   });
 
-  it('does not create zero-value orders when no effective pricing exists', () => {
+  it('creates zero-value orders when no effective pricing exists', () => {
     expect(
       BillingCalculator.calculate(
         [source('attendance-1', 'student-1', '2026-06-01', 'missing-level')],
         pricing,
         'pricePerSession',
       ),
-    ).toEqual([]);
+    ).toEqual([
+      expect.objectContaining({
+        ownerId: 'student-1',
+        totalSessions: 1,
+        totalAmount: 0,
+      }),
+    ]);
   });
 
   it('uses inclusive effective date boundaries', () => {

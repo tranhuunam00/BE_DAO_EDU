@@ -62,7 +62,6 @@ export class BillingCalculator {
           (rule.effectiveTo === null || rule.effectiveTo >= source.date),
       );
       const rate = Money.vnd(pricing ? pricing[amountField] : 0).value;
-      if (rate === 0) continue;
 
       const order = orders.get(source.ownerId) ?? {
         ownerId: source.ownerId,
