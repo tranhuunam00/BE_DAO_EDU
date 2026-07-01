@@ -14,20 +14,15 @@ export class SendTuitionPaymentRequestUseCase {
     private readonly qrCode: PaymentQrCodePort,
   ) {}
 
+  /** Gửi QR + thông báo cho học sinh (yêu cầu học sinh có tài khoản) */
   execute(billId: string) {
     return this.persistence.transaction(async (context) => {
       const bill = await context.findBillById(billId);
       if (!bill) {
-        throw new PaymentError(
-          'BILL_NOT_FOUND',
-          'Không tìm thấy hóa đơn học phí',
-        );
+        throw new PaymentError('BILL_NOT_FOUND', 'Không tìm thấy hóa đơn học phí');
       }
       if (bill.status === 'Paid') {
-        throw new PaymentError(
-          'BILL_ALREADY_PAID',
-          'Hóa đơn đã được xác nhận thanh toán',
-        );
+        throw new PaymentError('BILL_ALREADY_PAID', 'Hóa đơn đã được xác nhận thanh toán');
       }
       if (!bill.studentUserId) {
         throw new PaymentError(
@@ -39,21 +34,11 @@ export class SendTuitionPaymentRequestUseCase {
       const bank = this.config.getBankAccount();
       const transferContent = `DAOHP${bill.id.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
       const now = new Date();
-      const qrUrl = this.qrCode.build({
-        bank,
-        amount: bill.totalAmount,
-        transferContent,
-      });
+      const qrUrl = this.qrCode.build({ bank, amount: bill.totalAmount, transferContent });
 
       let request = await context.findRequestByBillId(billId);
       if (request) {
-        request.reissue({
-          amount: bill.totalAmount,
-          ...bank,
-          transferContent,
-          qrUrl,
-          sentAt: now,
-        });
+        request.reissue({ amount: bill.totalAmount, ...bank, transferContent, qrUrl, sentAt: now });
       } else {
         request = new TuitionPaymentRequest({
           billId,
@@ -78,6 +63,62 @@ export class SendTuitionPaymentRequestUseCase {
         priority: 'urgent',
         metadata: { billId, paymentRequestId: saved.id },
       });
+      return presentPaymentRequest(saved);
+    });
+  }
+
+  /**
+   * Tạo / cập nhật QR code mà KHÔNG cần học sinh có tài khoản.
+   * Admin tự lấy QR rồi gửi qua Zalo / chia sẻ thủ công.
+   * Nếu học sinh CÓ tài khoản thì vẫn gửi thêm thông báo in-app.
+   */
+  executeGenerateOnly(billId: string) {
+    return this.persistence.transaction(async (context) => {
+      const bill = await context.findBillById(billId);
+      if (!bill) {
+        throw new PaymentError('BILL_NOT_FOUND', 'Không tìm thấy hóa đơn học phí');
+      }
+      if (bill.status === 'Paid') {
+        throw new PaymentError('BILL_ALREADY_PAID', 'Hóa đơn đã được xác nhận thanh toán');
+      }
+
+      const bank = this.config.getBankAccount();
+      const transferContent = `DAOHP${bill.id.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+      const now = new Date();
+      const qrUrl = this.qrCode.build({ bank, amount: bill.totalAmount, transferContent });
+
+      let request = await context.findRequestByBillId(billId);
+      if (request) {
+        request.reissue({ amount: bill.totalAmount, ...bank, transferContent, qrUrl, sentAt: now });
+      } else {
+        request = new TuitionPaymentRequest({
+          billId,
+          amount: bill.totalAmount,
+          ...bank,
+          transferContent,
+          qrUrl,
+          status: 'pending',
+          sentAt: now,
+          claimedAt: null,
+          reconciledAt: null,
+        });
+      }
+
+      const saved = await context.saveRequest(request);
+
+      // Gửi thông báo in-app nếu học sinh có tài khoản
+      if (bill.studentUserId) {
+        await context.saveNotification({
+          userId: bill.studentUserId,
+          type: 'tuition_payment_request',
+          title: 'Yêu cầu đóng học phí',
+          message: `${bill.periodName || `Học phí tháng ${bill.month}`}: ${bill.totalAmount.toLocaleString('vi-VN')} đ`,
+          linkPath: '/student/tuition',
+          priority: 'urgent',
+          metadata: { billId, paymentRequestId: saved.id },
+        });
+      }
+
       return presentPaymentRequest(saved);
     });
   }

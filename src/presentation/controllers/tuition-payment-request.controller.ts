@@ -32,6 +32,12 @@ export class TuitionPaymentRequestController {
     return this.run(() => this.sendPaymentRequest.execute(billId));
   }
 
+  @Post('bills/:billId/generate-qr')
+  @Roles(Role.ADMIN)
+  async generateQr(@Param('billId') billId: string) {
+    return this.run(() => this.sendPaymentRequest.executeGenerateOnly(billId));
+  }
+
   @Post('bills/:billId/confirm-transfer')
   @Roles(Role.STUDENT)
   async confirmTransfer(@Request() req: any, @Param('billId') billId: string) {
