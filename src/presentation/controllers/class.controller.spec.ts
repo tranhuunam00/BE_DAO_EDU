@@ -487,3 +487,134 @@ describe('ClassController enrollment and schedule edge cases', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('ClassController.overrideAttendance', () => {
+  const createController = () => {
+    const repos = {
+      classRepo: { findOne: jest.fn(), findOneOrFail: jest.fn(), create: jest.fn(v => v), save: jest.fn(async v => v), createQueryBuilder: jest.fn() },
+      scheduleRepo: { find: jest.fn().mockResolvedValue([]), create: jest.fn(v => v), save: jest.fn(async v => v), delete: jest.fn() },
+      sessionRepo: { findOne: jest.fn(), findOneOrFail: jest.fn(), count: jest.fn().mockResolvedValue(0), create: jest.fn(v => v), save: jest.fn(async v => ({ id: 'session-1', ...v })), createQueryBuilder: jest.fn(() => ({ where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), leftJoinAndSelect: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) })) },
+      classStudentRepo: { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), create: jest.fn(v => v), save: jest.fn(async v => v), findOneOrFail: jest.fn() },
+      attendanceRepo: {
+        findOne: jest.fn(),
+        find: jest.fn().mockResolvedValue([]),
+        create: jest.fn(v => v),
+        save: jest.fn(async v => v),
+        delete: jest.fn(),
+      },
+      courseRepo: { findOne: jest.fn() },
+      studentRepo: { findOne: jest.fn(), save: jest.fn(async v => v) },
+      assignmentRepo: { createQueryBuilder: jest.fn(() => ({ where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), leftJoinAndSelect: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) })) },
+      notificationRepo: { create: jest.fn(v => v), save: jest.fn() },
+    };
+
+    const controller = new ClassController(
+      repos.classRepo as any,
+      repos.scheduleRepo as any,
+      repos.sessionRepo as any,
+      repos.classStudentRepo as any,
+      repos.attendanceRepo as any,
+      repos.courseRepo as any,
+      repos.studentRepo as any,
+      repos.assignmentRepo as any,
+      repos.notificationRepo as any,
+      { execute: jest.fn().mockResolvedValue([]) } as any,
+      { execute: jest.fn().mockResolvedValue(undefined) } as any,
+      { execute: jest.fn().mockResolvedValue(undefined) } as any,
+      { execute: jest.fn() } as any,
+      { execute: jest.fn().mockResolvedValue(undefined) } as any,
+    );
+
+    return { controller, repos };
+  };
+
+  const attendancePayload = {
+    attendance: [
+      { studentId: 'student-1', isPresent: true },
+      { studentId: 'student-2', isPresent: false, reason: 'Sick' },
+    ],
+  };
+
+  it('rejects override when session is NOT locked (not completed yet)', async () => {
+    const { controller, repos } = createController();
+    repos.sessionRepo.findOneOrFail.mockResolvedValue({
+      id: 'session-1',
+      attendanceLocked: false, // Buổi chưa chốt
+    });
+
+    await expect(
+      controller.overrideAttendance('session-1', attendancePayload),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects override when ANY attendance record has already been billed (billId is not null)', async () => {
+    const { controller, repos } = createController();
+    repos.sessionRepo.findOneOrFail.mockResolvedValue({
+      id: 'session-1',
+      attendanceLocked: true,
+    });
+    // One of the existing records has already been put into a billing invoice
+    repos.attendanceRepo.find.mockResolvedValue([
+      { id: 'att-1', studentId: 'student-1', billId: 'bill-123' }, // đã tính tiền
+      { id: 'att-2', studentId: 'student-2', billId: null },
+    ]);
+
+    await expect(
+      controller.overrideAttendance('session-1', attendancePayload),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('successfully saves updated attendance when session is locked and no records have been billed', async () => {
+    const { controller, repos } = createController();
+    repos.sessionRepo.findOneOrFail.mockResolvedValue({
+      id: 'session-1',
+      attendanceLocked: true,
+    });
+    // No billed records
+    repos.attendanceRepo.find.mockResolvedValue([
+      { id: 'att-1', studentId: 'student-1', billId: null, isPresent: false },
+      { id: 'att-2', studentId: 'student-2', billId: null, isPresent: true },
+    ]);
+    repos.attendanceRepo.findOne
+      .mockResolvedValueOnce({ id: 'att-1', studentId: 'student-1', billId: null, isPresent: false })
+      .mockResolvedValueOnce({ id: 'att-2', studentId: 'student-2', billId: null, isPresent: true });
+
+    const result = await controller.overrideAttendance('session-1', attendancePayload);
+
+    expect(result).toEqual({ message: expect.stringContaining('thành công') });
+    // Should save each changed record
+    expect(repos.attendanceRepo.save).toHaveBeenCalledTimes(2);
+    // Verify student-1's isPresent is now true (was false in old record, now overridden to true)
+    expect(repos.attendanceRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: 'student-1', isPresent: true }),
+    );
+    // Verify student-2's isPresent is now false (was true in old record, now overridden to false) with reason
+    expect(repos.attendanceRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: 'student-2', isPresent: false, reason: 'Sick' }),
+    );
+  });
+
+  it('creates a new attendance record if one did not previously exist for a student', async () => {
+    const { controller, repos } = createController();
+    repos.sessionRepo.findOneOrFail.mockResolvedValue({
+      id: 'session-1',
+      attendanceLocked: true,
+    });
+    repos.attendanceRepo.find.mockResolvedValue([]); // No existing records for session
+    repos.attendanceRepo.findOne.mockResolvedValue(null); // Record doesn't exist for student yet
+
+    await controller.overrideAttendance('session-1', {
+      attendance: [{ studentId: 'student-new', isPresent: true }],
+    });
+
+    expect(repos.attendanceRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classSessionId: 'session-1',
+        studentId: 'student-new',
+      }),
+    );
+    expect(repos.attendanceRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: 'student-new', isPresent: true }),
+    );
+  });
+});

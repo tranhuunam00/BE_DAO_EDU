@@ -620,6 +620,48 @@ export class ClassController {
     return { message: 'Điểm danh lưu thành công' };
   }
 
+  @Post('sessions/:sessionId/attendance-override')
+  @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
+  async overrideAttendance(
+    @Param('sessionId') sessionId: string,
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string }[] }
+  ) {
+    const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    if (!session.attendanceLocked) {
+      throw new ConflictException('Buổi học này chưa được chốt. Hãy sử dụng endpoint điểm danh thông thường.');
+    }
+
+    // Check that none of the attendance records for this session have been billed
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    const billedRecord = existingRecords.find(r => r.billId !== null);
+    if (billedRecord) {
+      throw new ConflictException(
+        'Không thể sửa điểm danh: một hoặc nhiều học sinh trong buổi học này đã được tính tiền vào hóa đơn. Vui lòng liên hệ kế toán để điều chỉnh.'
+      );
+    }
+
+    // Apply the override
+    for (const item of body.attendance) {
+      let record = await this.attendanceRepo.findOne({
+        where: { classSessionId: sessionId, studentId: item.studentId }
+      });
+
+      if (!record) {
+        record = this.attendanceRepo.create({
+          classSessionId: sessionId,
+          studentId: item.studentId,
+        });
+      }
+
+      record.isPresent = item.isPresent;
+      record.reason = item.reason || null;
+      record.note = item.note || null;
+      await this.attendanceRepo.save(record);
+    }
+
+    return { message: 'Đã cập nhật điểm danh thành công (Admin override)' };
+  }
+
   @Post('sessions/:sessionId/complete')
   @ApiOperation({ summary: 'Kết thúc buổi học (chuyển trạng thái sang Hoàn thành)' })
   async completeSession(@Param('sessionId') sessionId: string) {
