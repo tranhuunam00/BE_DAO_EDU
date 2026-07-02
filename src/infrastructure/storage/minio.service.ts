@@ -95,11 +95,20 @@ export class MinioService extends FileStoragePort {
   }
 
   async getPresignedUrl(objectKey: string): Promise<string> {
-    return this.minioClient.presignedGetObject(
+    let url = await this.minioClient.presignedGetObject(
       this.bucketName,
       objectKey,
       15 * 60,
     );
+
+    const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT') || '103.90.227.173';
+    if (url.includes('localhost')) {
+      url = url.replace('localhost', externalEndpoint);
+    } else if (url.includes('127.0.0.1')) {
+      url = url.replace('127.0.0.1', externalEndpoint);
+    }
+
+    return url;
   }
 
   async removeFile(objectKey: string): Promise<void> {
