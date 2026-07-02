@@ -363,24 +363,23 @@ export class AssignmentController {
       );
 
       if (studentSubmissions.length > 0) {
-        for (const submission of studentSubmissions) {
-          resultList.push({
-            id: submission.id,
-            studentId: student.id,
-            studentCode: student.studentId,
-            studentName: `${student.lastName} ${student.firstName}`.trim(),
-            status: submission.status,
-            answerText: submission.answerText,
-            submittedAt: submission.submittedAt,
-            score:
-              submission.score === null || submission.score === undefined
-                ? null
-                : Number(submission.score),
-            feedback: submission.feedback,
-            attachments: await this.getSubmissionAttachments(submission.id),
-            enrollmentStatus: enrollment.status,
-          });
-        }
+        const submission = studentSubmissions[0];
+        resultList.push({
+          id: submission.id,
+          studentId: student.id,
+          studentCode: student.studentId,
+          studentName: `${student.lastName} ${student.firstName}`.trim(),
+          status: submission.status,
+          answerText: submission.answerText,
+          submittedAt: submission.submittedAt,
+          score:
+            submission.score === null || submission.score === undefined
+              ? null
+              : Number(submission.score),
+          feedback: submission.feedback,
+          attachments: await this.getSubmissionAttachments(submission.id),
+          enrollmentStatus: enrollment.status,
+        });
       } else {
         resultList.push({
           id: `not-submitted-${student.id}`,
