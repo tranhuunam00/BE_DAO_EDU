@@ -36,6 +36,7 @@ import { FacebookLeadScanOrmEntity } from './entities/facebook-lead-scan.orm-ent
 import { LeadOrmEntity } from './entities/lead.orm-entity';
 import { LeadDemandOrmEntity } from './entities/lead-demand.orm-entity';
 import { LeadInteractionOrmEntity } from './entities/lead-interaction.orm-entity';
+import { StudyMaterialOrmEntity } from './entities/study-material.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -76,4 +77,5 @@ export const TYPEORM_ENTITIES = [
   LeadOrmEntity,
   LeadDemandOrmEntity,
   LeadInteractionOrmEntity,
+  StudyMaterialOrmEntity,
 ];

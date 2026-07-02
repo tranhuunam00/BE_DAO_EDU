@@ -505,9 +505,9 @@ export class ClassController {
         throw new BadRequestException('studentId or studentIds must be provided');
       }
       const saved = await this.runAcademic(() =>
-        this.enrollStudentUseCase.execute(classId, body.studentId),
+        this.enrollStudentUseCase.execute(classId, body.studentId!),
       );
-      await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
+      await this.notifyStudentAboutOpenAssignments(classId, body.studentId!);
       return saved;
     }
   }

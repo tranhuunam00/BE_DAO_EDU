@@ -16,6 +16,7 @@ import { TeachersModule } from './modules/teachers/teachers.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
 import { ContactRequestsModule } from './modules/contact-requests/contact-requests.module';
 import { FacebookLeadScansModule } from './modules/facebook-lead-scans/facebook-lead-scans.module';
+import { StudyMaterialsModule } from './modules/study-materials/study-materials.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { FacebookLeadScansModule } from './modules/facebook-lead-scans/facebook-
     LeaveRequestsModule,
     ContactRequestsModule,
     FacebookLeadScansModule,
+    StudyMaterialsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
