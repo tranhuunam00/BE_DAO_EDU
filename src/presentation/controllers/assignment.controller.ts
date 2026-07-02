@@ -364,6 +364,9 @@ export class AssignmentController {
 
       if (studentSubmissions.length > 0) {
         const submission = studentSubmissions[0];
+        const attachmentsList = await Promise.all(
+          studentSubmissions.map((sub) => this.getSubmissionAttachments(sub.id)),
+        );
         resultList.push({
           id: submission.id,
           studentId: student.id,
@@ -377,7 +380,7 @@ export class AssignmentController {
               ? null
               : Number(submission.score),
           feedback: submission.feedback,
-          attachments: await this.getSubmissionAttachments(submission.id),
+          attachments: attachmentsList.flat(),
           enrollmentStatus: enrollment.status,
         });
       } else {
