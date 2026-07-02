@@ -4,14 +4,21 @@ import {
   ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   NotFoundException,
   Param,
   Post,
   Put,
   Query,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
+import { RolesGuard } from '../../infrastructure/security/roles.guard';
+import { Roles } from '../../infrastructure/security/roles.decorator';
+import { Role } from '../../domain/value-objects/role.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
@@ -21,6 +28,7 @@ import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { CreateClassDto, UpdateClassDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
@@ -98,7 +106,9 @@ function validateSchedules(
 }
 
 @ApiTags('Classes')
+@ApiBearerAuth()
 @Controller('classes')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ClassController {
   constructor(
     @InjectRepository(ClassOrmEntity)
@@ -115,6 +125,8 @@ export class ClassController {
     private readonly courseRepo: Repository<CourseOrmEntity>,
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepo: Repository<StudentOrmEntity>,
+    @InjectRepository(TeacherOrmEntity)
+    private readonly teacherRepo: Repository<TeacherOrmEntity>,
     @InjectRepository(AssignmentOrmEntity)
     private readonly assignmentRepo: Repository<AssignmentOrmEntity>,
     @InjectRepository(NotificationOrmEntity)
@@ -478,22 +490,26 @@ export class ClassController {
     @Param('id') classId: string,
     @Body() body: { studentId?: string; studentIds?: string[] },
   ) {
-    const studentIds =
-      body.studentIds || (body.studentId ? [body.studentId] : []);
-    if (studentIds.length === 0) {
-      throw new BadRequestException('studentId or studentIds must be provided');
-    }
-
-    const results = [];
-    for (const studentId of studentIds) {
+    if (body.studentIds) {
+      const results = [];
+      for (const studentId of body.studentIds) {
+        const saved = await this.runAcademic(() =>
+          this.enrollStudentUseCase.execute(classId, studentId),
+        );
+        await this.notifyStudentAboutOpenAssignments(classId, studentId);
+        results.push(saved);
+      }
+      return results;
+    } else {
+      if (!body.studentId) {
+        throw new BadRequestException('studentId or studentIds must be provided');
+      }
       const saved = await this.runAcademic(() =>
-        this.enrollStudentUseCase.execute(classId, studentId),
+        this.enrollStudentUseCase.execute(classId, body.studentId),
       );
-      await this.notifyStudentAboutOpenAssignments(classId, studentId);
-      results.push(saved);
+      await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
+      return saved;
     }
-
-    return results;
   }
 
   @Delete(':id/students/:studentId')
@@ -565,8 +581,10 @@ export class ClassController {
   }
 
   @Post('sessions/:sessionId/start-attendance')
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Bắt đầu điểm danh (chuyển trạng thái sang Đang học)' })
   async startAttendance(
+    @Request() req: any,
     @Param('sessionId') sessionId: string,
     @Query('bypassTimeCheck') bypassTimeCheck?: string,
   ) {
@@ -574,6 +592,8 @@ export class ClassController {
       where: { id: sessionId },
       relations: { classEntity: true },
     });
+
+    await this.validateAttendancePermission(session, req);
 
     if (session.attendanceLocked) {
       throw new Error('Buổi học này đã hoàn thành và khóa điểm danh.');
@@ -603,12 +623,20 @@ export class ClassController {
   }
 
   @Post('sessions/:sessionId/attendance')
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Ghi nhận điểm danh cho học sinh' })
   async saveAttendance(
+    @Request() req: any,
     @Param('sessionId') sessionId: string,
     @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string }[] }
   ) {
-    const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    const session = await this.sessionRepo.findOneOrFail({
+      where: { id: sessionId },
+      relations: { classEntity: true },
+    });
+
+    await this.validateAttendancePermission(session, req);
+
     if (session.attendanceLocked) {
       throw new Error('Điểm danh của buổi học này đã bị khóa.');
     }
@@ -635,6 +663,7 @@ export class ClassController {
   }
 
   @Post('sessions/:sessionId/attendance-override')
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
   async overrideAttendance(
     @Param('sessionId') sessionId: string,
@@ -677,9 +706,19 @@ export class ClassController {
   }
 
   @Post('sessions/:sessionId/complete')
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Kết thúc buổi học (chuyển trạng thái sang Hoàn thành)' })
-  async completeSession(@Param('sessionId') sessionId: string) {
-    const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+  async completeSession(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const session = await this.sessionRepo.findOneOrFail({
+      where: { id: sessionId },
+      relations: { classEntity: true },
+    });
+
+    await this.validateAttendancePermission(session, req);
+
     session.status = 'Completed';
     session.attendanceLocked = true;
     await this.sessionRepo.save(session);
@@ -931,6 +970,35 @@ export class ClassController {
         throw new NotFoundException(error.message);
       }
       throw new ConflictException(error.message);
+    }
+  }
+
+  private async validateAttendancePermission(
+    session: ClassSessionOrmEntity,
+    req: any,
+  ) {
+    if (req.user.role === 'admin') {
+      return; // Admin always allowed
+    }
+
+    if (req.user.role !== 'teacher') {
+      throw new ForbiddenException('Chỉ giáo viên và admin mới được điểm danh.');
+    }
+
+    const teacher = await this.teacherRepo.findOne({
+      where: { userId: req.user.sub },
+    });
+
+    if (!teacher) {
+      throw new ForbiddenException('Không tìm thấy thông tin giáo viên của bạn.');
+    }
+
+    const allowedTeacherId = session.teacherId || session.classEntity?.mainTeacherId;
+
+    if (!allowedTeacherId || allowedTeacherId !== teacher.id) {
+      throw new ForbiddenException(
+        'Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.',
+      );
     }
   }
 }

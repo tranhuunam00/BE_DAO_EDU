@@ -11,6 +11,7 @@ import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entiti
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { ClassController } from '../../presentation/controllers/class.controller';
 import { CourseController } from '../../presentation/controllers/course.controller';
 import { AcademicsPersistencePort } from './application/ports/academics-persistence.port';
@@ -50,6 +51,7 @@ import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/t
       AssignmentOrmEntity,
       NotificationOrmEntity,
       HolidayOrmEntity,
+      TeacherOrmEntity,
     ]),
   ],
   controllers: [CourseController, ClassController, HolidayController],

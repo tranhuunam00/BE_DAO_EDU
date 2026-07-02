@@ -65,6 +65,9 @@ describe('ClassController enrollment and schedule edge cases', () => {
         findOne: jest.fn(),
         save: jest.fn(async (value) => value),
       },
+      teacherRepo: {
+        findOne: jest.fn(),
+      },
       assignmentRepo: {
         createQueryBuilder: jest.fn(() => assignmentQueryBuilder),
       },
@@ -88,6 +91,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
       repos.attendanceRepo as any,
       repos.courseRepo as any,
       repos.studentRepo as any,
+      repos.teacherRepo as any,
       repos.assignmentRepo as any,
       repos.notificationRepo as any,
       { execute: jest.fn().mockResolvedValue([]) } as any,
@@ -504,6 +508,7 @@ describe('ClassController.overrideAttendance', () => {
       },
       courseRepo: { findOne: jest.fn() },
       studentRepo: { findOne: jest.fn(), save: jest.fn(async v => v) },
+      teacherRepo: { findOne: jest.fn() },
       assignmentRepo: { createQueryBuilder: jest.fn(() => ({ where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), leftJoinAndSelect: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) })) },
       notificationRepo: { create: jest.fn(v => v), save: jest.fn() },
     };
@@ -516,6 +521,7 @@ describe('ClassController.overrideAttendance', () => {
       repos.attendanceRepo as any,
       repos.courseRepo as any,
       repos.studentRepo as any,
+      repos.teacherRepo as any,
       repos.assignmentRepo as any,
       repos.notificationRepo as any,
       { execute: jest.fn().mockResolvedValue([]) } as any,
