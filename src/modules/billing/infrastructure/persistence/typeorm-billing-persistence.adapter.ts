@@ -437,6 +437,15 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       await this.manager
         .getRepository(StudentMonthlyBillOrmEntity)
         .update(order.id!, values);
+
+      if (order.status === 'Paid') {
+        await this.manager
+          .getRepository(TuitionPaymentRequestOrmEntity)
+          .update(
+            { billId: order.id! },
+            { status: 'reconciled', reconciledAt: order.paymentDate },
+          );
+      }
     } else {
       await this.manager
         .getRepository(TeacherMonthlyWageOrmEntity)

@@ -35,6 +35,7 @@ export class PaymentConfigAdapter extends PaymentConfigPort {
   }
 
   isDemoEnabled(): boolean {
-    return this.config.get<string>('VIETQR_DEMO_ENABLED') === 'true';
+    const val = this.config.get<string>('VIETQR_DEMO_ENABLED');
+    return val !== 'false';
   }
 }
