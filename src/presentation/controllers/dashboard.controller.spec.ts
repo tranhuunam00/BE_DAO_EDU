@@ -1,6 +1,6 @@
 import { DashboardController } from './dashboard.controller';
 
-describe('DashboardController teacher views', () => {
+describe('DashboardController views', () => {
   const createController = (overrides: Record<string, any> = {}) => {
     const sessionQueryBuilder = {
       select: jest.fn().mockReturnThis(),
@@ -21,6 +21,8 @@ describe('DashboardController teacher views', () => {
       attendanceRepo: { findOne: jest.fn() },
       teacherWageRepo: { find: jest.fn().mockResolvedValue([]) },
       studentBillRepo: { find: jest.fn() },
+      assignmentRepo: { find: jest.fn().mockResolvedValue([]) },
+      submissionRepo: { find: jest.fn().mockResolvedValue([]) },
       ...overrides,
     };
 
@@ -35,6 +37,8 @@ describe('DashboardController teacher views', () => {
       repositories.attendanceRepo as any,
       repositories.teacherWageRepo as any,
       repositories.studentBillRepo as any,
+      repositories.assignmentRepo as any,
+      repositories.submissionRepo as any,
       {} as any,
       {} as any,
       {} as any,
@@ -185,5 +189,120 @@ describe('DashboardController teacher views', () => {
     expect(result.classes).toHaveLength(2);
     expect(result.classes[0].isMainTeacher).toBe(true);
     expect(result.classes[1].studentCount).toBe(1);
+  });
+
+  describe('student dashboard view', () => {
+    it('correctly calculates attendance, homework statistics, and comments', async () => {
+      const studentRepo = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'student-1',
+          firstName: 'An',
+          lastName: 'Nguyen',
+          userId: 'user-student-1',
+        }),
+      };
+      const classStudentRepo = {
+        find: jest.fn().mockResolvedValue([{ classId: 'class-1', studentId: 'student-1', status: 'Active' }]),
+      };
+      
+      const mockSessions = [
+        {
+          id: 'session-1',
+          date: '2026-07-01',
+          status: 'Completed',
+          classEntity: { className: 'Toán' },
+        },
+        {
+          id: 'session-2',
+          date: '2026-07-02',
+          status: 'Completed',
+          classEntity: { className: 'Toán' },
+        },
+        {
+          id: 'session-3',
+          date: '2026-07-03',
+          status: 'Scheduled',
+          classEntity: { className: 'Toán' },
+        }
+      ];
+      
+      const sessionQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(mockSessions),
+      };
+      
+      const sessionRepo = {
+        createQueryBuilder: jest.fn().mockReturnValue(sessionQueryBuilder),
+      };
+
+      const attendanceRepo = {
+        findOne: jest.fn().mockImplementation((options) => {
+          const classSessionId = options.where.classSessionId;
+          if (classSessionId === 'session-1') {
+            return Promise.resolve({ isPresent: true, note: 'Tốt' });
+          }
+          if (classSessionId === 'session-2') {
+            return Promise.resolve({ isPresent: false, reason: 'Ốm' });
+          }
+          return Promise.resolve(null);
+        }),
+      };
+
+      const assignmentRepo = {
+        find: jest.fn().mockResolvedValue([
+          { id: 'assign-1', title: 'Bài tập 1', maxScore: 10, status: 'published' },
+          { id: 'assign-2', title: 'Bài tập 2', maxScore: 10, status: 'published' }
+        ]),
+      };
+
+      const submissionRepo = {
+        find: jest.fn().mockResolvedValue([
+          { id: 'sub-1', assignmentId: 'assign-1', status: 'graded', score: 9, feedback: 'Giỏi', gradedAt: new Date('2026-07-01T10:00:00Z') }
+        ]),
+      };
+
+      const { controller } = createController({
+        studentRepo,
+        classStudentRepo,
+        sessionRepo,
+        attendanceRepo,
+        assignmentRepo,
+        submissionRepo,
+      });
+
+      const result = await controller.getStudentData({ user: { sub: 'user-student-1' } });
+
+      expect(result.studentInfo.name).toBe('An Nguyen');
+      
+      // Attendance Stats
+      expect(result.stats.attendance.totalSessionsCompleted).toBe(2);
+      expect(result.stats.attendance.presentCount).toBe(1);
+      expect(result.stats.attendance.absentCount).toBe(1);
+      expect(result.stats.attendance.presentRate).toBe(50.0);
+      expect(result.stats.attendance.monthly).toHaveLength(1);
+      expect(result.stats.attendance.monthly[0]).toEqual({
+        month: '07/2026',
+        completed: 2,
+        present: 1,
+        absent: 1,
+        rate: 50.0
+      });
+
+      // Homework Stats
+      expect(result.stats.homework.totalAssignments).toBe(2);
+      expect(result.stats.homework.submittedCount).toBe(1);
+      expect(result.stats.homework.gradedCount).toBe(1);
+      expect(result.stats.homework.missingCount).toBe(1);
+      expect(result.stats.homework.averageScore).toBe(9.0);
+
+      // Comments
+      expect(result.stats.recentComments).toHaveLength(3); // 1 attendance note, 1 attendance absence reason, 1 assignment feedback
+      expect(result.stats.recentComments.some(c => c.comment === 'Tốt')).toBe(true);
+      expect(result.stats.recentComments.some(c => c.comment === 'Giỏi')).toBe(true);
+      expect(result.stats.recentComments.some(c => c.comment.includes('Ốm'))).toBe(true);
+    });
   });
 });

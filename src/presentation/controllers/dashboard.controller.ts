@@ -19,6 +19,8 @@ import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboar
 import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
 import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
 import { GetAdminOperationsUseCase } from '../../modules/dashboard/application/use-cases/get-admin-operations.use-case';
+import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -43,6 +45,10 @@ export class DashboardController {
     private readonly teacherWageRepo: Repository<TeacherMonthlyWageOrmEntity>,
     @InjectRepository(StudentMonthlyBillOrmEntity)
     private readonly studentBillRepo: Repository<StudentMonthlyBillOrmEntity>,
+    @InjectRepository(AssignmentOrmEntity)
+    private readonly assignmentRepo: Repository<AssignmentOrmEntity>,
+    @InjectRepository(AssignmentSubmissionOrmEntity)
+    private readonly submissionRepo: Repository<AssignmentSubmissionOrmEntity>,
     private readonly getSummaryUseCase: GetDashboardSummaryUseCase,
     private readonly getRevenueUseCase: GetDashboardRevenueUseCase,
     private readonly getActivitiesUseCase: GetDashboardActivitiesUseCase,
@@ -348,6 +354,11 @@ export class DashboardController {
         grades: [],
         upcomingExams: [],
         sessions: [],
+        stats: {
+          attendance: { totalSessionsCompleted: 0, presentCount: 0, absentCount: 0, presentRate: 0, monthly: [] },
+          homework: { totalAssignments: 0, submittedCount: 0, gradedCount: 0, pendingCount: 0, missingCount: 0, averageScore: 0 },
+          recentComments: [],
+        },
       };
     }
 
@@ -408,10 +419,118 @@ export class DashboardController {
             attendanceColor,
             attendanceText,
             isPresent: attendance ? attendance.isPresent : false,
+            note: attendance ? attendance.note : null,
+            reason: attendance ? attendance.reason : null,
           };
         }),
       );
     }
+
+    // 5. Calculate attendance statistics
+    const completedSessions = sessionsList.filter((s) => s.status === 'Completed');
+    const totalSessionsCompleted = completedSessions.length;
+    const presentCount = completedSessions.filter((s) => s.isPresent).length;
+    const absentCount = totalSessionsCompleted - presentCount;
+    const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
+
+    // Monthly attendance breakdown
+    const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {};
+    for (const s of completedSessions) {
+      const dateParts = s.date.split('-');
+      if (dateParts.length >= 2) {
+        const monthYear = `${dateParts[1]}/${dateParts[0]}`; // e.g. "07/2026"
+        if (!monthlyAttendance[monthYear]) {
+          monthlyAttendance[monthYear] = { completed: 0, present: 0, absent: 0 };
+        }
+        monthlyAttendance[monthYear].completed++;
+        if (s.isPresent) {
+          monthlyAttendance[monthYear].present++;
+        } else {
+          monthlyAttendance[monthYear].absent++;
+        }
+      }
+    }
+    const monthlyAttendanceList = Object.entries(monthlyAttendance)
+      .map(([month, stats]) => ({
+        month,
+        ...stats,
+        rate: stats.completed > 0 ? Number(((stats.present / stats.completed) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => {
+        const [mA, yA] = a.month.split('/');
+        const [mB, yB] = b.month.split('/');
+        return `${yB}-${mB}`.localeCompare(`${yA}-${mA}`); // Sort newest month first
+      });
+
+    // 6. Calculate homework/assignment statistics
+    let totalAssignments = 0;
+    let submittedCount = 0;
+    let gradedCount = 0;
+    let pendingCount = 0;
+    let missingCount = 0;
+    let averageScore = 0;
+    let submissions: any[] = [];
+    let assignments: any[] = [];
+
+    if (classIds.length > 0) {
+      assignments = await this.assignmentRepo.find({
+        where: { classId: In(classIds), status: 'published' },
+      });
+      totalAssignments = assignments.length;
+
+      if (totalAssignments > 0) {
+        submissions = await this.submissionRepo.find({
+          where: {
+            assignmentId: In(assignments.map((a) => a.id)),
+            studentId: student.id,
+          },
+        });
+        submittedCount = submissions.length;
+        gradedCount = submissions.filter((sub) => sub.status === 'graded').length;
+        pendingCount = submittedCount - gradedCount;
+        missingCount = Math.max(0, totalAssignments - submittedCount);
+
+        const gradedSubmissions = submissions.filter((sub) => sub.status === 'graded' && sub.score !== null);
+        if (gradedSubmissions.length > 0) {
+          const totalScore = gradedSubmissions.reduce((sum, sub) => sum + Number(sub.score), 0);
+          averageScore = Number((totalScore / gradedSubmissions.length).toFixed(1));
+        }
+      }
+    }
+
+    // 7. Compile recent comments
+    const recentComments: any[] = [];
+
+    // From attendance notes & reasons
+    for (const s of completedSessions) {
+      if (s.note || (!s.isPresent && s.reason)) {
+        recentComments.push({
+          date: s.date,
+          type: 'attendance',
+          title: `Điểm danh lớp ${s.className}`,
+          comment: s.note || `Vắng mặt (Lý do: ${s.reason || 'Không rõ'})`,
+        });
+      }
+    }
+
+    // From assignment graded feedback
+    for (const sub of submissions) {
+      if (sub.status === 'graded' && sub.feedback) {
+        const assignment = assignments.find((a) => a.id === sub.assignmentId);
+        recentComments.push({
+          date: sub.gradedAt ? new Date(sub.gradedAt).toISOString().split('T')[0] : (sub.submittedAt ? new Date(sub.submittedAt).toISOString().split('T')[0] : ''),
+          type: 'assignment',
+          title: `Bài tập: ${assignment?.title || 'Bài tập'}`,
+          comment: sub.feedback,
+          score: sub.score !== null ? Number(sub.score) : null,
+          maxScore: assignment ? Number(assignment.maxScore) : 10,
+        });
+      }
+    }
+
+    // Sort by date descending
+    recentComments.sort((a, b) => b.date.localeCompare(a.date));
+    const topComments = recentComments.slice(0, 10);
 
     return {
       message: 'Chào mừng Học sinh đến với Cổng thông tin học tập',
@@ -428,6 +547,24 @@ export class DashboardController {
         { subject: 'Toán học', date: '2026-06-18', time: '08:00 AM', type: 'Thi giữa kỳ' }
       ],
       sessions: sessionsList,
+      stats: {
+        attendance: {
+          totalSessionsCompleted,
+          presentCount,
+          absentCount,
+          presentRate,
+          monthly: monthlyAttendanceList,
+        },
+        homework: {
+          totalAssignments,
+          submittedCount,
+          gradedCount,
+          pendingCount,
+          missingCount,
+          averageScore,
+        },
+        recentComments: topComments,
+      },
     };
   }
 

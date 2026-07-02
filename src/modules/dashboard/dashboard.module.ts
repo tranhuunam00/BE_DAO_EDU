@@ -22,6 +22,9 @@ import { ClassRecommendationPolicy } from './domain/services/class-recommendatio
 import { StudentRiskPolicy } from './domain/services/student-risk.policy';
 import { TypeOrmOperationsQueryAdapter } from './infrastructure/persistence/typeorm-operations-query.adapter';
 
+import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
+
 @Module({
   imports: [
     IdentityModule,
@@ -37,6 +40,8 @@ import { TypeOrmOperationsQueryAdapter } from './infrastructure/persistence/type
       StudentMonthlyBillOrmEntity,
       CourseOrmEntity,
       CenterOrmEntity,
+      AssignmentOrmEntity,
+      AssignmentSubmissionOrmEntity,
     ]),
   ],
   controllers: [DashboardController],
