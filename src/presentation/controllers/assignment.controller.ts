@@ -179,6 +179,18 @@ export class AssignmentController {
     };
   }
 
+  @Get('class/:classId')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  async getClassAssignments(
+    @Request() req: any,
+    @Param('classId') classId: string,
+  ) {
+    if (req.user.role !== Role.ADMIN) {
+      await this.assertCanManageClass(req.user, classId);
+    }
+    return { assignments: await this.listAssignments([classId]) };
+  }
+
   @Post('class/:classId')
   @Roles(Role.ADMIN, Role.TEACHER)
   async create(
