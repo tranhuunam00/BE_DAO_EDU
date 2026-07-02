@@ -534,6 +534,7 @@ export class ClassController {
     const qb = this.sessionRepo.createQueryBuilder('s')
       .leftJoinAndSelect('s.teacher', 'teacher')
       .leftJoinAndSelect('s.room', 'room')
+      .leftJoinAndSelect('s.assistant', 'assistant')
       .where('s.class_id = :classId', { classId });
 
     if (month && year) {
@@ -710,7 +711,7 @@ export class ClassController {
   }
 
   @Put('sessions/:sessionId')
-  @ApiOperation({ summary: 'Cập nhật một buổi học cụ thể (đổi lịch, đổi phòng, đổi giáo viên)' })
+  @ApiOperation({ summary: 'Cập nhật một buổi học cụ thể (đổi lịch, đổi phòng, đổi giáo viên, trợ giảng)' })
   async updateSession(
     @Param('sessionId') sessionId: string,
     @Body() body: {
@@ -719,9 +720,11 @@ export class ClassController {
       endTime?: string;
       roomId?: string;
       teacherId?: string;
+      assistantId?: string | null;
       status?: string;
       scope?: 'single' | 'all-future';
-    }
+    },
+    @Request() req?: any,
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
 
@@ -729,6 +732,25 @@ export class ClassController {
       throw new ConflictException(
         'Completed or attendance-locked sessions cannot be changed.',
       );
+    }
+
+    // Validate permission: only admin or the main teacher of the class is allowed to update class session.
+    const userRole = req?.user?.role?.toUpperCase() || 'ADMIN';
+    if (userRole !== 'ADMIN' && req?.user) {
+      const teacher = await this.teacherRepo.findOne({
+        where: { userId: req.user.sub },
+      });
+      if (!teacher) {
+        throw new ForbiddenException('Không tìm thấy hồ sơ giáo viên để xác thực.');
+      }
+      
+      const classEntity = await this.classRepo.findOne({
+        where: { id: session.classId },
+      });
+      
+      if (!classEntity || classEntity.mainTeacherId !== teacher.id) {
+        throw new ForbiddenException('Chỉ admin hoặc giáo viên chính của lớp mới được phép thay đổi lịch học/phân công.');
+      }
     }
 
     // "không được đổi quá khứ"
@@ -759,6 +781,13 @@ export class ClassController {
     }
 
     if (scope === 'single') {
+      const checkTeacher = body.teacherId !== undefined ? body.teacherId || null : session.teacherId;
+      const checkAssistant = body.assistantId !== undefined ? body.assistantId || null : session.assistantId;
+      
+      if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+        throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
+      }
+
       await this.runAcademic(() =>
         this.checkSessionScheduleConflict.execute(
           {
@@ -769,19 +798,33 @@ export class ClassController {
               body.roomId !== undefined
                 ? body.roomId || null
                 : session.roomId,
-            teacherId:
-              body.teacherId !== undefined
-                ? body.teacherId || null
-                : session.teacherId,
+            teacherId: checkTeacher,
           },
           session.id,
         ),
       );
+
+      if (body.assistantId) {
+        await this.runAcademic(() =>
+          this.checkSessionScheduleConflict.execute(
+            {
+              date: body.date ?? session.date,
+              startTime: nextStartTime,
+              endTime: nextEndTime,
+              roomId: null,
+              teacherId: body.assistantId,
+            },
+            session.id,
+          ),
+        );
+      }
+
       if (body.date !== undefined) session.date = body.date;
       if (body.startTime !== undefined) session.startTime = body.startTime;
       if (body.endTime !== undefined) session.endTime = body.endTime;
       if (body.roomId !== undefined) session.roomId = body.roomId || null;
       if (body.teacherId !== undefined) session.teacherId = body.teacherId || null;
+      if (body.assistantId !== undefined) session.assistantId = body.assistantId || null;
       if (body.status !== undefined) session.status = body.status;
       await this.sessionRepo.save(session);
     } else {
@@ -793,6 +836,13 @@ export class ClassController {
         .getMany();
 
       for (const fs of futureSessions) {
+        const checkTeacher = body.teacherId !== undefined ? body.teacherId || null : fs.teacherId;
+        const checkAssistant = body.assistantId !== undefined ? body.assistantId || null : fs.assistantId;
+        
+        if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+          throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
+        }
+
         await this.runAcademic(() =>
           this.checkSessionScheduleConflict.execute(
             {
@@ -801,18 +851,32 @@ export class ClassController {
               endTime: body.endTime ?? fs.endTime,
               roomId:
                 body.roomId !== undefined ? body.roomId || null : fs.roomId,
-              teacherId:
-                body.teacherId !== undefined
-                  ? body.teacherId || null
-                  : fs.teacherId,
+              teacherId: checkTeacher,
             },
             fs.id,
           ),
         );
+
+        if (body.assistantId) {
+          await this.runAcademic(() =>
+            this.checkSessionScheduleConflict.execute(
+              {
+                date: fs.date,
+                startTime: body.startTime ?? fs.startTime,
+                endTime: body.endTime ?? fs.endTime,
+                roomId: null,
+                teacherId: body.assistantId,
+              },
+              fs.id,
+            ),
+          );
+        }
+
         if (body.startTime !== undefined) fs.startTime = body.startTime;
         if (body.endTime !== undefined) fs.endTime = body.endTime;
         if (body.roomId !== undefined) fs.roomId = body.roomId || null;
         if (body.teacherId !== undefined) fs.teacherId = body.teacherId || null;
+        if (body.assistantId !== undefined) fs.assistantId = body.assistantId || null;
         if (body.status !== undefined) fs.status = body.status;
         await this.sessionRepo.save(fs);
       }
@@ -961,7 +1025,7 @@ export class ClassController {
     session: ClassSessionOrmEntity,
     req: any,
   ) {
-    const userRole = req.user.role?.toUpperCase();
+    const userRole = req?.user?.role?.toUpperCase() || 'ADMIN';
     if (userRole === 'ADMIN') {
       return; // Admin always allowed
     }
@@ -971,7 +1035,7 @@ export class ClassController {
     }
 
     const teacher = await this.teacherRepo.findOne({
-      where: { userId: req.user.sub },
+      where: { userId: req?.user?.sub },
     });
 
     if (!teacher) {
@@ -980,8 +1044,9 @@ export class ClassController {
 
     const isSessionTeacher = session.teacherId === teacher.id;
     const isMainTeacher = session.classEntity?.mainTeacherId === teacher.id;
+    const isSessionAssistant = session.assistantId === teacher.id;
 
-    if (!isSessionTeacher && !isMainTeacher) {
+    if (!isSessionTeacher && !isMainTeacher && !isSessionAssistant) {
       throw new ForbiddenException(
         'Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.',
       );

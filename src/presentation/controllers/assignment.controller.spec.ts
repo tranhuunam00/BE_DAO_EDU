@@ -242,4 +242,57 @@ describe('AssignmentController edge cases', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  describe('Teaching Assistant (TA) assignment management permissions', () => {
+    it('allows a teacher who is an assistant in the class to grade submissions', async () => {
+      const { controller, repos } = createController();
+      repos.submissionRepo.findOne.mockResolvedValue({
+        id: 'submission-1',
+        assignment: publishedAssignment,
+        student: { userId: 'student-user' },
+      });
+      repos.classRepo.findOne.mockResolvedValue({
+        id: 'class-1',
+        mainTeacherId: 'other-teacher',
+      });
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-1' });
+      repos.sessionRepo.count.mockResolvedValue(1); // Mock count > 0 (meaning teacher is assistant on at least one session)
+
+      const result = await controller.grade(
+        { user: { sub: 'teacher-user', role: Role.TEACHER } },
+        'submission-1',
+        { score: 8, feedback: 'Good job' },
+      );
+
+      expect(result.score).toBe(8);
+      expect(result.feedback).toBe('Good job');
+    });
+
+    it('lists assignments for classes where the teacher is an assistant', async () => {
+      const { controller, repos } = createController();
+      
+      const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([{ classId: 'class-assisted' }]),
+      };
+      repos.sessionRepo.createQueryBuilder = jest.fn(() => mockQueryBuilder);
+      
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-1' });
+      repos.classRepo.find.mockResolvedValue([]); // not main teacher of any class
+      
+      // Mock listAssignments inside controller:
+      const mockAssignmentList = [
+        { id: 'assignment-ta-1', classId: 'class-assisted', title: 'TA homework' }
+      ];
+      controller.listAssignments = jest.fn().mockResolvedValue(mockAssignmentList);
+
+      const response = await controller.teacherAssignments({
+        user: { sub: 'teacher-user', role: Role.TEACHER }
+      });
+
+      expect(response.assignments).toEqual(mockAssignmentList);
+      expect(repos.sessionRepo.createQueryBuilder).toHaveBeenCalled();
+    });
+  });
 });

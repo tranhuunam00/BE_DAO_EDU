@@ -623,4 +623,108 @@ describe('ClassController.overrideAttendance', () => {
       expect.objectContaining({ studentId: 'student-new', isPresent: true }),
     );
   });
+
+  describe('Teaching Assistant (TA) authorization and conflict checks', () => {
+    it('blocks updateSession if user is a teacher but not the main teacher of the class', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-other' });
+      repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', mainTeacherId: 'teacher-main' });
+
+      const req = { user: { role: 'TEACHER', sub: 'user-other' } };
+      await expect(
+        controller.updateSession('session-1', { startTime: '10:00', endTime: '11:30' }, req),
+      ).rejects.toThrow('Chỉ admin hoặc giáo viên chính của lớp mới được phép thay đổi lịch học/phân công.');
+    });
+
+    it('allows updateSession if user is the main teacher of the class', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classRepo.findOne.mockResolvedValue({ id: 'class-1', mainTeacherId: 'teacher-main' });
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const response = await controller.updateSession('session-1', { startTime: '10:00', endTime: '11:30' }, req);
+      expect(response).toEqual({ message: 'Cập nhật buổi học thành công' });
+    });
+
+    it('rejects updateSession if teacher and assistant are the same person', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-same',
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+
+      await expect(
+        controller.updateSession('session-1', { assistantId: 'teacher-same' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('allows validateAttendancePermission for session assistant', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        assistantId: 'teacher-ta',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-ta' });
+
+      const req = { user: { role: 'TEACHER', sub: 'user-ta' } };
+      repos.classStudentRepo.find.mockResolvedValue([]);
+      repos.attendanceRepo.find.mockResolvedValue([]);
+      const response = await controller.saveAttendance(req, 'session-1', { attendance: [] });
+      expect(response).toEqual({ message: expect.stringContaining('thành công') });
+    });
+
+    it('blocks validateAttendancePermission for unrelated teachers', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        assistantId: 'teacher-ta',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-unrelated' });
+
+      const req = { user: { role: 'TEACHER', sub: 'user-unrelated' } };
+      await expect(
+        controller.saveAttendance(req, 'session-1', { attendance: [] }),
+      ).rejects.toThrow('Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.');
+    });
+  });
 });

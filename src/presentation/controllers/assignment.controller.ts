@@ -618,7 +618,10 @@ export class AssignmentController {
     const teacher = await this.getTeacherByUser(user.sub);
     if (classEntity.mainTeacherId === teacher.id) return teacher;
     const sessionCount = await this.sessionRepo.count({
-      where: { classId, teacherId: teacher.id },
+      where: [
+        { classId, teacherId: teacher.id },
+        { classId, assistantId: teacher.id },
+      ],
     });
     if (!sessionCount)
       throw new ForbiddenException('Bạn không phụ trách lớp học này');
@@ -630,7 +633,7 @@ export class AssignmentController {
     const sessionRows = await this.sessionRepo
       .createQueryBuilder('session')
       .select('DISTINCT session.classId', 'classId')
-      .where('session.teacherId = :teacherId', { teacherId: teacher.id })
+      .where('session.teacherId = :teacherId OR session.assistantId = :teacherId', { teacherId: teacher.id })
       .getRawMany<{ classId: string }>();
     const mainClasses = await this.classRepo.find({
       where: { mainTeacherId: teacher.id },

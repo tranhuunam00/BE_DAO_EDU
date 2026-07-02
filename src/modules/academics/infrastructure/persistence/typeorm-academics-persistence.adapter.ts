@@ -52,21 +52,47 @@ export class TypeOrmAcademicsPersistenceAdapter
     const qb = this.dataSource
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
-      .select([
-        'session.id AS id',
-        'session.date AS date',
-        'session.start_time AS "startTime"',
-        'session.end_time AS "endTime"',
-        'session.room_id AS "roomId"',
-        'session.teacher_id AS "teacherId"',
-      ])
       .where('session.date = :date', { date })
       .andWhere("session.status NOT IN ('Cancelled', 'Canceled')");
 
     if (excludeSessionId) {
       qb.andWhere('session.id != :excludeSessionId', { excludeSessionId });
     }
-    return qb.getRawMany<ScheduleAllocation>();
+    
+    const sessions = await qb.getMany();
+    const allocations: ScheduleAllocation[] = [];
+    
+    for (const s of sessions) {
+      if (s.roomId) {
+        allocations.push({
+          id: s.id,
+          date: s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          roomId: s.roomId,
+        });
+      }
+      if (s.teacherId) {
+        allocations.push({
+          id: s.id,
+          date: s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          teacherId: s.teacherId,
+        });
+      }
+      if (s.assistantId) {
+        allocations.push({
+          id: s.id,
+          date: s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          teacherId: s.assistantId,
+        });
+      }
+    }
+    
+    return allocations;
   }
 
   enrollStudent(

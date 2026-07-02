@@ -4,6 +4,7 @@ export interface PricingRule {
   courseLevelId: string;
   pricePerSession: number;
   teacherWagePerSession: number;
+  taWagePerSession: number;
   effectiveFrom: string;
   effectiveTo: string | null;
 }
@@ -22,6 +23,7 @@ export interface BillingSource {
   levelName: string;
   courseLevelId: string;
   date: string;
+  roleInSession?: 'teacher' | 'assistant';
 }
 
 export interface BillingLine {
@@ -33,6 +35,7 @@ export interface BillingLine {
   sessionsCount: number;
   rate: number;
   totalAmount: number;
+  roleInSession?: 'teacher' | 'assistant';
 }
 
 export interface BillingOrderDraft {
@@ -61,7 +64,12 @@ export class BillingCalculator {
           rule.effectiveFrom <= source.date &&
           (rule.effectiveTo === null || rule.effectiveTo >= source.date),
       );
-      const rate = Money.vnd(pricing ? pricing[amountField] : 0).value;
+      
+      let rateField = amountField;
+      if (amountField === 'teacherWagePerSession' && source.roleInSession === 'assistant') {
+        rateField = 'taWagePerSession' as any;
+      }
+      const rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
 
       const order = orders.get(source.ownerId) ?? {
         ownerId: source.ownerId,
@@ -88,6 +96,7 @@ export class BillingCalculator {
         sessionsCount: 1,
         rate,
         totalAmount: rate,
+        roleInSession: source.roleInSession,
       });
       order.totalSessions += 1;
       order.totalAmount = Money.vnd(order.totalAmount).plus(

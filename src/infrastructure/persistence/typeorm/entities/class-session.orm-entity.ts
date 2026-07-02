@@ -18,8 +18,14 @@ export class ClassSessionOrmEntity {
   @Column({ type: 'uuid', name: 'teacher_id', nullable: true })
   teacherId!: string | null;
 
+  @Column({ type: 'uuid', name: 'assistant_id', nullable: true })
+  assistantId!: string | null;
+
   @Column({ type: 'uuid', name: 'wage_id', nullable: true })
   wageId!: string | null;
+
+  @Column({ type: 'uuid', name: 'assistant_wage_id', nullable: true })
+  assistantWageId!: string | null;
 
   @Column({ type: 'date' })
   date!: string;
@@ -54,7 +60,15 @@ export class ClassSessionOrmEntity {
   @JoinColumn({ name: 'teacher_id' })
   teacher!: TeacherOrmEntity;
 
+  @ManyToOne(() => TeacherOrmEntity, { nullable: true })
+  @JoinColumn({ name: 'assistant_id' })
+  assistant!: TeacherOrmEntity | null;
+
   @ManyToOne(() => TeacherMonthlyWageOrmEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'wage_id' })
   wage!: TeacherMonthlyWageOrmEntity | null;
+
+  @ManyToOne(() => TeacherMonthlyWageOrmEntity, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'assistant_wage_id' })
+  assistantWage!: TeacherMonthlyWageOrmEntity | null;
 }

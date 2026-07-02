@@ -305,4 +305,55 @@ describe('DashboardController views', () => {
       expect(result.stats.recentComments.some(c => c.comment.includes('Ốm'))).toBe(true);
     });
   });
+
+  describe('Teacher Assistant dashboard view support', () => {
+    it('getTeacherData retrieves both teacher and assistant sessions', async () => {
+      const teacherRepo = { findOne: jest.fn().mockResolvedValue({ id: 'teacher-ta' }) };
+      const sessionRepo = {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 'session-main',
+            date: '2026-07-01',
+            startTime: '08:00',
+            teacherId: 'teacher-ta',
+            classEntity: { className: 'Math' },
+          },
+          {
+            id: 'session-assist',
+            date: '2026-07-02',
+            startTime: '10:00',
+            assistantId: 'teacher-ta',
+            classEntity: { className: 'Science' },
+          },
+        ]),
+      };
+      const classRepo = { find: jest.fn().mockResolvedValue([]) };
+      const teacherWageRepo = { find: jest.fn().mockResolvedValue([]) };
+      const assignmentRepo = { find: jest.fn().mockResolvedValue([]) };
+      const submissionRepo = { find: jest.fn().mockResolvedValue([]) };
+
+      const { controller } = createController({
+        teacherRepo,
+        sessionRepo,
+        classRepo,
+        teacherWageRepo,
+        assignmentRepo,
+        submissionRepo,
+      });
+
+      const result = await controller.getTeacherData({ user: { sub: 'user-ta' } });
+
+      expect(sessionRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: [
+            { teacherId: 'teacher-ta' },
+            { assistantId: 'teacher-ta' },
+          ],
+        }),
+      );
+      expect(result.sessions).toHaveLength(2);
+      expect(result.sessions[0].className).toBe('Math');
+      expect(result.sessions[1].className).toBe('Science');
+    });
+  });
 });

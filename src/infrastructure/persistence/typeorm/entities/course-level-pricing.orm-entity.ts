@@ -15,6 +15,9 @@ export class CourseLevelPricingOrmEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'teacher_wage_per_session', default: 0 })
   teacherWagePerSession!: number;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'ta_wage_per_session', default: 0 })
+  taWagePerSession!: number;
+
   @Column({ type: 'date', name: 'effective_from' })
   effectiveFrom!: string;
 

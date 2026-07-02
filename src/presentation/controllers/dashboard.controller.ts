@@ -108,9 +108,12 @@ export class DashboardController {
       };
     }
 
-    // Find all class sessions for this teacher
+    // Find all class sessions for this teacher (either as main teacher or assistant)
     const sessions = await this.sessionRepo.find({
-      where: { teacherId: teacher.id },
+      where: [
+        { teacherId: teacher.id },
+        { assistantId: teacher.id },
+      ],
       relations: { classEntity: true, room: true },
       order: { date: 'ASC', startTime: 'ASC' },
     });
@@ -237,7 +240,7 @@ export class DashboardController {
     const sessionClasses = await this.sessionRepo
       .createQueryBuilder('session')
       .select('DISTINCT session.classId', 'classId')
-      .where('session.teacherId = :teacherId', { teacherId: teacher.id })
+      .where('session.teacherId = :teacherId OR session.assistantId = :teacherId', { teacherId: teacher.id })
       .getRawMany<{ classId: string }>();
 
     const classIds = new Set(sessionClasses.map((row) => row.classId));

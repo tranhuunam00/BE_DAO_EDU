@@ -29,6 +29,7 @@ const pricing: PricingRule[] = [
     courseLevelId: 'level-1',
     pricePerSession: 100000,
     teacherWagePerSession: 60000,
+    taWagePerSession: 30000,
     effectiveFrom: '2026-01-01',
     effectiveTo: '2026-06-30',
   },
@@ -36,6 +37,7 @@ const pricing: PricingRule[] = [
     courseLevelId: 'level-1',
     pricePerSession: 120000,
     teacherWagePerSession: 70000,
+    taWagePerSession: 35000,
     effectiveFrom: '2026-07-01',
     effectiveTo: null,
   },
@@ -107,6 +109,7 @@ describe('BillingCalculator', () => {
         courseLevelId: 'level-1',
         pricePerSession: 100000,
         teacherWagePerSession: 60000,
+        taWagePerSession: 30000,
         effectiveFrom: '2026-01-01',
         effectiveTo: '2026-06-15',
       },
@@ -114,6 +117,7 @@ describe('BillingCalculator', () => {
         courseLevelId: 'level-1',
         pricePerSession: 150000,
         teacherWagePerSession: 90000,
+        taWagePerSession: 45000,
         effectiveFrom: '2026-06-16',
         effectiveTo: null,
       },
@@ -141,5 +145,28 @@ describe('BillingCalculator', () => {
     expect(lines.find(l => l.sourceId === 'att-2')?.rate).toBe(100000);
     expect(lines.find(l => l.sourceId === 'att-3')?.rate).toBe(150000);
     expect(lines.find(l => l.sourceId === 'att-4')?.rate).toBe(150000);
+  });
+
+  it('uses TA wage when source role is assistant', () => {
+    const pricingWithTA: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 120000,
+        teacherWagePerSession: 70000,
+        taWagePerSession: 35000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    ];
+    const assistantSource = {
+      ...source('session-1', 'teacher-1', '2026-07-10'),
+      roleInSession: 'assistant' as const,
+    };
+    const [result] = BillingCalculator.calculate(
+      [assistantSource],
+      pricingWithTA,
+      'teacherWagePerSession',
+    );
+    expect(result.totalAmount).toBe(35000);
   });
 });

@@ -152,6 +152,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       courseLevelId: pricing.courseLevelId,
       pricePerSession: Number(pricing.pricePerSession),
       teacherWagePerSession: Number(pricing.teacherWagePerSession),
+      taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
     }));
@@ -413,18 +414,32 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
           totalAmount: line.totalAmount,
         })),
       );
-      await this.manager
-        .getRepository(ClassSessionOrmEntity)
-        .update(
-          {
-            id: In(
-              order.lines
-                .filter((line) => line.sessionsCount > 0)
-                .map((line) => line.sourceId),
-            ),
-          },
-          { wageId: wage.id },
-        );
+      
+      const teacherSessionIds = order.lines
+        .filter((line) => line.sessionsCount > 0 && line.roleInSession !== 'assistant')
+        .map((line) => line.sourceId);
+
+      const assistantSessionIds = order.lines
+        .filter((line) => line.sessionsCount > 0 && line.roleInSession === 'assistant')
+        .map((line) => line.sourceId);
+
+      if (teacherSessionIds.length > 0) {
+        await this.manager
+          .getRepository(ClassSessionOrmEntity)
+          .update(
+            { id: In(teacherSessionIds) },
+            { wageId: wage.id },
+          );
+      }
+
+      if (assistantSessionIds.length > 0) {
+        await this.manager
+          .getRepository(ClassSessionOrmEntity)
+          .update(
+            { id: In(assistantSessionIds) },
+            { assistantWageId: wage.id },
+          );
+      }
     }
     return ids;
   }
@@ -579,6 +594,9 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       await this.manager
         .getRepository(ClassSessionOrmEntity)
         .update({ wageId: id }, { wageId: null });
+      await this.manager
+        .getRepository(ClassSessionOrmEntity)
+        .update({ assistantWageId: id }, { assistantWageId: null });
       await this.manager.getRepository(TeacherMonthlyWageOrmEntity).delete(id);
     }
   }
@@ -592,6 +610,7 @@ async function loadPricings(
     courseLevelId: row.courseLevelId,
     pricePerSession: Number(row.pricePerSession),
     teacherWagePerSession: Number(row.teacherWagePerSession),
+    taWagePerSession: Number(row.taWagePerSession),
     effectiveFrom: row.effectiveFrom,
     effectiveTo: row.effectiveTo,
   }));
@@ -649,7 +668,8 @@ async function findSalarySources(
   endDate: string,
   ownerIds?: string[],
 ): Promise<BillingSource[]> {
-  const query = repository
+  // Query 1: Main teacher sessions
+  const q1 = repository
     .createQueryBuilder('session')
     .innerJoinAndSelect('session.classEntity', 'classEntity')
     .leftJoinAndSelect('classEntity.course', 'course')
@@ -666,10 +686,10 @@ async function findSalarySources(
       },
     );
   if (ownerIds?.length) {
-    query.andWhere('session.teacherId IN (:...ownerIds)', { ownerIds });
+    q1.andWhere('session.teacherId IN (:...ownerIds)', { ownerIds });
   }
-  const rows = await query.getMany();
-  return rows.map((row) => ({
+  const rows1 = await q1.getMany();
+  const sources1: BillingSource[] = rows1.map((row) => ({
     id: row.id,
     ownerId: row.teacherId!,
     ownerCode: row.teacher?.teacherId || '',
@@ -683,7 +703,48 @@ async function findSalarySources(
     levelName: row.classEntity?.courseLevel?.levelName || '',
     courseLevelId: row.classEntity?.courseLevelId,
     date: row.date,
+    roleInSession: 'teacher',
   }));
+
+  // Query 2: Assistant (TA) sessions
+  const q2 = repository
+    .createQueryBuilder('session')
+    .innerJoinAndSelect('session.classEntity', 'classEntity')
+    .leftJoinAndSelect('classEntity.course', 'course')
+    .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
+    .innerJoinAndSelect('session.assistant', 'assistant')
+    .where('session.assistantWageId IS NULL')
+    .andWhere('session.assistantId IS NOT NULL')
+    .andWhere('session.date <= :endDate', { endDate })
+    .andWhere(
+      '(session.status = :completed OR session.attendance_locked = :locked)',
+      {
+        completed: 'Completed',
+        locked: true,
+      },
+    );
+  if (ownerIds?.length) {
+    q2.andWhere('session.assistantId IN (:...ownerIds)', { ownerIds });
+  }
+  const rows2 = await q2.getMany();
+  const sources2: BillingSource[] = rows2.map((row) => ({
+    id: row.id,
+    ownerId: row.assistantId!,
+    ownerCode: row.assistant?.teacherId || '',
+    ownerName:
+      `${row.assistant?.lastName || ''} ${row.assistant?.firstName || ''}`.trim(),
+    ownerMobile: row.assistant?.mobile || '',
+    ownerStatus: row.assistant?.status || '',
+    classId: row.classId,
+    className: row.classEntity?.className || '',
+    courseName: row.classEntity?.course?.name || '',
+    levelName: row.classEntity?.courseLevel?.levelName || '',
+    courseLevelId: row.classEntity?.courseLevelId,
+    date: row.date,
+    roleInSession: 'assistant',
+  }));
+
+  return [...sources1, ...sources2];
 }
 
 async function aggregateOrders<
