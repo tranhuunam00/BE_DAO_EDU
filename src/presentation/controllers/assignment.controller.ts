@@ -350,39 +350,50 @@ export class AssignmentController {
         order: { submittedAt: 'DESC' },
       }),
     ]);
-    const students = new Map(
-      enrollments.map((item) => [item.studentId, item.student]),
-    );
-    submissions.forEach((item) => students.set(item.studentId, item.student));
-    return {
-      submissions: await Promise.all(
-        Array.from(students.values()).map(async (student) => {
-          const submission = submissions.find(
-            (item) => item.studentId === student.id,
-          );
-          return {
-            id: submission?.id || `not-submitted-${student.id}`,
+    const resultList: any[] = [];
+    for (const enrollment of enrollments) {
+      const student = enrollment.student;
+      const studentSubmissions = submissions.filter(
+        (item) => item.studentId === student.id,
+      );
+
+      if (studentSubmissions.length > 0) {
+        for (const submission of studentSubmissions) {
+          resultList.push({
+            id: submission.id,
             studentId: student.id,
             studentCode: student.studentId,
             studentName: `${student.lastName} ${student.firstName}`.trim(),
-            status: submission?.status || 'not_submitted',
-            answerText: submission?.answerText || null,
-            submittedAt: submission?.submittedAt || null,
+            status: submission.status,
+            answerText: submission.answerText,
+            submittedAt: submission.submittedAt,
             score:
-              submission?.score === null || submission?.score === undefined
+              submission.score === null || submission.score === undefined
                 ? null
                 : Number(submission.score),
-            feedback: submission?.feedback || null,
-            attachments: submission
-              ? await this.getSubmissionAttachments(submission.id)
-              : [],
-            enrollmentStatus:
-              enrollments.find((item) => item.studentId === student.id)
-                ?.status || 'Historical',
-          };
-        }),
-      ),
-    };
+            feedback: submission.feedback,
+            attachments: await this.getSubmissionAttachments(submission.id),
+            enrollmentStatus: enrollment.status,
+          });
+        }
+      } else {
+        resultList.push({
+          id: `not-submitted-${student.id}`,
+          studentId: student.id,
+          studentCode: student.studentId,
+          studentName: `${student.lastName} ${student.firstName}`.trim(),
+          status: 'not_submitted',
+          answerText: null,
+          submittedAt: null,
+          score: null,
+          feedback: null,
+          attachments: [],
+          enrollmentStatus: enrollment.status,
+        });
+      }
+    }
+
+    return { submissions: resultList };
   }
 
   @Post(':id/submit')
@@ -414,15 +425,11 @@ export class AssignmentController {
     if (!dto.answerText?.trim() && !files?.length)
       throw new BadRequestException('Bài nộp phải có nội dung hoặc file');
 
-    let submission = await this.submissionRepo.findOne({
-      where: { assignmentId: id, studentId: student.id },
-    });
     const now = new Date();
-    if (!submission)
-      submission = this.submissionRepo.create({
-        assignmentId: id,
-        studentId: student.id,
-      });
+    let submission = this.submissionRepo.create({
+      assignmentId: id,
+      studentId: student.id,
+    });
     submission.answerText = dto.answerText?.trim() || null;
     submission.submittedAt = now;
     submission.status =
@@ -434,15 +441,6 @@ export class AssignmentController {
     submission = await this.submissionRepo.save(submission);
 
     if (files?.length) {
-      const oldFiles = await this.submissionAttachmentRepo.find({
-        where: { submissionId: submission.id },
-      });
-      await this.submissionAttachmentRepo.remove(oldFiles);
-      await Promise.all(
-        oldFiles.map((file) =>
-          this.minioService.removeFile(file.objectKey).catch(() => undefined),
-        ),
-      );
       for (const file of files) {
         const objectKey = await this.minioService.uploadFile(
           file,
