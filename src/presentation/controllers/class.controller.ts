@@ -977,11 +977,12 @@ export class ClassController {
     session: ClassSessionOrmEntity,
     req: any,
   ) {
-    if (req.user.role === 'admin') {
+    const userRole = req.user.role?.toUpperCase();
+    if (userRole === 'ADMIN') {
       return; // Admin always allowed
     }
 
-    if (req.user.role !== 'teacher') {
+    if (userRole !== 'TEACHER') {
       throw new ForbiddenException('Chỉ giáo viên và admin mới được điểm danh.');
     }
 
