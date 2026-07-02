@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -473,13 +474,26 @@ export class ClassController {
 
   @Post(':id/students')
   @ApiOperation({ summary: 'Thêm Học sinh vào Lớp' })
-  async addStudent(@Param('id') classId: string, @Body() body: { studentId: string }) {
-    const saved = await this.runAcademic(() =>
-      this.enrollStudentUseCase.execute(classId, body.studentId),
-    );
-    await this.notifyStudentAboutOpenAssignments(classId, body.studentId);
+  async addStudent(
+    @Param('id') classId: string,
+    @Body() body: { studentId?: string; studentIds?: string[] },
+  ) {
+    const studentIds =
+      body.studentIds || (body.studentId ? [body.studentId] : []);
+    if (studentIds.length === 0) {
+      throw new BadRequestException('studentId or studentIds must be provided');
+    }
 
-    return saved;
+    const results = [];
+    for (const studentId of studentIds) {
+      const saved = await this.runAcademic(() =>
+        this.enrollStudentUseCase.execute(classId, studentId),
+      );
+      await this.notifyStudentAboutOpenAssignments(classId, studentId);
+      results.push(saved);
+    }
+
+    return results;
   }
 
   @Delete(':id/students/:studentId')
