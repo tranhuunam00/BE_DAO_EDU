@@ -599,23 +599,7 @@ export class ClassController {
       throw new BadRequestException('Buổi học này đã hoàn thành và khóa điểm danh.');
     }
 
-    // Check time window: 10 mins before startTime until endTime
-    if (bypassTimeCheck !== 'true') {
-      const now = new Date();
-      
-      const sessionDate = session.date;
-      const startParts = session.startTime.split(':');
-      const endParts = session.endTime.split(':');
 
-      const sessionStart = new Date(`${sessionDate}T${startParts[0]}:${startParts[1]}:00`);
-      const sessionEnd = new Date(`${sessionDate}T${endParts[0]}:${endParts[1]}:00`);
-
-      const tenMinsBeforeStart = new Date(sessionStart.getTime() - 10 * 60 * 1000);
-
-      if (now < tenMinsBeforeStart || now > sessionEnd) {
-        throw new BadRequestException('Chỉ được điểm danh từ trước buổi học 10 phút đến khi kết thúc buổi học.');
-      }
-    }
 
     session.status = 'In-Progress';
     await this.sessionRepo.save(session);
