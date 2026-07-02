@@ -65,6 +65,9 @@ export class SubmitAssignmentDto {
   @MaxLength(20000)
   @IsOptional()
   answerText?: string;
+
+  @IsOptional()
+  files?: any;
 }
 
 export class GradeSubmissionDto {

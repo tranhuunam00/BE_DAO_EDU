@@ -114,6 +114,13 @@ export class DashboardController {
       const sessionDateTime = new Date(`${s.date}T${s.startTime}`);
       const isPast = sessionDateTime < new Date();
 
+      let attendanceColor = 'blue';
+      if (s.status === 'Completed' || s.attendanceLocked) {
+        attendanceColor = 'green';
+      } else if (isPast) {
+        attendanceColor = 'red';
+      }
+
       return {
         id: s.id,
         date: s.date,
@@ -124,7 +131,8 @@ export class DashboardController {
         roomName: s.room?.name || 'Chưa xếp phòng',
         status: s.status,
         attendanceLocked: s.attendanceLocked,
-        isPast: isPast
+        isPast: isPast,
+        attendanceColor: attendanceColor
       };
     });
 
