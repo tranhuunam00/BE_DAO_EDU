@@ -66,6 +66,21 @@ export interface BillingTransactionContext {
   deleteOrder(type: BillingOrderType, id: string): Promise<void>;
 }
 
+export interface StudentTuitionReportSession {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  classId: string;
+  className: string;
+  classCode: string;
+  courseLevelId: string;
+  courseName: string;
+  levelName: string;
+  isPresent: boolean;
+  reason: string | null;
+}
+
 export abstract class BillingPersistencePort {
   abstract transaction<T>(
     work: (context: BillingTransactionContext) => Promise<T>,
@@ -81,4 +96,12 @@ export abstract class BillingPersistencePort {
   ): Promise<BillingSource[]>;
   abstract listPeriods(): Promise<PeriodSummary[]>;
   abstract findPeriodDetails(id: string): Promise<PaymentPeriodDetails | null>;
+  abstract getStudentTuitionReportData(
+    studentId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{
+    sessions: StudentTuitionReportSession[];
+    pricingList: PricingRule[];
+  }>;
 }

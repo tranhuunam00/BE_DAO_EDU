@@ -30,6 +30,7 @@ import { AddStudentUseCase } from '../../application/use-cases/add-student.use-c
 import { GetStudentsUseCase } from '../../application/use-cases/get-students.use-case';
 import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
+import { GetStudentTuitionReportUseCase } from '../../modules/billing/application/use-cases/get-student-tuition-report.use-case';
 import {
   CreateStudentDto,
   UpdateStudentDto,
@@ -51,6 +52,7 @@ export class StudentController {
     private readonly getStudentsUseCase: GetStudentsUseCase,
     private readonly getStudentByIdUseCase: GetStudentByIdUseCase,
     private readonly updateStudentUseCase: UpdateStudentUseCase,
+    private readonly getStudentTuitionReportUseCase: GetStudentTuitionReportUseCase,
     @InjectRepository(ClassStudentOrmEntity)
     private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
     @InjectRepository(ClassSessionOrmEntity)
@@ -819,109 +821,10 @@ export class StudentController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    const enrollments = await this.classStudentRepo.find({
-      where: { studentId },
-      relations: {
-        classEntity: {
-          course: true,
-          courseLevel: true,
-        },
-      },
-    });
-
-    if (enrollments.length === 0) {
-      return { sessions: [], totalSessions: 0, totalAmount: 0 };
-    }
-
-    const classIds = enrollments.map((e) => e.classId);
-
-    const sessions = await this.sessionRepo
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.classEntity', 'classEntity')
-      .leftJoinAndSelect('classEntity.course', 'course')
-      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .leftJoinAndMapOne(
-        'session.attendance',
-        StudentAttendanceOrmEntity,
-        'attendance',
-        'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
-        { studentId },
-      )
-      .where('session.class_id IN (:...classIds)', { classIds })
-      .andWhere('session.date >= :startDate', { startDate })
-      .andWhere('session.date <= :endDate', { endDate })
-      .andWhere(
-        '(session.status = :completedStatus OR session.attendance_locked = :locked)',
-        { completedStatus: 'Completed', locked: true },
-      )
-      .orderBy('session.date', 'ASC')
-      .addOrderBy('session.start_time', 'ASC')
-      .getMany();
-
-    const levelIds = Array.from(
-      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+    return this.getStudentTuitionReportUseCase.execute(
+      studentId,
+      startDate,
+      endDate,
     );
-    let pricingList: CourseLevelPricingOrmEntity[] = [];
-    if (levelIds.length > 0) {
-      pricingList = await this.sessionRepo.manager.find(
-        CourseLevelPricingOrmEntity,
-        {
-          where: { courseLevelId: In(levelIds) },
-          relations: { courseLevel: true },
-        },
-      );
-    }
-
-    const reportSessions = sessions.map((session) => {
-      const date = session.date;
-      const levelId = session.classEntity.courseLevelId;
-
-      const pricing = pricingList.find((p) => {
-        return (
-          p.courseLevelId === levelId &&
-          p.effectiveFrom <= date &&
-          (p.effectiveTo === null || p.effectiveTo >= date)
-        );
-      });
-
-      const rate = pricing ? Number(pricing.pricePerSession) : 0;
-      const attendance = (session as any).attendance;
-      const isPresent = attendance ? attendance.isPresent : false;
-      const amount = isPresent ? rate : 0;
-
-      return {
-        id: session.id,
-        date: session.date,
-        startTime: session.startTime,
-        endTime: session.endTime,
-        classId: session.classId,
-        className: session.classEntity.className,
-        classCode: session.classEntity.classCode,
-        courseName: session.classEntity.course?.name || '',
-        levelName: session.classEntity.courseLevel?.levelName || '',
-        isPresent,
-        rate,
-        amount,
-        pricingEffectiveFrom: pricing ? pricing.effectiveFrom : null,
-        pricingEffectiveTo: pricing ? pricing.effectiveTo : null,
-      };
-    });
-
-    const totalAmount = reportSessions.reduce((sum, s) => sum + s.amount, 0);
-    const totalSessions = reportSessions.filter((s) => s.isPresent).length;
-
-    return {
-      sessions: reportSessions,
-      totalSessions,
-      totalAmount,
-      pricingHistory: pricingList.map((p) => ({
-        id: p.id,
-        levelName: p.courseLevel?.levelName || '',
-        pricePerSession: Number(p.pricePerSession),
-        teacherWagePerSession: Number(p.teacherWagePerSession),
-        effectiveFrom: p.effectiveFrom,
-        effectiveTo: p.effectiveTo,
-      })),
-    };
   }
 }

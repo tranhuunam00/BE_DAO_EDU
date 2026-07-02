@@ -16,11 +16,13 @@ import { TypeOrmStudentRepository } from '../../infrastructure/persistence/typeo
 import { StorageModule } from '../../infrastructure/storage/storage.module';
 import { StudentController } from '../../presentation/controllers/student.controller';
 import { IdentityModule } from '../identity/identity.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
     IdentityModule,
     StorageModule,
+    BillingModule,
     TypeOrmModule.forFeature([
       StudentOrmEntity,
       ClassStudentOrmEntity,

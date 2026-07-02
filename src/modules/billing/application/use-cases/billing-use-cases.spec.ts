@@ -125,9 +125,9 @@ describe('Billing use cases', () => {
     expect(result.data.id).toBe('period-1');
   });
 
-  it('validates the period before opening a transaction', () => {
+  it('validates the period before opening a transaction', async () => {
     const { persistence } = makePersistence();
-    expect(() =>
+    await expect(
       new CreatePaymentPeriodUseCase(persistence).execute({
         name: '',
         type: 'tuition',
@@ -135,7 +135,7 @@ describe('Billing use cases', () => {
         startDate: '2026-06-01',
         endDate: '2026-06-30',
       }),
-    ).toThrow('Tên đợt thanh toán không được để trống');
+    ).rejects.toThrow('Tên đợt thanh toán không được để trống');
     expect(persistence.transaction).not.toHaveBeenCalled();
   });
 

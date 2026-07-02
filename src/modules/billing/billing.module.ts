@@ -25,6 +25,7 @@ import {
   PreviewSalaryUseCase,
   PreviewTuitionUseCase,
 } from './application/use-cases/preview-billing.use-case';
+import { GetStudentTuitionReportUseCase } from './application/use-cases/get-student-tuition-report.use-case';
 import { TypeOrmBillingPersistenceAdapter } from './infrastructure/persistence/typeorm-billing-persistence.adapter';
 import { PaymentsModule } from '../payments/payments.module';
 import { SendTuitionPaymentRequestUseCase } from '../payments/application/use-cases/send-tuition-payment-request.use-case';
@@ -38,6 +39,7 @@ const useCases = [
   DeletePaymentPeriodUseCase,
   UpdateBillingOrderUseCase,
   DeleteBillingOrderUseCase,
+  GetStudentTuitionReportUseCase,
 ];
 
 @Module({
@@ -77,5 +79,6 @@ const useCases = [
       inject: [BillingPersistencePort, SendTuitionPaymentRequestUseCase],
     },
   ],
+  exports: [GetStudentTuitionReportUseCase],
 })
 export class BillingModule {}

@@ -7,6 +7,7 @@ import {
   BillingAuditInput,
   PaymentPeriodDetails,
   PeriodSummary,
+  StudentTuitionReportSession,
 } from '../../application/ports/billing-persistence.port';
 import {
   BillingOrderProps,
@@ -31,6 +32,7 @@ import { TeacherMonthlyWageItemOrmEntity } from '../../../../infrastructure/pers
 import { TeacherMonthlyWageOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher-monthly-wage.orm-entity';
 import { TuitionPaymentRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 import { BillingAuditLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
+import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 
 @Injectable()
 export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
@@ -64,6 +66,100 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       endDate,
       ownerIds,
     );
+  }
+
+  async getStudentTuitionReportData(
+    studentId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{
+    sessions: StudentTuitionReportSession[];
+    pricingList: PricingRule[];
+  }> {
+    const classStudentRepo = this.dataSource.getRepository(ClassStudentOrmEntity);
+    const sessionRepo = this.dataSource.getRepository(ClassSessionOrmEntity);
+    const pricingRepo = this.dataSource.getRepository(CourseLevelPricingOrmEntity);
+
+    const enrollments = await classStudentRepo.find({
+      where: { studentId },
+      relations: {
+        classEntity: {
+          course: true,
+          courseLevel: true,
+        },
+      },
+    });
+
+    if (enrollments.length === 0) {
+      return { sessions: [], pricingList: [] };
+    }
+
+    const classIds = enrollments.map((e) => e.classId);
+
+    const sessions = await sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.classEntity', 'classEntity')
+      .leftJoinAndSelect('classEntity.course', 'course')
+      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
+      .leftJoinAndMapOne(
+        'session.attendance',
+        StudentAttendanceOrmEntity,
+        'attendance',
+        'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
+        { studentId },
+      )
+      .where('session.class_id IN (:...classIds)', { classIds })
+      .andWhere('session.date >= :startDate', { startDate })
+      .andWhere('session.date <= :endDate', { endDate })
+      .andWhere(
+        '(session.status = :completedStatus OR session.attendance_locked = :locked)',
+        { completedStatus: 'Completed', locked: true },
+      )
+      .orderBy('session.date', 'ASC')
+      .addOrderBy('session.start_time', 'ASC')
+      .getMany();
+
+    const levelIds = Array.from(
+      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+    );
+    let pricingList: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricingList = await pricingRepo.find({
+        where: { courseLevelId: In(levelIds) },
+        relations: { courseLevel: true },
+      });
+    }
+
+    const sessionsMapped: StudentTuitionReportSession[] = sessions.map((session) => {
+      const attendance = (session as any).attendance;
+      return {
+        id: session.id,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        classId: session.classId,
+        className: session.classEntity.className,
+        classCode: session.classEntity.classCode,
+        courseLevelId: session.classEntity.courseLevelId,
+        courseName: session.classEntity.course?.name || '',
+        levelName: session.classEntity.courseLevel?.levelName || '',
+        isPresent: attendance ? attendance.isPresent : false,
+        reason: attendance ? attendance.reason : null,
+      };
+    });
+
+    const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      courseLevelId: pricing.courseLevelId,
+      pricePerSession: Number(pricing.pricePerSession),
+      teacherWagePerSession: Number(pricing.teacherWagePerSession),
+      effectiveFrom: pricing.effectiveFrom,
+      effectiveTo: pricing.effectiveTo,
+    }));
+
+    return {
+      sessions: sessionsMapped,
+      pricingList: pricingListMapped,
+    };
   }
 
   async listPeriods(): Promise<PeriodSummary[]> {
