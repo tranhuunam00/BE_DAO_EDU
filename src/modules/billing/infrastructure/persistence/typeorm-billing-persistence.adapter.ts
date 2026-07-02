@@ -243,7 +243,8 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
     type: PaymentPeriodType,
     period: PaymentPeriodProps & { id: string },
     orders: BillingOrderDraft[],
-  ) {
+  ): Promise<string[]> {
+    const ids: string[] = [];
     if (type === 'tuition') {
       for (const order of orders) {
         const bill = await this.manager
@@ -258,6 +259,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
             billingStartDate: new Date(period.startDate),
             billingEndDate: new Date(period.endDate),
           });
+        ids.push(bill.id);
         await this.manager.getRepository(StudentMonthlyBillItemOrmEntity).save(
           order.lines.map((line) => ({
             billId: bill.id,
@@ -283,7 +285,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
             { billId: bill.id },
           );
       }
-      return;
+      return ids;
     }
 
     for (const order of orders) {
@@ -299,6 +301,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
           billingStartDate: new Date(period.startDate),
           billingEndDate: new Date(period.endDate),
         });
+      ids.push(wage.id);
       await this.manager.getRepository(TeacherMonthlyWageItemOrmEntity).save(
         order.lines.map((line) => ({
           wageId: wage.id,
@@ -324,6 +327,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
           { wageId: wage.id },
         );
     }
+    return ids;
   }
 
   async findPeriod(id: string): Promise<PaymentPeriodProps | null> {

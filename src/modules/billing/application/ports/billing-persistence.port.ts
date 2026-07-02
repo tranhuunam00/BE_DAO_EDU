@@ -51,7 +51,7 @@ export interface BillingTransactionContext {
     type: PaymentPeriodType,
     period: PaymentPeriodProps & { id: string },
     orders: BillingOrderDraft[],
-  ): Promise<void>;
+  ): Promise<string[]>;
   findPeriod(id: string): Promise<PaymentPeriodProps | null>;
   savePeriodStatus(id: string, status: 'Active' | 'Closed'): Promise<void>;
   hasPaidOrders(periodId: string, type: PaymentPeriodType): Promise<boolean>;

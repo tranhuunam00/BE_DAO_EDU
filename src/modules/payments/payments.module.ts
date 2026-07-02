@@ -113,5 +113,6 @@ import { VietQrTokenAdapter } from './infrastructure/services/vietqr-token.adapt
       inject: [PaymentPersistencePort],
     },
   ],
+  exports: [SendTuitionPaymentRequestUseCase],
 })
 export class PaymentsModule {}

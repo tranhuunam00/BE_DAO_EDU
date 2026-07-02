@@ -5,6 +5,7 @@ import {
 } from '../../domain/entities/payment-period';
 import { BillingCalculator } from '../../domain/services/billing-calculator';
 import { BillingError } from '../../domain/errors/billing.error';
+import { SendTuitionPaymentRequestUseCase } from '../../../payments/application/use-cases/send-tuition-payment-request.use-case';
 
 export interface BillingAdjustmentInput {
   ownerId: string;
@@ -25,11 +26,14 @@ export interface CreatePaymentPeriodInput {
 }
 
 export class CreatePaymentPeriodUseCase {
-  constructor(private readonly persistence: BillingPersistencePort) {}
+  constructor(
+    private readonly persistence: BillingPersistencePort,
+    private readonly sendTuitionPaymentRequest?: SendTuitionPaymentRequestUseCase,
+  ) {}
 
-  execute(input: CreatePaymentPeriodInput) {
+  async execute(input: CreatePaymentPeriodInput) {
     const period = PaymentPeriod.create(input);
-    return this.persistence.transaction(async (context) => {
+    const result = await this.persistence.transaction(async (context) => {
       const [pricings, sources] = await Promise.all([
         context.loadPricings(),
         period.type === 'tuition'
@@ -43,7 +47,7 @@ export class CreatePaymentPeriodUseCase {
       );
       const orders = applyAdjustments(calculatedOrders, input.adjustments);
       const savedPeriod = await context.savePeriod(period.toPrimitives());
-      await context.saveOrders(period.type, savedPeriod, orders);
+      const billIds = await context.saveOrders(period.type, savedPeriod, orders);
       await context.saveAudit({
         event: 'PERIOD_CREATED',
         periodId: savedPeriod.id,
@@ -55,11 +59,24 @@ export class CreatePaymentPeriodUseCase {
           adjustments: input.adjustments ?? [],
         },
       });
-      return {
-        message: 'Đã tạo đợt thanh toán thành công',
-        data: savedPeriod,
-      };
+      return { savedPeriod, billIds };
     });
+
+    // Auto-generate QR codes for each created tuition bill after transaction commits
+    if (period.type === 'tuition' && this.sendTuitionPaymentRequest && result.billIds?.length) {
+      for (const billId of result.billIds) {
+        try {
+          await this.sendTuitionPaymentRequest.executeGenerateOnly(billId);
+        } catch (err) {
+          console.error(`Auto QR generation failed for bill ${billId}:`, err);
+        }
+      }
+    }
+
+    return {
+      message: 'Đã tạo đợt thanh toán thành công',
+      data: result.savedPeriod,
+    };
   }
 }
 

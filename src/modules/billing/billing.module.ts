@@ -26,11 +26,12 @@ import {
   PreviewTuitionUseCase,
 } from './application/use-cases/preview-billing.use-case';
 import { TypeOrmBillingPersistenceAdapter } from './infrastructure/persistence/typeorm-billing-persistence.adapter';
+import { PaymentsModule } from '../payments/payments.module';
+import { SendTuitionPaymentRequestUseCase } from '../payments/application/use-cases/send-tuition-payment-request.use-case';
 
 const useCases = [
   PreviewTuitionUseCase,
   PreviewSalaryUseCase,
-  CreatePaymentPeriodUseCase,
   ListPaymentPeriodsUseCase,
   GetPaymentPeriodUseCase,
   UpdatePaymentPeriodStatusUseCase,
@@ -53,6 +54,7 @@ const useCases = [
       TuitionPaymentRequestOrmEntity,
       BillingAuditLogOrmEntity,
     ]),
+    PaymentsModule,
   ],
   controllers: [PaymentPeriodController],
   providers: [
@@ -66,6 +68,14 @@ const useCases = [
         new useCase(persistence),
       inject: [BillingPersistencePort],
     })),
+    {
+      provide: CreatePaymentPeriodUseCase,
+      useFactory: (
+        persistence: BillingPersistencePort,
+        sendTuitionPaymentRequest: SendTuitionPaymentRequestUseCase,
+      ) => new CreatePaymentPeriodUseCase(persistence, sendTuitionPaymentRequest),
+      inject: [BillingPersistencePort, SendTuitionPaymentRequestUseCase],
+    },
   ],
 })
 export class BillingModule {}
