@@ -301,6 +301,9 @@ export class StudentController {
         const items = await this.monthlyBillItemRepo.find({
           where: { billId: bill.id },
         });
+        if (bill.paymentRequest?.qrUrl) {
+          bill.paymentRequest.qrUrl = bill.paymentRequest.qrUrl.replace('/970418-', '/BIDV-');
+        }
         return { ...bill, items };
       }),
     );

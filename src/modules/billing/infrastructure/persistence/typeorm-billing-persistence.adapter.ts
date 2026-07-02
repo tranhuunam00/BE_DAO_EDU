@@ -146,7 +146,10 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
             : null,
           receiptCode: bill.receiptCode,
           auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
-          paymentRequest: bill.paymentRequest,
+          paymentRequest: bill.paymentRequest ? {
+            ...bill.paymentRequest,
+            qrUrl: bill.paymentRequest.qrUrl?.replace('/970418-', '/BIDV-')
+          } : null,
           items: (byBill.get(bill.id) ?? []).map(mapItem),
         })),
       };
