@@ -596,7 +596,7 @@ export class ClassController {
     await this.validateAttendancePermission(session, req);
 
     if (session.attendanceLocked) {
-      throw new Error('Buổi học này đã hoàn thành và khóa điểm danh.');
+      throw new BadRequestException('Buổi học này đã hoàn thành và khóa điểm danh.');
     }
 
     // Check time window: 10 mins before startTime until endTime
@@ -613,7 +613,7 @@ export class ClassController {
       const tenMinsBeforeStart = new Date(sessionStart.getTime() - 10 * 60 * 1000);
 
       if (now < tenMinsBeforeStart || now > sessionEnd) {
-        throw new Error('Chỉ được điểm danh từ trước buổi học 10 phút đến khi kết thúc buổi học.');
+        throw new BadRequestException('Chỉ được điểm danh từ trước buổi học 10 phút đến khi kết thúc buổi học.');
       }
     }
 
@@ -994,9 +994,10 @@ export class ClassController {
       throw new ForbiddenException('Không tìm thấy thông tin giáo viên của bạn.');
     }
 
-    const allowedTeacherId = session.teacherId || session.classEntity?.mainTeacherId;
+    const isSessionTeacher = session.teacherId === teacher.id;
+    const isMainTeacher = session.classEntity?.mainTeacherId === teacher.id;
 
-    if (!allowedTeacherId || allowedTeacherId !== teacher.id) {
+    if (!isSessionTeacher && !isMainTeacher) {
       throw new ForbiddenException(
         'Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.',
       );
