@@ -170,9 +170,14 @@ export class AssignmentController {
         assignments.map(async (assignment) => ({
           ...assignment,
           maxScore: Number(assignment.maxScore),
-          submission:
-            submissions.find((item) => item.assignmentId === assignment.id) ||
-            null,
+          submission: submissions.find((item) => item.assignmentId === assignment.id)
+            ? {
+                ...submissions.find((item) => item.assignmentId === assignment.id)!,
+                attachments: await this.getSubmissionAttachments(
+                  submissions.find((item) => item.assignmentId === assignment.id)!.id,
+                ),
+              }
+            : null,
           attachments: await this.getAssignmentAttachments(assignment.id),
         })),
       ),
@@ -461,6 +466,78 @@ export class AssignmentController {
       ...submission,
       attachments: await this.getSubmissionAttachments(submission.id),
     };
+  }
+
+  @Patch('submissions/:submissionId')
+  @Roles(Role.STUDENT)
+  @UseInterceptors(FilesInterceptor('files', 10, filesOptions))
+  async updateSubmission(
+    @Request() req: any,
+    @Param('submissionId') submissionId: string,
+    @Body() dto: SubmitAssignmentDto,
+    @UploadedFiles() files: StorageFile[],
+  ) {
+    const student = await this.getStudentByUser(req.user.sub);
+    let submission = await this.submissionRepo.findOne({
+      where: { id: submissionId, studentId: student.id },
+      relations: { assignment: true },
+    });
+    if (!submission) throw new NotFoundException('Không tìm thấy bài nộp');
+    if (submission.status === 'graded' || submission.assignment.status === 'closed') {
+      throw new BadRequestException('Không thể sửa bài nộp này');
+    }
+
+    submission.answerText = dto.answerText?.trim() || null;
+    submission = await this.submissionRepo.save(submission);
+
+    if (files?.length) {
+      for (const file of files) {
+        const objectKey = await this.minioService.uploadFile(
+          file,
+          `submissions/${submission.id}`,
+        );
+        await this.submissionAttachmentRepo.save(
+          this.submissionAttachmentRepo.create({
+            submissionId: submission.id,
+            objectKey,
+            fileName: file.originalname,
+            mimeType: file.mimetype,
+            fileSize: file.size,
+          }),
+        );
+      }
+    }
+
+    return {
+      ...submission,
+      attachments: await this.getSubmissionAttachments(submission.id),
+    };
+  }
+
+  @Delete('submissions/:submissionId/attachments/:attachmentId')
+  @Roles(Role.STUDENT)
+  async removeSubmissionAttachment(
+    @Request() req: any,
+    @Param('submissionId') submissionId: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    const student = await this.getStudentByUser(req.user.sub);
+    const submission = await this.submissionRepo.findOne({
+      where: { id: submissionId, studentId: student.id },
+    });
+    if (!submission) throw new NotFoundException('Không tìm thấy bài nộp');
+    if (submission.status === 'graded') {
+      throw new BadRequestException('Không thể sửa bài nộp đã được chấm điểm');
+    }
+    const attachment = await this.submissionAttachmentRepo.findOne({
+      where: { id: attachmentId, submissionId },
+    });
+    if (!attachment) throw new NotFoundException('Không tìm thấy file');
+    await this.submissionAttachmentRepo.remove(attachment);
+    await this.minioService
+      .removeFile(attachment.objectKey)
+      .catch(() => undefined);
+    return { success: true };
   }
 
   @Patch('submissions/:submissionId/grade')
