@@ -19,6 +19,7 @@ import { GetDashboardSummaryUseCase } from '../../application/use-cases/dashboar
 import { GetDashboardRevenueUseCase } from '../../application/use-cases/dashboard/get-dashboard-revenue.use-case';
 import { GetDashboardActivitiesUseCase } from '../../application/use-cases/dashboard/get-dashboard-activities.use-case';
 import { GetAdminOperationsUseCase } from '../../modules/dashboard/application/use-cases/get-admin-operations.use-case';
+import { GetAdminAnomaliesUseCase } from '../../modules/dashboard/application/use-cases/get-admin-anomalies.use-case';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { AssignmentSubmissionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
 
@@ -53,6 +54,7 @@ export class DashboardController {
     private readonly getRevenueUseCase: GetDashboardRevenueUseCase,
     private readonly getActivitiesUseCase: GetDashboardActivitiesUseCase,
     private readonly getAdminOperationsUseCase: GetAdminOperationsUseCase,
+    private readonly getAdminAnomaliesUseCase: GetAdminAnomaliesUseCase,
   ) {}
 
   @Get('profile')
@@ -90,6 +92,12 @@ export class DashboardController {
   @Roles(Role.ADMIN)
   getAdminOperations() {
     return this.getAdminOperationsUseCase.execute();
+  }
+
+  @Get('admin/anomalies')
+  @Roles(Role.ADMIN)
+  getAdminAnomalies() {
+    return this.getAdminAnomaliesUseCase.execute();
   }
 
   @Get('teacher')

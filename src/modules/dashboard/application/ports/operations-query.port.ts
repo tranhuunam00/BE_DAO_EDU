@@ -13,7 +13,20 @@ export interface OperationsTasks {
   unlockedPastSessions: number;
   openPaymentPeriods: number;
   cancelledReceipts: number;
-  paymentAnomalies: number;
+}
+
+export interface CancelledReceipt {
+  id: string;
+  createdAt: Date;
+  actorName: string | null;
+  type: string;
+  receiptCode: string | null;
+  totalAmount: number;
+  reason: string | null;
+}
+
+export interface AnomaliesResult {
+  cancelledReceipts: CancelledReceipt[];
 }
 
 export abstract class OperationsQueryPort {
@@ -21,4 +34,5 @@ export abstract class OperationsQueryPort {
   abstract getWaitingStudents(): Promise<WaitingStudent[]>;
   abstract getCandidateClasses(): Promise<CandidateClass[]>;
   abstract getTasks(): Promise<OperationsTasks>;
+  abstract getAnomalies(): Promise<AnomaliesResult>;
 }

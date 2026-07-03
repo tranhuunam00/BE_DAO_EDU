@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import {
+  AnomaliesResult,
+  CancelledReceipt,
   OperationsQueryPort,
   OperationsTasks,
   WaitingStudent,
@@ -105,17 +107,44 @@ export class TypeOrmOperationsQueryAdapter implements OperationsQueryPort {
           AND status NOT IN ('Cancelled', 'Canceled')) AS "unlockedPastSessions",
         (SELECT COUNT(*)::int FROM payment_periods WHERE status = 'Active') AS "openPaymentPeriods",
         (SELECT COUNT(*)::int FROM billing_audit_logs WHERE event = 'PAYMENT_CANCELLED'
-          AND created_at >= now() - interval '30 days') AS "cancelledReceipts",
-        (SELECT COUNT(*)::int FROM student_monthly_bills WHERE
-          (status = 'Paid' AND paid_amount <> total_amount) OR (status <> 'Paid' AND paid_amount > 0))
-          AS "paymentAnomalies"
+          AND created_at >= now() - interval '30 days') AS "cancelledReceipts"
     `);
     return {
       unassignedStudents: Number(row.unassignedStudents),
       unlockedPastSessions: Number(row.unlockedPastSessions),
       openPaymentPeriods: Number(row.openPaymentPeriods),
       cancelledReceipts: Number(row.cancelledReceipts),
-      paymentAnomalies: Number(row.paymentAnomalies),
     };
+  }
+
+  async getAnomalies(): Promise<AnomaliesResult> {
+    const rawCancelled = await this.dataSource.query(`
+      SELECT log.id,
+             log.created_at              AS "createdAt",
+             u.name                      AS "actorName",
+             log.metadata->'after'->>'type'         AS "type",
+             log.metadata->'after'->>'receiptCode'  AS "receiptCode",
+             (log.metadata->'after'->>'totalAmount')::numeric AS "totalAmount",
+             log.metadata->>'reason'     AS "reason"
+      FROM billing_audit_logs log
+      LEFT JOIN users u ON u.id = log.actor_id
+      WHERE log.event = 'PAYMENT_CANCELLED'
+        AND log.created_at >= now() - interval '30 days'
+      ORDER BY log.created_at DESC
+    `);
+
+    const cancelledReceipts: CancelledReceipt[] = rawCancelled.map(
+      (row: any) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        actorName: row.actorName ?? null,
+        type: row.type ?? '',
+        receiptCode: row.receiptCode ?? null,
+        totalAmount: Number(row.totalAmount ?? 0),
+        reason: row.reason ?? null,
+      }),
+    );
+
+    return { cancelledReceipts };
   }
 }
