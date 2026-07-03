@@ -15,6 +15,9 @@ import {
   SalaryByTeacherRow,
   SalarySummary,
   TopAbsentStudent,
+  StudentsSummary,
+  NewStudentsByMonthRow,
+  NewStudentRow,
 } from '../../application/ports/reports-query.port';
 
 @Injectable()
