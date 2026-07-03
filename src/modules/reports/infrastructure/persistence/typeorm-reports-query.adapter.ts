@@ -104,17 +104,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   // ── Salary ───────────────────────────────────────────
 
   async getSalarySummary(filters: ReportFilters): Promise<SalarySummary> {
-    const monthFilter = filters.month ? `AND w.month = $1` : '';
-    const params = filters.month ? [filters.month] : [];
-
+    const { where, params } = this.salaryWhereClause(filters);
     const rows = await this.ds.query(
       `SELECT
          t.type,
-         COALESCE(SUM(w.total_amount), 0)::numeric AS total,
-         COALESCE(SUM(w.paid_amount), 0)::numeric  AS paid
+         COALESCE(SUM(wi.total_amount), 0)::numeric AS total,
+         COALESCE(SUM(wi.total_amount * (CASE WHEN w.status = 'Paid' THEN 1 ELSE 0 END)), 0)::numeric AS paid
        FROM teacher_monthly_wages w
        JOIN teachers t ON t.id = w.teacher_id
-       WHERE 1=1 ${monthFilter}
+       LEFT JOIN teacher_monthly_wage_items wi ON wi.wage_id = w.id
+       LEFT JOIN classes cl ON cl.id = wi.class_id
+       ${where}
        GROUP BY t.type`,
       params,
     );
@@ -144,9 +144,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   async getSalaryByTeacher(filters: ReportFilters): Promise<SalaryByTeacherRow[]> {
-    const monthFilter = filters.month ? `AND w.month = $1` : '';
-    const params = filters.month ? [filters.month] : [];
-
+    const { where, params } = this.salaryWhereClause(filters);
     const rows = await this.ds.query(
       `SELECT
          t.id AS "teacherId",
@@ -154,13 +152,14 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          CONCAT(t.last_name, ' ', t.first_name) AS "teacherName",
          t.type,
          COALESCE(SUM(wi.sessions_count), 0)::int AS sessions,
-         COALESCE(SUM(w.total_amount), 0)::numeric AS "totalAmount",
-         COALESCE(SUM(w.paid_amount), 0)::numeric  AS "paidAmount",
+         COALESCE(SUM(wi.total_amount), 0)::numeric AS "totalAmount",
+         COALESCE(SUM(wi.total_amount * (CASE WHEN w.status = 'Paid' THEN 1 ELSE 0 END)), 0)::numeric AS "paidAmount",
          MAX(w.status) AS status
        FROM teacher_monthly_wages w
        JOIN teachers t ON t.id = w.teacher_id
        LEFT JOIN teacher_monthly_wage_items wi ON wi.wage_id = w.id
-       WHERE 1=1 ${monthFilter}
+       LEFT JOIN classes cl ON cl.id = wi.class_id
+       ${where}
        GROUP BY t.id, t.teacher_id, t.last_name, t.first_name, t.type
        ORDER BY "totalAmount" DESC`,
       params,
@@ -179,16 +178,21 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   async getSalaryByMonth(filters: ReportFilters): Promise<SalaryByMonth[]> {
+    const { where, params } = this.salaryWhereClause(filters, true);
     const rows = await this.ds.query(
       `SELECT
          w.month,
          t.type,
-         COALESCE(SUM(w.total_amount), 0)::numeric AS total
+         COALESCE(SUM(wi.total_amount), 0)::numeric AS total
        FROM teacher_monthly_wages w
        JOIN teachers t ON t.id = w.teacher_id
+       LEFT JOIN teacher_monthly_wage_items wi ON wi.wage_id = w.id
+       LEFT JOIN classes cl ON cl.id = wi.class_id
+       ${where}
        GROUP BY w.month, t.type
        ORDER BY w.month DESC
        LIMIT 24`,
+      params,
     );
 
     const monthMap: Record<string, { mainTeacher: number; ta: number }> = {};
@@ -572,6 +576,23 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     if (filters.classId) {
       conditions.push(`cl.id = $${idx++}`);
       params.push(filters.classId);
+    }
+
+    return { where: `WHERE ${conditions.join(' AND ')}`, params };
+  }
+
+  private salaryWhereClause(filters: ReportFilters, skipMonth = false) {
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters.month && !skipMonth) {
+      conditions.push(`w.month = $${idx++}`);
+      params.push(filters.month);
+    }
+    if (filters.centerId) {
+      conditions.push(`cl.center_id = $${idx++}`);
+      params.push(filters.centerId);
     }
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };

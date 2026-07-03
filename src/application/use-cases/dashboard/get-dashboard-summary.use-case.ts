@@ -28,13 +28,32 @@ export class GetDashboardSummaryUseCase {
       totalTeachers,
       totalClasses,
       totalCourses,
-      totalCenters
+      totalCenters,
+      studentGrowth,
+      courseDistribution,
     ] = await Promise.all([
       this.studentRepo.count(),
       this.teacherRepo.count(),
       this.classRepo.count(),
       this.courseRepo.count(),
       this.centerRepo.count(),
+      this.studentRepo.query(
+        `SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS count
+         FROM students
+         GROUP BY month
+         ORDER BY month ASC
+         LIMIT 6`
+      ),
+      this.studentRepo.query(
+        `SELECT c.course_name AS name, COUNT(DISTINCT cs.student_id)::int AS value
+         FROM courses c
+         JOIN classes cl ON cl.course_id = c.id
+         JOIN class_students cs ON cs.class_id = cl.id
+         WHERE cs.status = 'Active'
+         GROUP BY c.course_name
+         ORDER BY value DESC
+         LIMIT 5`
+      ),
     ]);
 
     return {
@@ -45,6 +64,14 @@ export class GetDashboardSummaryUseCase {
         totalClasses,
         totalCourses,
         totalCenters,
+        studentGrowth: studentGrowth.map((g: any) => ({
+          month: g.month,
+          students: Number(g.count),
+        })),
+        courseDistribution: courseDistribution.map((d: any) => ({
+          name: d.name,
+          value: Number(d.value),
+        })),
         systemStatus: 'Hoạt động ổn định'
       }
     };

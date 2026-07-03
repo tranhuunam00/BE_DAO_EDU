@@ -145,6 +145,21 @@ export class DashboardController {
       };
     });
 
+    const pendingGradingCountRes = await this.submissionRepo.query(
+      `SELECT COUNT(sub.id)::int AS count
+       FROM assignment_submissions sub
+       JOIN assignments a ON a.id = sub.assignment_id
+       JOIN classes cl ON cl.id = a.class_id
+       WHERE sub.status = 'submitted' AND (
+         cl.main_teacher_id = $1 OR
+         cl.id IN (
+           SELECT class_id FROM class_sessions WHERE teacher_id = $1 OR assistant_id = $1
+         )
+       )`,
+      [teacher.id],
+    );
+    const pendingGradingCount = Number(pendingGradingCountRes[0]?.count ?? 0);
+
     return {
       message: 'Chào mừng Giáo viên đến với Dashboard',
       teacherInfo: {
@@ -154,7 +169,7 @@ export class DashboardController {
         avatar: teacher.avatar,
       },
       sessions: formattedSessions,
-      pendingGradingCount: 0 // Will be implemented in Phase 2
+      pendingGradingCount
     };
   }
 
