@@ -40,4 +40,4 @@ import { StudyMaterialsModule } from './modules/study-materials/study-materials.
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
