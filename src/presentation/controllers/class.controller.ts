@@ -951,8 +951,8 @@ export class ClassController {
             where: { classId, date: dateStr, startTime: schedule.startTime },
           });
           if (exists) {
-            // Update teacher and assistant if it's a future session and not locked
-            if (!exists.attendanceLocked && exists.date >= todayStr) {
+            // Update teacher and assistant if it's a future session, not locked, and still Scheduled
+            if (!exists.attendanceLocked && exists.date >= todayStr && exists.status === 'Scheduled') {
               exists.teacherId = classEntity.mainTeacherId;
               exists.assistantId = classEntity.assistantId;
               await this.sessionRepo.save(exists);
@@ -990,13 +990,14 @@ export class ClassController {
   private async regenerateFutureSessions(classId: string) {
     const today = new Date().toISOString().split('T')[0];
 
-    // Delete future unlocked sessions
+    // Delete future unlocked sessions that are still Scheduled
     await this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
       .andWhere('date >= :today', { today })
       .andWhere('attendance_locked = false')
+      .andWhere('status = :status', { status: 'Scheduled' })
       .execute();
 
     // Regenerate
