@@ -45,12 +45,12 @@ export class GetDashboardSummaryUseCase {
          LIMIT 6`
       ),
       this.studentRepo.query(
-        `SELECT c.course_name AS name, COUNT(DISTINCT cs.student_id)::int AS value
+        `SELECT c.name AS name, COUNT(DISTINCT cs.student_id)::int AS value
          FROM courses c
          JOIN classes cl ON cl.course_id = c.id
          JOIN class_students cs ON cs.class_id = cl.id
          WHERE cs.status = 'Active'
-         GROUP BY c.course_name
+         GROUP BY c.name
          ORDER BY value DESC
          LIMIT 5`
       ),
