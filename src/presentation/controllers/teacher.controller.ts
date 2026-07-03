@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
+import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { AddTeacherUseCase } from '../../application/use-cases/add-teacher.use-case';
 import { GetTeachersUseCase } from '../../application/use-cases/get-teachers.use-case';
 import { GetTeacherByIdUseCase } from '../../application/use-cases/get-teacher-by-id.use-case';
@@ -91,7 +92,7 @@ export class TeacherController {
         .where('session.teacher_id = :teacherId', { teacherId: teacher.id })
         .andWhere('session.date >= :startDate', { startDate })
         .andWhere('session.date <= :endDate', { endDate })
-        .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: 'Completed', l: true })
+        .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: SessionStatus.COMPLETED, l: true })
         .getMany();
 
       const levelIds = Array.from(new Set(sessions.map(s => s.classEntity.courseLevelId)));
@@ -138,7 +139,7 @@ export class TeacherController {
       .where('session.teacher_id = :teacherId', { teacherId })
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
-      .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: 'Completed', l: true })
+      .andWhere('(session.status = :s OR session.attendance_locked = :l)', { s: SessionStatus.COMPLETED, l: true })
       .getMany();
 
     if (sessions.length === 0) {
@@ -472,7 +473,7 @@ export class TeacherController {
       .where('session.teacher_id = :teacherId', { teacherId })
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
-      .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: 'Completed', locked: true })
+      .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: SessionStatus.COMPLETED, locked: true })
       .orderBy('session.date', 'ASC')
       .addOrderBy('session.start_time', 'ASC')
       .getMany();

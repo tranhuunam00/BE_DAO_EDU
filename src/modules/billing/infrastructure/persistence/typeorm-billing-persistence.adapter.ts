@@ -23,6 +23,7 @@ import {
   PricingRule,
 } from '../../domain/services/billing-calculator';
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 import { CourseLevelPricingOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
 import { PaymentPeriodOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/payment-period.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
@@ -113,7 +114,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       .andWhere('session.date <= :endDate', { endDate })
       .andWhere(
         '(session.status = :completedStatus OR session.attendance_locked = :locked)',
-        { completedStatus: 'Completed', locked: true },
+        { completedStatus: SessionStatus.COMPLETED, locked: true },
       )
       .orderBy('session.date', 'ASC')
       .addOrderBy('session.start_time', 'ASC')
@@ -633,7 +634,7 @@ async function findTuitionSources(
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {
-        completed: 'Completed',
+        completed: SessionStatus.COMPLETED,
         locked: true,
       },
     )
@@ -681,7 +682,7 @@ async function findSalarySources(
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {
-        completed: 'Completed',
+        completed: SessionStatus.COMPLETED,
         locked: true,
       },
     );
@@ -719,7 +720,7 @@ async function findSalarySources(
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {
-        completed: 'Completed',
+        completed: SessionStatus.COMPLETED,
         locked: true,
       },
     );

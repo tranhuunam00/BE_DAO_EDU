@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
+import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { IUserRepository } from '../../domain/repositories/user-repository.interface';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
@@ -140,7 +141,7 @@ export class DashboardController {
       const isPast = sessionDateTime < new Date();
 
       let attendanceColor = 'blue';
-      if (s.status === 'Completed' || s.attendanceLocked) {
+      if (s.status === SessionStatus.COMPLETED || s.attendanceLocked) {
         attendanceColor = 'green';
       } else if (isPast) {
         attendanceColor = 'red';
@@ -430,7 +431,7 @@ export class DashboardController {
           let attendanceColor = 'blue'; // blue (Scheduled)
           let attendanceText = 'Chưa diễn ra';
 
-          if (session.status === 'Completed' || session.status === 'In-Progress') {
+          if (session.status === SessionStatus.COMPLETED || session.status === SessionStatus.IN_PROGRESS) {
             if (attendance && attendance.isPresent) {
               attendanceColor = 'green';
               attendanceText = 'Có tham gia';
@@ -461,7 +462,7 @@ export class DashboardController {
     }
 
     // 5. Calculate attendance statistics
-    const completedSessions = sessionsList.filter((s) => s.status === 'Completed');
+    const completedSessions = sessionsList.filter((s) => s.status === SessionStatus.COMPLETED);
     const totalSessionsCompleted = completedSessions.length;
     const presentCount = completedSessions.filter((s) => s.isPresent).length;
     const absentCount = totalSessionsCompleted - presentCount;

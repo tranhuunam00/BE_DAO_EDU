@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 import {
   AssignmentByClassRow,
   AssignmentSummary,
@@ -540,7 +541,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   private attendanceWhereClause(filters: ReportFilters, skipMonth = false) {
-    const conditions: string[] = [`cs.status = 'Completed'`];
+    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
     const params: any[] = [];
     let idx = 1;
 

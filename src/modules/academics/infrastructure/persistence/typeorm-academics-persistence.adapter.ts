@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, MoreThanOrEqual } from 'typeorm';
 import { ClassOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class.orm-entity';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 import { ClassScheduleOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
@@ -53,7 +54,7 @@ export class TypeOrmAcademicsPersistenceAdapter
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .where('session.date = :date', { date })
-      .andWhere("session.status NOT IN ('Cancelled', 'Canceled')");
+      .andWhere("session.status NOT IN (:...cancelledStatuses)", { cancelledStatuses: [SessionStatus.CANCELLED, 'Canceled'] });
 
     if (excludeSessionId) {
       qb.andWhere('session.id != :excludeSessionId', { excludeSessionId });

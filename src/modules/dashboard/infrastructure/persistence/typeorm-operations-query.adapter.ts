@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 import {
   AnomaliesResult,
   CancelledReceipt,
@@ -105,7 +106,7 @@ export class TypeOrmOperationsQueryAdapter implements OperationsQueryPort {
       SELECT
         (SELECT COUNT(*)::int FROM students WHERE status = 'Waiting for class') AS "unassignedStudents",
         (SELECT COUNT(*)::int FROM class_sessions WHERE date < CURRENT_DATE AND attendance_locked = false
-          AND status NOT IN ('Cancelled', 'Canceled')) AS "unlockedPastSessions",
+          AND status NOT IN ('${SessionStatus.CANCELLED}', 'Canceled')) AS \"unlockedPastSessions\",
         (SELECT COUNT(*)::int FROM payment_periods WHERE status = 'Active') AS "openPaymentPeriods",
         (SELECT COUNT(*)::int FROM billing_audit_logs WHERE event = 'PAYMENT_CANCELLED'
           AND created_at >= now() - interval '30 days') AS "cancelledReceipts"
@@ -168,7 +169,7 @@ export class TypeOrmOperationsQueryAdapter implements OperationsQueryPort {
       LEFT JOIN teachers t ON t.id = s.teacher_id
       WHERE s.date < CURRENT_DATE
         AND s.attendance_locked = false
-        AND s.status NOT IN ('Cancelled', 'Canceled')
+        AND s.status NOT IN ('${SessionStatus.CANCELLED}', 'Canceled')
       ORDER BY s.date DESC, s.start_time DESC
     `);
 

@@ -4,6 +4,7 @@ import {
   LeaveRequestListFilter,
   LeaveRequestPersistencePort,
 } from '../ports/leave-request-persistence.port';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 
 export class ListMyLeaveRequestsUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
@@ -78,7 +79,7 @@ export class ReviewLeaveRequestUseCase {
     }
     if (
       input.decision === 'approved' &&
-      (session.attendanceLocked || session.status === 'Completed')
+      (session.attendanceLocked || session.status === SessionStatus.COMPLETED)
     ) {
       throw new LeaveRequestError(
         'SESSION_NOT_AVAILABLE',

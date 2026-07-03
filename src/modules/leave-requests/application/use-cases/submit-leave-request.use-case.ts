@@ -1,6 +1,7 @@
 import { LeaveRequestPersistencePort } from '../ports/leave-request-persistence.port';
 import { LeaveRequest } from '../../domain/entities/leave-request';
 import { LeaveRequestError } from '../../domain/errors/leave-request.error';
+import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 
 export class SubmitLeaveRequestUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
@@ -41,7 +42,7 @@ export class SubmitLeaveRequestUseCase {
     if (
       session.date < today ||
       session.attendanceLocked ||
-      session.status === 'Completed'
+      session.status === SessionStatus.COMPLETED
     ) {
       throw new LeaveRequestError(
         'SESSION_NOT_AVAILABLE',

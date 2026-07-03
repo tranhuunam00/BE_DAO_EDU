@@ -26,6 +26,7 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
+import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { AddStudentUseCase } from '../../application/use-cases/add-student.use-case';
 import { GetStudentsUseCase } from '../../application/use-cases/get-students.use-case';
 import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
@@ -190,7 +191,7 @@ export class StudentController {
         .andWhere('session.date >= :startDate', { startDate })
         .andWhere('session.date <= :endDate', { endDate })
         .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
-          s: 'Completed',
+          s: SessionStatus.COMPLETED,
           l: true,
         })
         .getMany();
@@ -351,7 +352,7 @@ export class StudentController {
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
       .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
-        s: 'Completed',
+        s: SessionStatus.COMPLETED,
         l: true,
       })
       .getMany();
