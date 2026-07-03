@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
+import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
@@ -618,7 +619,7 @@ export class ClassController {
 
 
 
-    session.status = 'In-Progress';
+    session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
     return session;
   }
@@ -720,7 +721,7 @@ export class ClassController {
 
     await this.validateAttendancePermission(session, req);
 
-    session.status = 'Completed';
+    session.status = SessionStatus.COMPLETED;
     session.attendanceLocked = true;
     await this.sessionRepo.save(session);
     return session;
@@ -952,7 +953,7 @@ export class ClassController {
           });
           if (exists) {
             // Update teacher and assistant if it's a future session, not locked, and still Scheduled
-            if (!exists.attendanceLocked && exists.date >= todayStr && exists.status === 'Scheduled') {
+            if (!exists.attendanceLocked && exists.date >= todayStr && exists.status === SessionStatus.SCHEDULED) {
               exists.teacherId = classEntity.mainTeacherId;
               exists.assistantId = classEntity.assistantId;
               await this.sessionRepo.save(exists);
@@ -968,7 +969,7 @@ export class ClassController {
             date: dateStr,
             startTime: schedule.startTime,
             endTime: schedule.endTime,
-            status: 'Scheduled',
+            status: SessionStatus.SCHEDULED,
             attendanceLocked: false,
           });
           const savedSession = await this.sessionRepo.save(session);
@@ -997,7 +998,7 @@ export class ClassController {
       .where('class_id = :classId', { classId })
       .andWhere('date >= :today', { today })
       .andWhere('attendance_locked = false')
-      .andWhere('status = :status', { status: 'Scheduled' })
+      .andWhere('status = :status', { status: SessionStatus.SCHEDULED })
       .execute();
 
     // Regenerate
