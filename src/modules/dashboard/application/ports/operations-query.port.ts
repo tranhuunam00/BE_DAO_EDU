@@ -29,10 +29,25 @@ export interface AnomaliesResult {
   cancelledReceipts: CancelledReceipt[];
 }
 
+export interface UnlockedSession {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  attendanceLocked: boolean;
+  classId: string;
+  classCode: string;
+  className: string;
+  roomName: string | null;
+  teacherName: string | null;
+}
+
 export abstract class OperationsQueryPort {
   abstract getRiskInputs(): Promise<StudentRiskInput[]>;
   abstract getWaitingStudents(): Promise<WaitingStudent[]>;
   abstract getCandidateClasses(): Promise<CandidateClass[]>;
   abstract getTasks(): Promise<OperationsTasks>;
   abstract getAnomalies(): Promise<AnomaliesResult>;
+  abstract getUnlockedSessions(): Promise<UnlockedSession[]>;
 }

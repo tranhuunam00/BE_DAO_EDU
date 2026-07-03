@@ -6,6 +6,7 @@ import {
   CancelledReceipt,
   OperationsQueryPort,
   OperationsTasks,
+  UnlockedSession,
   WaitingStudent,
 } from '../../application/ports/operations-query.port';
 import { CandidateClass } from '../../domain/services/class-recommendation.policy';
@@ -146,5 +147,43 @@ export class TypeOrmOperationsQueryAdapter implements OperationsQueryPort {
     );
 
     return { cancelledReceipts };
+  }
+
+  async getUnlockedSessions(): Promise<UnlockedSession[]> {
+    const rows = await this.dataSource.query(`
+      SELECT s.id,
+             s.date,
+             s.start_time AS "startTime",
+             s.end_time AS "endTime",
+             s.status,
+             s.attendance_locked AS "attendanceLocked",
+             c.id AS "classId",
+             c.class_code AS "classCode",
+             c.class_name AS "className",
+             r.name AS "roomName",
+             CONCAT(t.last_name, ' ', t.first_name) AS "teacherName"
+      FROM class_sessions s
+      JOIN classes c ON c.id = s.class_id
+      LEFT JOIN rooms r ON r.id = s.room_id
+      LEFT JOIN teachers t ON t.id = s.teacher_id
+      WHERE s.date < CURRENT_DATE
+        AND s.attendance_locked = false
+        AND s.status NOT IN ('Cancelled', 'Canceled')
+      ORDER BY s.date DESC, s.start_time DESC
+    `);
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      status: row.status,
+      attendanceLocked: Boolean(row.attendanceLocked),
+      classId: row.classId,
+      classCode: row.classCode,
+      className: row.className,
+      roomName: row.roomName ?? null,
+      teacherName: (row.teacherName && row.teacherName.trim()) ? row.teacherName.trim() : null,
+    }));
   }
 }

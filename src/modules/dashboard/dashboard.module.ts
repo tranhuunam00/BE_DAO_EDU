@@ -19,6 +19,7 @@ import { IdentityModule } from '../identity/identity.module';
 import { OperationsQueryPort } from './application/ports/operations-query.port';
 import { GetAdminOperationsUseCase } from './application/use-cases/get-admin-operations.use-case';
 import { GetAdminAnomaliesUseCase } from './application/use-cases/get-admin-anomalies.use-case';
+import { GetAdminUnlockedSessionsUseCase } from './application/use-cases/get-admin-unlocked-sessions.use-case';
 import { ClassRecommendationPolicy } from './domain/services/class-recommendation.policy';
 import { StudentRiskPolicy } from './domain/services/student-risk.policy';
 import { TypeOrmOperationsQueryAdapter } from './infrastructure/persistence/typeorm-operations-query.adapter';
@@ -65,6 +66,11 @@ import { AssignmentSubmissionOrmEntity } from '../../infrastructure/persistence/
     {
       provide: GetAdminAnomaliesUseCase,
       useFactory: (query: OperationsQueryPort) => new GetAdminAnomaliesUseCase(query),
+      inject: [OperationsQueryPort],
+    },
+    {
+      provide: GetAdminUnlockedSessionsUseCase,
+      useFactory: (query: OperationsQueryPort) => new GetAdminUnlockedSessionsUseCase(query),
       inject: [OperationsQueryPort],
     },
   ],
