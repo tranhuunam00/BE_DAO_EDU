@@ -50,6 +50,7 @@ export class CreateClassDto {
   @IsString() @IsOptional() assignedTo?: string;
   @IsString() @IsOptional() csoName?: string;
   @IsString() @IsOptional() centerId?: string;
+  @IsString() @IsOptional() assistantId?: string;
 
   @ApiProperty({ required: false, type: [ClassScheduleDto], description: 'Lịch học cố định' })
   @IsArray()
@@ -78,6 +79,7 @@ export class UpdateClassDto {
   @IsString() @IsOptional() assignedTo?: string;
   @IsString() @IsOptional() csoName?: string;
   @IsString() @IsOptional() centerId?: string;
+  @IsString() @IsOptional() assistantId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

@@ -152,6 +152,7 @@ export class ClassController {
       .leftJoinAndSelect('c.course', 'course')
       .leftJoinAndSelect('c.courseLevel', 'level')
       .leftJoinAndSelect('c.mainTeacher', 'teacher')
+      .leftJoinAndSelect('c.assistant', 'assistant')
       .leftJoinAndSelect('c.center', 'center');
 
     if (search) {
@@ -187,7 +188,7 @@ export class ClassController {
   async findOne(@Param('id') id: string) {
     const classEntity = await this.classRepo.findOneOrFail({
       where: { id },
-      relations: { course: true, courseLevel: true, mainTeacher: true, center: true },
+      relations: { course: true, courseLevel: true, mainTeacher: true, assistant: true, center: true },
     });
     const schedules = await this.scheduleRepo.find({
       where: { classId: id },
@@ -292,6 +293,7 @@ export class ClassController {
       skipHolidays: dto.skipHolidays || false,
       description: dto.description || null,
       mainTeacherId: dto.mainTeacherId || null,
+      assistantId: dto.assistantId || null,
       assignedTo: dto.assignedTo || null,
       csoName: dto.csoName || null,
       centerId: dto.centerId || null,
@@ -426,6 +428,7 @@ export class ClassController {
     if (dto.skipHolidays !== undefined) classEntity.skipHolidays = dto.skipHolidays;
     if (dto.description !== undefined) classEntity.description = dto.description || null;
     if (dto.mainTeacherId !== undefined) classEntity.mainTeacherId = dto.mainTeacherId || null;
+    if (dto.assistantId !== undefined) classEntity.assistantId = dto.assistantId || null;
     if (dto.assignedTo !== undefined) classEntity.assignedTo = dto.assignedTo || null;
     if (dto.csoName !== undefined) classEntity.csoName = dto.csoName || null;
     if (dto.centerId !== undefined) classEntity.centerId = dto.centerId || null;
@@ -443,6 +446,19 @@ export class ClassController {
         .createQueryBuilder()
         .update(ClassSessionOrmEntity)
         .set({ teacherId: dto.mainTeacherId || null })
+        .where('class_id = :classId', { classId: id })
+        .andWhere('date >= :today', { today: todayStr })
+        .andWhere('attendance_locked = false')
+        .execute();
+    }
+
+    // Sync assistant to all future unlocked sessions if assistantId is updated
+    if (dto.assistantId !== undefined) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      await this.sessionRepo
+        .createQueryBuilder()
+        .update(ClassSessionOrmEntity)
+        .set({ assistantId: dto.assistantId || null })
         .where('class_id = :classId', { classId: id })
         .andWhere('date >= :today', { today: todayStr })
         .andWhere('attendance_locked = false')
@@ -935,9 +951,10 @@ export class ClassController {
             where: { classId, date: dateStr, startTime: schedule.startTime },
           });
           if (exists) {
-            // Update teacher if it's a future session and not locked
+            // Update teacher and assistant if it's a future session and not locked
             if (!exists.attendanceLocked && exists.date >= todayStr) {
               exists.teacherId = classEntity.mainTeacherId;
+              exists.assistantId = classEntity.assistantId;
               await this.sessionRepo.save(exists);
             }
             continue;
@@ -947,6 +964,7 @@ export class ClassController {
             classId,
             roomId: schedule.roomId,
             teacherId: classEntity.mainTeacherId,
+            assistantId: classEntity.assistantId,
             date: dateStr,
             startTime: schedule.startTime,
             endTime: schedule.endTime,

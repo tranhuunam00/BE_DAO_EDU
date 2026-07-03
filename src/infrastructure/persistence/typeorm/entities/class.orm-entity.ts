@@ -54,6 +54,9 @@ export class ClassOrmEntity {
   @Column({ type: 'uuid', name: 'main_teacher_id', nullable: true })
   mainTeacherId!: string | null;
 
+  @Column({ type: 'uuid', name: 'assistant_id', nullable: true })
+  assistantId!: string | null;
+
   @Column({ type: 'uuid', name: 'assigned_to', nullable: true })
   assignedTo!: string | null;
 
@@ -80,6 +83,10 @@ export class ClassOrmEntity {
   @ManyToOne(() => TeacherOrmEntity)
   @JoinColumn({ name: 'main_teacher_id' })
   mainTeacher!: TeacherOrmEntity;
+
+  @ManyToOne(() => TeacherOrmEntity)
+  @JoinColumn({ name: 'assistant_id' })
+  assistant!: TeacherOrmEntity | null;
 
   @ManyToOne(() => CenterOrmEntity)
   @JoinColumn({ name: 'center_id' })
