@@ -130,6 +130,7 @@ export class StudentController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('province') province?: string,
+    @Query('noClass') noClass?: string,
   ) {
     return this.getStudentsUseCase.execute({
       page: page ? parseInt(page, 10) : undefined,
@@ -137,6 +138,7 @@ export class StudentController {
       search,
       status,
       province,
+      noClass: noClass === 'true' || noClass === '1',
     });
   }
 

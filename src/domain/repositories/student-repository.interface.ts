@@ -6,6 +6,7 @@ export interface GetStudentsQuery {
   search?: string;
   status?: string;
   province?: string;
+  noClass?: boolean | string;
 }
 
 export abstract class IStudentRepository {

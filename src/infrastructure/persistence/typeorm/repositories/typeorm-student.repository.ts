@@ -58,6 +58,14 @@ export class TypeOrmStudentRepository implements IStudentRepository {
       qb.andWhere('student.province = :province', { province: query.province });
     }
 
+    if (query.noClass === true || query.noClass === 'true') {
+      qb.andWhere(
+        `student.id NOT IN (
+          SELECT student_id FROM class_students WHERE status = 'Active'
+        )`
+      );
+    }
+
     qb.orderBy('student.createdAt', 'DESC'); // Sử dụng trường camelCase do TypeORM tự map sang snake_case
     qb.skip(skip);
     qb.take(limit);
