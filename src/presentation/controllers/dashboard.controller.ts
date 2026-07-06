@@ -486,8 +486,12 @@ export class DashboardController {
     const absentCount = totalSessionsCompleted - presentCount;
     const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
 
-    // Monthly attendance breakdown
-    const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {};
+    // Monthly attendance breakdown (initialize with the current month to ensure it is always shown)
+    const currentDate = new Date();
+    const currentMonthYear = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+    const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {
+      [currentMonthYear]: { completed: 0, present: 0, absent: 0 }
+    };
     for (const s of completedSessions) {
       const dateParts = s.date.split('-');
       if (dateParts.length >= 2) {
