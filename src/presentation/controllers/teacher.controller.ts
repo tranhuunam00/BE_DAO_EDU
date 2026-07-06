@@ -470,7 +470,7 @@ export class TeacherController {
       .leftJoinAndSelect('session.classEntity', 'classEntity')
       .leftJoinAndSelect('classEntity.course', 'course')
       .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .where('session.teacher_id = :teacherId', { teacherId })
+      .where('(session.teacher_id = :teacherId OR session.assistant_id = :teacherId)', { teacherId })
       .andWhere('session.date >= :startDate', { startDate })
       .andWhere('session.date <= :endDate', { endDate })
       .andWhere('(session.status = :completedStatus OR session.attendance_locked = :locked)', { completedStatus: SessionStatus.COMPLETED, locked: true })
@@ -494,6 +494,7 @@ export class TeacherController {
     const reportSessions = sessions.map(session => {
       const date = session.date;
       const levelId = session.classEntity.courseLevelId;
+      const role = session.teacherId === teacherId ? 'teacher' : 'assistant';
 
       const pricing = pricingList.find(p => {
         return p.courseLevelId === levelId &&
@@ -501,7 +502,8 @@ export class TeacherController {
                (p.effectiveTo === null || p.effectiveTo >= date);
       });
 
-      const rate = pricing ? Number(pricing.teacherWagePerSession) : 0;
+      const rateField = role === 'teacher' ? 'teacherWagePerSession' : 'taWagePerSession';
+      const rate = pricing ? Number(pricing[rateField]) : 0;
       const amount = rate;
 
       return {
@@ -514,6 +516,7 @@ export class TeacherController {
         classCode: session.classEntity.classCode,
         courseName: session.classEntity.course?.name || '',
         levelName: session.classEntity.courseLevel?.levelName || '',
+        role,
         rate,
         amount,
         pricingEffectiveFrom: pricing ? pricing.effectiveFrom : null,
