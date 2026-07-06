@@ -479,30 +479,32 @@ export class DashboardController {
       );
     }
 
-    // 5. Calculate attendance statistics (only count sessions with actual attendance records)
-    const completedSessions = sessionsList.filter((s) => s.status === SessionStatus.COMPLETED && s.hasAttendanceRecord);
-    const totalSessionsCompleted = completedSessions.length;
-    const presentCount = completedSessions.filter((s) => s.isPresent).length;
-    const absentCount = totalSessionsCompleted - presentCount;
+    // 5. Calculate attendance statistics
+    // Total = all sessions (including upcoming), present = sessions where attendance recorded as present
+    const totalSessionsCompleted = sessionsList.length;
+    const presentCount = sessionsList.filter((s) => s.hasAttendanceRecord && s.isPresent).length;
+    const absentCount = sessionsList.filter((s) => s.hasAttendanceRecord && !s.isPresent).length;
     const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
 
-    // Monthly attendance breakdown (initialize with the current month to ensure it is always shown)
+    // Monthly attendance breakdown (total = all sessions in month, present = sessions with is_present=true)
+    // Initialize with the current month to ensure it is always shown
     const currentDate = new Date();
     const currentMonthYear = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
     const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {
       [currentMonthYear]: { completed: 0, present: 0, absent: 0 }
     };
-    for (const s of completedSessions) {
+    for (const s of sessionsList) {
       const dateParts = s.date.split('-');
       if (dateParts.length >= 2) {
         const monthYear = `${dateParts[1]}/${dateParts[0]}`; // e.g. "07/2026"
         if (!monthlyAttendance[monthYear]) {
           monthlyAttendance[monthYear] = { completed: 0, present: 0, absent: 0 };
         }
+        // Count every session in the month as part of total
         monthlyAttendance[monthYear].completed++;
-        if (s.isPresent) {
+        if (s.hasAttendanceRecord && s.isPresent) {
           monthlyAttendance[monthYear].present++;
-        } else {
+        } else if (s.hasAttendanceRecord && !s.isPresent) {
           monthlyAttendance[monthYear].absent++;
         }
       }
@@ -558,8 +560,8 @@ export class DashboardController {
     // 7. Compile recent comments
     const recentComments: any[] = [];
 
-    // From attendance notes & reasons
-    for (const s of completedSessions) {
+    // From attendance notes & reasons (only sessions with actual attendance records)
+    for (const s of sessionsList.filter((s) => s.hasAttendanceRecord)) {
       if (s.note || (!s.isPresent && s.reason)) {
         recentComments.push({
           date: s.date,
