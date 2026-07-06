@@ -542,7 +542,7 @@ export class TeacherController {
     };
   }
 
-  // Fetch actual payment history records finalized in teacher_monthly_wages table
+  // Fetch actual payment history records finalized in teacher_monthly_wages table - release v1.8.24
   @Get(':id/wages-history')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Lấy lịch sử nhận lương thực tế của giáo viên theo năm' })
