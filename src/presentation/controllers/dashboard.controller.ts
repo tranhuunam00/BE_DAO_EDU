@@ -574,13 +574,9 @@ export class DashboardController {
         name: `${student.firstName} ${student.lastName}`,
         role: req.user.role,
       },
-      grades: [
-        { subject: 'Toán học', score: 9.0, teacher: 'Cô Nguyễn Thị Mai', status: 'Đạt' },
-        { subject: 'Ngữ văn', score: 8.5, teacher: 'Thầy Lê Hoàng Minh', status: 'Đạt' },
-      ],
-      upcomingExams: [
-        { subject: 'Toán học', date: '2026-06-18', time: '08:00 AM', type: 'Thi giữa kỳ' }
-      ],
+      classesCount: classIds.length,
+      grades: [],
+      upcomingExams: [],
       sessions: sessionsList,
       stats: {
         attendance: {
