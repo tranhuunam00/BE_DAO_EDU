@@ -17,6 +17,8 @@
 import { ConflictException } from '@nestjs/common';
 import { ClassController } from './class.controller';
 import { SessionStatus } from '../../domain/value-objects/session-status.enum';
+import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -61,55 +63,79 @@ const makeQueryBuilder = (overrides: any = {}) => ({
   ...overrides,
 });
 
-const makeRepos = (overrides: any = {}) => ({
-  classRepo: {
-    findOne: jest.fn().mockResolvedValue(null),
-    findOneOrFail: jest.fn().mockResolvedValue(null),
-    create: jest.fn((v) => v),
-    save: jest.fn(async (v) => ({ id: 'class-1', ...v })),
-    createQueryBuilder: jest.fn(() => makeQueryBuilder()),
-    ...overrides.classRepo,
-  },
-  scheduleRepo: {
-    find: jest.fn().mockResolvedValue([]),
-    create: jest.fn((v) => v),
-    save: jest.fn(async (v) => v),
-    delete: jest.fn(),
-    ...overrides.scheduleRepo,
-  },
-  sessionRepo: {
-    findOne: jest.fn().mockResolvedValue(null),
-    findOneOrFail: jest.fn().mockResolvedValue(null),
-    count: jest.fn().mockResolvedValue(0),
-    create: jest.fn((v) => ({ id: `session-${Math.random()}`, ...v })),
-    save: jest.fn(async (v) => ({ id: `session-${Math.random()}`, ...v })),
-    createQueryBuilder: jest.fn(() => makeQueryBuilder()),
-    ...overrides.sessionRepo,
-  },
-  classStudentRepo: {
-    findOne: jest.fn().mockResolvedValue(null),
-    findOneOrFail: jest.fn().mockResolvedValue(null),
-    find: jest.fn().mockResolvedValue([]),
-    count: jest.fn().mockResolvedValue(0),
-    create: jest.fn((v) => v),
-    save: jest.fn(async (v) => v),
-    ...overrides.classStudentRepo,
-  },
-  attendanceRepo: {
-    findOne: jest.fn().mockResolvedValue(null),
-    create: jest.fn((v) => v),
-    save: jest.fn(async (v) => v),
-    delete: jest.fn(),
-    find: jest.fn().mockResolvedValue([]),
-    ...overrides.attendanceRepo,
-  },
-  courseRepo: { findOne: jest.fn() },
-  studentRepo: { findOne: jest.fn(), save: jest.fn(async (v) => v) },
-  teacherRepo: { findOne: jest.fn() },
-  assignmentRepo: { createQueryBuilder: jest.fn(() => makeQueryBuilder()) },
-  notificationRepo: { create: jest.fn((v) => v), save: jest.fn() },
-  ...overrides,
-});
+const makeRepos = (overrides: any = {}) => {
+  const transactionManager = {
+    save: jest.fn(async (Entity: any, data: any) => {
+      const actualData = data !== undefined ? data : Entity;
+      if (Array.isArray(actualData)) {
+        return actualData.map((d: any) => ({ id: `id-${Math.random()}`, ...d }));
+      }
+      return { id: `id-${Math.random()}`, ...actualData };
+    }),
+    create: jest.fn((Entity: any, data: any) => {
+      const actualData = data !== undefined ? data : Entity;
+      return actualData;
+    }),
+  };
+
+  const repos = {
+    classRepo: {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      findOneOrFail: jest.fn().mockResolvedValue(null),
+      createQueryBuilder: jest.fn(() => makeQueryBuilder()),
+      ...overrides.classRepo,
+    },
+    scheduleRepo: {
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((v) => v),
+      save: jest.fn(async (v) => v),
+      delete: jest.fn(),
+      ...overrides.scheduleRepo,
+    },
+    sessionRepo: {
+      findOne: jest.fn().mockResolvedValue(null),
+      findOneOrFail: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((v) => ({ id: `session-${Math.random()}`, ...v })),
+      save: jest.fn(async (v) => ({ id: `session-${Math.random()}`, ...v })),
+      createQueryBuilder: jest.fn(() => makeQueryBuilder()),
+      ...overrides.sessionRepo,
+    },
+    classStudentRepo: {
+      findOne: jest.fn().mockResolvedValue(null),
+      findOneOrFail: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn((v) => v),
+      save: jest.fn(async (v) => v),
+      ...overrides.classStudentRepo,
+    },
+    attendanceRepo: {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((v) => v),
+      save: jest.fn(async (v) => v),
+      delete: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
+      ...overrides.attendanceRepo,
+    },
+    courseRepo: { findOne: jest.fn() },
+    studentRepo: { findOne: jest.fn(), save: jest.fn(async (v) => v) },
+    teacherRepo: { findOne: jest.fn() },
+    assignmentRepo: { createQueryBuilder: jest.fn(() => makeQueryBuilder()) },
+    notificationRepo: { create: jest.fn((v) => v), save: jest.fn() },
+    dataSource: {
+      transaction: jest.fn(async (cb: (manager: any) => Promise<any>) => {
+        return cb(transactionManager);
+      }),
+    },
+    transactionManager,
+    ...overrides,
+  };
+
+  return repos;
+};
 
 const makeController = (repoOverrides: any = {}) => {
   const repos = makeRepos(repoOverrides);
@@ -129,6 +155,7 @@ const makeController = (repoOverrides: any = {}) => {
     { execute: jest.fn().mockResolvedValue(undefined) } as any,  // checkSession
     { execute: jest.fn() } as any,                              // enrollStudent
     { execute: jest.fn().mockResolvedValue(undefined) } as any, // removeStudent
+    repos.dataSource as any,                                    // DataSource (for transactions)
   );
   return { ctrl, repos };
 };
@@ -176,7 +203,7 @@ describe('ClassController — Session Generation Rules', () => {
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('không sinh buổi khi lớp không có startDate', async () => {
@@ -187,7 +214,7 @@ describe('ClassController — Session Generation Rules', () => {
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('không sinh buổi khi lớp chưa có lịch học (schedules = [])', async () => {
@@ -197,7 +224,7 @@ describe('ClassController — Session Generation Rules', () => {
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('generateSessionsEndpoint() ném ConflictException khi lớp không Active', async () => {
@@ -239,15 +266,18 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null); // no existing session
+      repos.sessionRepo.find.mockResolvedValue([]); // no existing sessions
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          date: tomorrow,
-          status: SessionStatus.SCHEDULED,
-        }),
+      expect(repos.transactionManager.save).toHaveBeenCalledWith(
+        ClassSessionOrmEntity,
+        expect.arrayContaining([
+          expect.objectContaining({
+            date: tomorrow,
+            status: SessionStatus.SCHEDULED,
+          }),
+        ]),
       );
     });
 
@@ -259,12 +289,11 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(yesterday)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      // startFromStr = max(startDate, today) = today. Since finishDate < today, loop body is never entered.
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('startDate trong quá khứ → coi như bắt đầu từ hôm nay', async () => {
@@ -275,13 +304,17 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      // Should only create the session on tomorrow (today's date + 1) since yesterday is past
-      const saveCalls = repos.sessionRepo.save.mock.calls;
-      const createdDates = saveCalls.map((call: any[]) => call[0].date).filter(Boolean);
+      // Should only create the session on tomorrow since yesterday is past
+      const saveCalls = repos.transactionManager.save.mock.calls;
+      const sessionSaveCall = saveCalls.find((call: any[]) => call[0] === ClassSessionOrmEntity);
+      expect(sessionSaveCall).toBeDefined();
+
+      const createdSessions = sessionSaveCall[1];
+      const createdDates = createdSessions.map((s: any) => s.date).filter(Boolean);
       expect(createdDates.every((d: string) => d >= todayStr())).toBe(true);
     });
   });
@@ -296,13 +329,16 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ status: SessionStatus.SCHEDULED }),
-      );
+      const saveCalls = repos.transactionManager.save.mock.calls;
+      const sessionSaveCall = saveCalls.find((call: any[]) => call[0] === ClassSessionOrmEntity);
+      expect(sessionSaveCall).toBeDefined();
+
+      const createdSessions = sessionSaveCall[1];
+      expect(createdSessions[0]).toMatchObject({ status: SessionStatus.SCHEDULED });
     });
 
     it('session mới được tạo với attendanceLocked = false', async () => {
@@ -312,13 +348,16 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.sessionRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ attendanceLocked: false }),
-      );
+      const saveCalls = repos.transactionManager.save.mock.calls;
+      const sessionSaveCall = saveCalls.find((call: any[]) => call[0] === ClassSessionOrmEntity);
+      expect(sessionSaveCall).toBeDefined();
+
+      const createdSessions = sessionSaveCall[1];
+      expect(createdSessions[0]).toMatchObject({ attendanceLocked: false });
     });
   });
 
@@ -338,21 +377,21 @@ describe('ClassController — Session Generation Rules', () => {
         );
         repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
         repos.classStudentRepo.find.mockResolvedValue([]);
-        // Session already exists with non-Scheduled status
-        repos.sessionRepo.findOne.mockResolvedValue({
-          id: 'existing-session',
-          date: tomorrow,
-          startTime: '08:00',
-          status,
-          attendanceLocked: false,
-        });
+        // Session already exists in preloaded list with non-Scheduled status
+        repos.sessionRepo.find.mockResolvedValue([
+          {
+            id: 'existing-session',
+            date: tomorrow,
+            startTime: '08:00',
+            status,
+            attendanceLocked: false,
+          },
+        ]);
 
         await (ctrl as any).generateSessions('class-1');
 
-        // Must NOT create a new session
-        expect(repos.sessionRepo.create).not.toHaveBeenCalled();
-        // Must NOT save any NEW session (the existing one must not be overwritten)
-        expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+        // Must NOT update or save anything since no new sessions are generated
+        expect(repos.transactionManager.save).not.toHaveBeenCalled();
       });
     }
 
@@ -363,19 +402,20 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue({
-        id: 'locked-session',
-        date: tomorrow,
-        startTime: '08:00',
-        status: SessionStatus.SCHEDULED,
-        attendanceLocked: true, // locked!
-      });
+      repos.sessionRepo.find.mockResolvedValue([
+        {
+          id: 'locked-session',
+          date: tomorrow,
+          startTime: '08:00',
+          status: SessionStatus.SCHEDULED,
+          attendanceLocked: true, // locked!
+        },
+      ]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      // Should NOT update nor create
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
-      expect(repos.sessionRepo.create).not.toHaveBeenCalled();
+      // Should NOT save or update
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('buổi Scheduled tương lai chưa khoá → chỉ cập nhật teacher, không tạo mới', async () => {
@@ -394,15 +434,16 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(existingSession);
+      repos.sessionRepo.find.mockResolvedValue([existingSession]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      // Must NOT create a new session
-      expect(repos.sessionRepo.create).not.toHaveBeenCalled();
-      // Must save only the existing session (updating teacher)
-      expect(repos.sessionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'existing-session', teacherId: 'new-teacher' }),
+      // Must update the existing session inside the transaction manager
+      expect(repos.transactionManager.save).toHaveBeenCalledWith(
+        ClassSessionOrmEntity,
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'existing-session', teacherId: 'new-teacher' }),
+        ]),
       );
     });
   });
@@ -419,7 +460,7 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).regenerateFutureSessions('class-1');
 
@@ -444,7 +485,7 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       const generateSpy = jest.spyOn(ctrl as any, 'generateSessions');
 
@@ -468,16 +509,18 @@ describe('ClassController — Session Generation Rules', () => {
         { studentId: 'student-B' },
         { studentId: 'student-C' },
       ]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
-      repos.sessionRepo.save.mockResolvedValue({ id: 'new-session', date: tomorrow });
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      // Should save attendance for 3 students
-      expect(repos.attendanceRepo.save).toHaveBeenCalledTimes(3);
-      expect(repos.attendanceRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ isPresent: false }),
-      );
+      // Should save attendance records for the 3 students in transaction manager
+      const saveCalls = repos.transactionManager.save.mock.calls;
+      const attendanceSaveCall = saveCalls.find((call: any[]) => call[0] === StudentAttendanceOrmEntity);
+      expect(attendanceSaveCall).toBeDefined();
+
+      const savedAttendances = attendanceSaveCall[1];
+      expect(savedAttendances).toHaveLength(3);
+      expect(savedAttendances[0]).toMatchObject({ isPresent: false });
     });
 
     it('không tạo điểm danh nếu không có học sinh Active', async () => {
@@ -487,11 +530,13 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]); // no students
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
-      expect(repos.attendanceRepo.save).not.toHaveBeenCalled();
+      const saveCalls = repos.transactionManager.save.mock.calls;
+      const attendanceSaveCall = saveCalls.find((call: any[]) => call[0] === StudentAttendanceOrmEntity);
+      expect(attendanceSaveCall).toBeUndefined();
     });
   });
 
@@ -505,7 +550,7 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       // Inject holiday service mock via controller constructor override
       const getHolidayDates = { execute: jest.fn().mockResolvedValue([tomorrow]) };
@@ -525,12 +570,13 @@ describe('ClassController — Session Generation Rules', () => {
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn() } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
+        repos.dataSource as any, // Inject dataSource
       );
 
       await (ctrlWithHoliday as any).generateSessions('class-1');
 
       // Tomorrow is a holiday — session should NOT be created
-      expect(repos.sessionRepo.save).not.toHaveBeenCalled();
+      expect(repos.transactionManager.save).not.toHaveBeenCalled();
     });
 
     it('sinh buổi bình thường khi skipHolidays = false dù ngày trùng nghỉ lễ', async () => {
@@ -540,12 +586,12 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([]);
-      repos.sessionRepo.findOne.mockResolvedValue(null);
+      repos.sessionRepo.find.mockResolvedValue([]);
 
       await (ctrl as any).generateSessions('class-1');
 
       // skipHolidays is false so holidays are irrelevant → session IS created
-      expect(repos.sessionRepo.save).toHaveBeenCalled();
+      expect(repos.transactionManager.save).toHaveBeenCalled();
     });
   });
 });

@@ -42,6 +42,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
         findOne: jest.fn(),
         findOneOrFail: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
+        find: jest.fn().mockResolvedValue([]),
         create: jest.fn((value) => value),
         save: jest.fn(async (value) => ({ id: 'session-1', ...value })),
         createQueryBuilder: jest.fn(() => sessionQueryBuilder),
@@ -75,6 +76,18 @@ describe('ClassController enrollment and schedule edge cases', () => {
         create: jest.fn((value) => value),
         save: jest.fn(),
       },
+      dataSource: {
+        transaction: jest.fn(async (cb: (manager: any) => Promise<any>) => {
+          const manager = {
+            save: jest.fn(async (_Entity: any, data: any) => {
+              if (Array.isArray(data)) return data.map((d: any) => ({ id: 'session-1', ...d }));
+              return { id: 'session-1', ...data };
+            }),
+            create: jest.fn((_Entity: any, data: any) => data),
+          };
+          return cb(manager);
+        }),
+      },
     };
     const academics = {
       checkRecurring: { execute: jest.fn().mockResolvedValue(undefined) },
@@ -99,6 +112,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
       academics.checkSession as any,
       academics.enrollStudent as any,
       academics.removeStudent as any,
+      repos.dataSource as any,
     );
 
     return {
@@ -248,38 +262,56 @@ describe('ClassController enrollment and schedule edge cases', () => {
 
   it('generates a scheduled session and attendance for every active student', async () => {
     const { controller, repos } = createController();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const weekdayKeys = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const tomorrowWeekday = weekdayKeys[tomorrow.getUTCDay()];
+
     repos.classRepo.findOneOrFail.mockResolvedValue({
       id: 'class-1',
       status: 'Active',
-      startDate: '2026-06-14',
-      finishDate: '2026-06-14',
+      startDate: tomorrowStr,
+      finishDate: tomorrowStr,
       mainTeacherId: 'teacher-1',
+      skipHolidays: false,
     });
     repos.scheduleRepo.find.mockResolvedValue([
-      {
-        weekday: 'Sun',
-        roomId: 'room-1',
-        startTime: '08:00',
-        endTime: '09:00',
-      },
+      { weekday: tomorrowWeekday, roomId: 'room-1', startTime: '08:00', endTime: '09:00' },
     ]);
     repos.classStudentRepo.find.mockResolvedValue([
       { studentId: 'student-1' },
       { studentId: 'student-2' },
     ]);
-    repos.sessionRepo.findOne.mockResolvedValue(null);
+    // No existing sessions (preload returns empty)
+    repos.sessionRepo.find.mockResolvedValue([]);
 
     await (controller as any).generateSessions('class-1');
 
-    expect(repos.sessionRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        classId: 'class-1',
-        date: '2026-06-14',
-        teacherId: 'teacher-1',
-        status: 'Scheduled',
+    // All DB writes now go through dataSource.transaction
+    const txCallback = repos.dataSource.transaction.mock.calls[0]?.[0];
+    expect(txCallback).toBeDefined();
+
+    // Inspect the manager passed to the transaction
+    const capturedManager = { saves: [] as any[] };
+    const manager = {
+      save: jest.fn(async (_Entity: any, data: any) => {
+        capturedManager.saves.push(data);
+        if (Array.isArray(data)) return data.map((d: any) => ({ id: 'session-1', ...d }));
+        return { id: 'session-1', ...data };
       }),
-    );
-    expect(repos.attendanceRepo.save).toHaveBeenCalledTimes(2);
+      create: jest.fn((_Entity: any, data: any) => data),
+    };
+    await txCallback(manager);
+
+    // First save = session bulk insert
+    const sessionSave = capturedManager.saves.find((s) => Array.isArray(s) && s[0]?.date === tomorrowStr);
+    expect(sessionSave).toBeDefined();
+    expect(sessionSave[0]).toMatchObject({ classId: 'class-1', teacherId: 'teacher-1', status: 'Scheduled' });
+
+    // Second save = attendance bulk insert (2 students)
+    const attendanceSave = capturedManager.saves.find((s) => Array.isArray(s) && s.some((a: any) => a.isPresent === false));
+    expect(attendanceSave).toHaveLength(2);
   });
 
   it('rejects enrollment when the class does not exist', async () => {

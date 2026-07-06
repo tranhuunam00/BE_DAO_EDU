@@ -21,7 +21,8 @@ import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, DataSource, Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
@@ -137,6 +138,7 @@ export class ClassController {
     private readonly checkSessionScheduleConflict: CheckSessionScheduleConflictUseCase,
     private readonly enrollStudentUseCase: EnrollStudentUseCase,
     private readonly removeStudentUseCase: RemoveStudentFromClassUseCase,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   @Get()
@@ -302,19 +304,19 @@ export class ClassController {
 
     const saved = await this.classRepo.save(classEntity);
 
-    // Create schedules
+    // Create schedules — bulk insert
     if (dto.schedules && dto.schedules.length > 0) {
-      for (const s of dto.schedules) {
-        const schedule = this.scheduleRepo.create({
+      const schedules = dto.schedules.map((s) =>
+        this.scheduleRepo.create({
           classId: saved.id,
           roomId: s.roomId || null,
           weekday: s.weekday,
           startTime: s.startTime,
           endTime: s.endTime,
           durationMins: s.durationMins || null,
-        });
-        await this.scheduleRepo.save(schedule);
-      }
+        }),
+      );
+      await this.scheduleRepo.save(schedules);
     }
 
     // If startDate is set and status is Active, generate sessions
@@ -904,6 +906,21 @@ export class ClassController {
 
   // ========= Private helpers =========
 
+  // ── Timezone-safe UTC date helpers ──────────────────────────────────────────
+
+  /** Parse 'YYYY-MM-DD' as UTC midnight, avoiding local-timezone shift. */
+  private parseUtcDate(dateStr: string): Date {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+
+  /** Format a UTC Date back to 'YYYY-MM-DD'. */
+  private formatUtcDate(d: Date): string {
+    return d.toISOString().split('T')[0];
+  }
+
+  // ── Session generation ───────────────────────────────────────────────────────
+
   private async generateSessions(classId: string) {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     const schedules = await this.scheduleRepo.find({ where: { classId } });
@@ -916,82 +933,121 @@ export class ClassController {
       return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = this.formatUtcDate(new Date());
     const startFromStr = classEntity.startDate > todayStr ? classEntity.startDate : todayStr;
-
-    const startDate = new Date(startFromStr);
-    const endDate = classEntity.finishDate ? new Date(classEntity.finishDate) : new Date(startDate);
-    if (!classEntity.finishDate) {
-      endDate.setMonth(endDate.getMonth() + 3); // Default 3 months if no end date
-    }
+    const endDateStr = classEntity.finishDate
+      ? classEntity.finishDate
+      : this.formatUtcDate(
+          new Date(Date.UTC(
+            this.parseUtcDate(startFromStr).getUTCFullYear(),
+            this.parseUtcDate(startFromStr).getUTCMonth() + 3,
+            this.parseUtcDate(startFromStr).getUTCDate(),
+          )),
+        );
 
     const weekdayMap: Record<string, number> = {
       Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
     };
 
-    const activeStudents = await this.classStudentRepo.find({
-      where: { classId, status: 'Active' },
-    });
-    const holidayDates = classEntity.skipHolidays
-      ? new Set(
-          await this.getHolidayDates.execute(
-            startFromStr,
-            endDate.toISOString().split('T')[0],
-          ),
-        )
-      : new Set<string>();
+    // Load all needed data in parallel — avoid repeated DB calls inside the loop
+    const [activeStudents, existingSessions, holidayDates] = await Promise.all([
+      this.classStudentRepo.find({ where: { classId, status: 'Active' } }),
+      this.sessionRepo.find({
+        where: { classId, date: Between(startFromStr, endDateStr) },
+        select: { id: true, date: true, startTime: true, status: true, attendanceLocked: true, teacherId: true, assistantId: true },
+      }),
+      classEntity.skipHolidays
+        ? this.getHolidayDates.execute(startFromStr, endDateStr)
+        : Promise.resolve([] as string[]),
+    ]);
 
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dayOfWeek = d.getDay();
-      const dateStr = d.toISOString().split('T')[0];
-      if (holidayDates.has(dateStr)) continue;
+    // Build lookup map: "date_startTime" → session, to avoid N+1 findOne calls
+    const existingMap = new Map(
+      existingSessions.map((s) => [`${s.date}_${s.startTime}`, s]),
+    );
+    const holidaySet = new Set(holidayDates);
+
+    const sessionsToUpdate: ClassSessionOrmEntity[] = [];
+    const sessionsToCreate: Partial<ClassSessionOrmEntity>[] = [];
+
+    for (
+      let d = this.parseUtcDate(startFromStr);
+      this.formatUtcDate(d) <= endDateStr;
+      d.setUTCDate(d.getUTCDate() + 1)
+    ) {
+      const dayOfWeek = d.getUTCDay();
+      const dateStr = this.formatUtcDate(d);
+      if (holidaySet.has(dateStr)) continue;
+
       for (const schedule of schedules) {
-        if (weekdayMap[schedule.weekday] === dayOfWeek) {
-          // Check if session already exists
-          const exists = await this.sessionRepo.findOne({
-            where: { classId, date: dateStr, startTime: schedule.startTime },
-          });
-          if (exists) {
-            // Update teacher and assistant if it's a future session, not locked, and still Scheduled
-            if (!exists.attendanceLocked && exists.date >= todayStr && exists.status === SessionStatus.SCHEDULED) {
-              exists.teacherId = classEntity.mainTeacherId;
-              exists.assistantId = classEntity.assistantId;
-              await this.sessionRepo.save(exists);
-            }
-            continue;
-          }
+        if (weekdayMap[schedule.weekday] !== dayOfWeek) continue;
 
-          const session = this.sessionRepo.create({
-            classId,
-            roomId: schedule.roomId,
-            teacherId: classEntity.mainTeacherId,
-            assistantId: classEntity.assistantId,
-            date: dateStr,
-            startTime: schedule.startTime,
-            endTime: schedule.endTime,
-            status: SessionStatus.SCHEDULED,
-            attendanceLocked: false,
-          });
-          const savedSession = await this.sessionRepo.save(session);
+        const key = `${dateStr}_${schedule.startTime}`;
+        const exists = existingMap.get(key);
 
-          // Create attendance records for all active students
-          for (const cs of activeStudents) {
-            const att = this.attendanceRepo.create({
-              classSessionId: savedSession.id,
-              studentId: cs.studentId,
-              isPresent: false,
-            });
-            await this.attendanceRepo.save(att);
+        if (exists) {
+          // Only update teacher/assistant on future unlocked Scheduled sessions
+          if (
+            !exists.attendanceLocked &&
+            exists.date >= todayStr &&
+            exists.status === SessionStatus.SCHEDULED
+          ) {
+            exists.teacherId = classEntity.mainTeacherId;
+            exists.assistantId = classEntity.assistantId;
+            sessionsToUpdate.push(exists as ClassSessionOrmEntity);
           }
+          continue;
         }
+
+        sessionsToCreate.push({
+          classId,
+          roomId: schedule.roomId,
+          teacherId: classEntity.mainTeacherId,
+          assistantId: classEntity.assistantId,
+          date: dateStr,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          status: SessionStatus.SCHEDULED,
+          attendanceLocked: false,
+        });
       }
     }
+
+    // Persist in a single transaction: update existing + bulk-insert new + bulk-insert attendance
+    await this.dataSource.transaction(async (manager) => {
+      // 1. Bulk-update teacher/assistant on modified scheduled sessions
+      if (sessionsToUpdate.length > 0) {
+        await manager.save(ClassSessionOrmEntity, sessionsToUpdate);
+      }
+
+      // 2. Bulk-insert new sessions
+      if (sessionsToCreate.length > 0) {
+        const newEntities = sessionsToCreate.map((s) =>
+          manager.create(ClassSessionOrmEntity, s),
+        );
+        const savedSessions = await manager.save(ClassSessionOrmEntity, newEntities);
+
+        // 3. Bulk-insert attendance records for every new session × every active student
+        if (activeStudents.length > 0) {
+          const attendances = savedSessions.flatMap((session) =>
+            activeStudents.map((cs) =>
+              manager.create(StudentAttendanceOrmEntity, {
+                classSessionId: session.id,
+                studentId: cs.studentId,
+                isPresent: false,
+              }),
+            ),
+          );
+          await manager.save(StudentAttendanceOrmEntity, attendances);
+        }
+      }
+    });
   }
 
   private async regenerateFutureSessions(classId: string) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.formatUtcDate(new Date());
 
-    // Delete future unlocked sessions that are still Scheduled
+    // Delete future unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
     await this.sessionRepo
       .createQueryBuilder()
       .delete()
