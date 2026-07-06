@@ -31,6 +31,8 @@ export class GetDashboardSummaryUseCase {
       totalCenters,
       studentGrowth,
       courseDistribution,
+      salaryRes,
+      tuitionRes,
     ] = await Promise.all([
       this.studentRepo.count(),
       this.teacherRepo.count(),
@@ -54,6 +56,12 @@ export class GetDashboardSummaryUseCase {
          ORDER BY value DESC
          LIMIT 5`
       ),
+      this.studentRepo.query(
+        `SELECT SUM(paid_amount) AS total FROM teacher_monthly_wages WHERE status = 'Paid'`
+      ),
+      this.studentRepo.query(
+        `SELECT SUM(paid_amount) AS total FROM student_monthly_bills WHERE status = 'Paid'`
+      ),
     ]);
 
     return {
@@ -64,6 +72,8 @@ export class GetDashboardSummaryUseCase {
         totalClasses,
         totalCourses,
         totalCenters,
+        totalPaidSalary: Number(salaryRes[0]?.total || 0),
+        totalCollectedTuition: Number(tuitionRes[0]?.total || 0),
         studentGrowth: studentGrowth.map((g: any) => ({
           month: g.month,
           students: Number(g.count),
