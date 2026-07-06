@@ -479,34 +479,45 @@ export class DashboardController {
       );
     }
 
-    // 5. Calculate attendance statistics
-    // Total = all sessions (including upcoming), present = sessions where attendance recorded as present
-    const totalSessionsCompleted = sessionsList.length;
-    const presentCount = sessionsList.filter((s) => s.hasAttendanceRecord && s.isPresent).length;
-    const absentCount = sessionsList.filter((s) => s.hasAttendanceRecord && !s.isPresent).length;
-    const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
-
-    // Monthly attendance breakdown (total = all sessions in month, present = sessions with is_present=true)
-    // Initialize with the current month to ensure it is always shown
+    // 5. Calculate attendance statistics — scoped to current month only
     const currentDate = new Date();
     const currentMonthYear = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+
+    // Helper: get MM/YYYY string from session date string "YYYY-MM-DD"
+    const getMonthYear = (dateStr: string): string | null => {
+      const parts = dateStr.split('-');
+      return parts.length >= 2 ? `${parts[1]}/${parts[0]}` : null;
+    };
+
+    // Build set of 3 allowed months: current, prev, prev-prev
+    const allowedMonths = new Set<string>();
+    for (let offset = 0; offset <= 2; offset++) {
+      const d = new Date(currentDate.getFullYear(), currentDate.getMonth() - offset, 1);
+      allowedMonths.add(`${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
+    }
+
+    // Overall stats = current month sessions only
+    const currentMonthSessions = sessionsList.filter((s) => getMonthYear(s.date) === currentMonthYear);
+    const totalSessionsCompleted = currentMonthSessions.length;
+    const presentCount = currentMonthSessions.filter((s) => s.hasAttendanceRecord && s.isPresent).length;
+    const absentCount = currentMonthSessions.filter((s) => s.hasAttendanceRecord && !s.isPresent).length;
+    const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
+
+    // Monthly attendance breakdown — only show current month + 2 previous months
     const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {
       [currentMonthYear]: { completed: 0, present: 0, absent: 0 }
     };
     for (const s of sessionsList) {
-      const dateParts = s.date.split('-');
-      if (dateParts.length >= 2) {
-        const monthYear = `${dateParts[1]}/${dateParts[0]}`; // e.g. "07/2026"
-        if (!monthlyAttendance[monthYear]) {
-          monthlyAttendance[monthYear] = { completed: 0, present: 0, absent: 0 };
-        }
-        // Count every session in the month as part of total
-        monthlyAttendance[monthYear].completed++;
-        if (s.hasAttendanceRecord && s.isPresent) {
-          monthlyAttendance[monthYear].present++;
-        } else if (s.hasAttendanceRecord && !s.isPresent) {
-          monthlyAttendance[monthYear].absent++;
-        }
+      const monthYear = getMonthYear(s.date);
+      if (!monthYear || !allowedMonths.has(monthYear)) continue; // skip months outside the 3-month window
+      if (!monthlyAttendance[monthYear]) {
+        monthlyAttendance[monthYear] = { completed: 0, present: 0, absent: 0 };
+      }
+      monthlyAttendance[monthYear].completed++;
+      if (s.hasAttendanceRecord && s.isPresent) {
+        monthlyAttendance[monthYear].present++;
+      } else if (s.hasAttendanceRecord && !s.isPresent) {
+        monthlyAttendance[monthYear].absent++;
       }
     }
     const monthlyAttendanceList = Object.entries(monthlyAttendance)
