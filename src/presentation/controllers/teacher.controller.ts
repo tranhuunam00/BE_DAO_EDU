@@ -541,4 +541,48 @@ export class TeacherController {
       }))
     };
   }
+
+  @Get(':id/wages-history')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Lấy lịch sử nhận lương thực tế của giáo viên theo năm' })
+  async getWagesHistory(
+    @Param('id') teacherId: string,
+    @Query('year') year: string,
+  ) {
+    if (!year || !/^\d{4}$/.test(year)) {
+      throw new BadRequestException('Năm không hợp lệ. Định dạng yêu cầu là YYYY');
+    }
+
+    const wages = await this.monthlyWageRepo
+      .createQueryBuilder('wage')
+      .leftJoinAndSelect('wage.period', 'period')
+      .leftJoinAndSelect('wage.items', 'items')
+      .where('wage.teacher_id = :teacherId', { teacherId })
+      .andWhere('wage.month LIKE :yearPattern', { yearPattern: `${year}-%` })
+      .orderBy('wage.month', 'DESC')
+      .addOrderBy('wage.created_at', 'DESC')
+      .getMany();
+
+    return wages.map(wage => ({
+      id: wage.id,
+      month: wage.month,
+      totalAmount: Number(wage.totalAmount),
+      paidAmount: Number(wage.paidAmount),
+      status: wage.status,
+      paymentDate: wage.paymentDate,
+      paymentMethod: wage.paymentMethod,
+      note: wage.note,
+      periodName: wage.period?.name || `Đợt chi trả Tháng ${wage.month}`,
+      items: wage.items.map(item => ({
+        id: item.id,
+        classId: item.classId,
+        className: item.className,
+        courseName: item.courseName,
+        levelName: item.levelName,
+        sessionsCount: item.sessionsCount,
+        rate: Number(item.rate),
+        totalAmount: Number(item.totalAmount)
+      }))
+    }));
+  }
 }
