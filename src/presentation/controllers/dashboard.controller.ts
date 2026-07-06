@@ -403,6 +403,12 @@ export class DashboardController {
     });
     const classIds = classStudents.map((cs) => cs.classId);
 
+    // Map classId to joinedDate for filtering sessions
+    const classStudentMap = new Map<string, string>();
+    for (const cs of classStudents) {
+      classStudentMap.set(cs.classId, cs.joinedDate);
+    }
+
     let sessionsList: any[] = [];
 
     if (classIds.length > 0) {
@@ -417,9 +423,15 @@ export class DashboardController {
         .addOrderBy('s.start_time', 'ASC')
         .getMany();
 
+      // Filter sessions that occur on or after the student's joinedDate for that class
+      const eligibleSessions = sessions.filter((session) => {
+        const joinedDate = classStudentMap.get(session.classId);
+        return joinedDate ? session.date >= joinedDate : false;
+      });
+
       // 4. Map each session with student attendance status
       sessionsList = await Promise.all(
-        sessions.map(async (session) => {
+        eligibleSessions.map(async (session) => {
           const attendance = await this.attendanceRepo.findOne({
             where: { classSessionId: session.id, studentId: student.id },
           });
@@ -428,17 +440,22 @@ export class DashboardController {
           // - Chưa diễn ra: color: Blue (xanh nước biển)
           // - Diễn ra rồi có tham gia: color: Green (xanh lá cây)
           // - Diễn ra rồi không tham gia: color: Red (đỏ)
+          // - Chưa điểm danh (đối với buổi đã hoặc đang diễn ra nhưng chưa có bản ghi điểm danh): color: Gray (xám)
           let attendanceColor = 'blue'; // blue (Scheduled)
           let attendanceText = 'Chưa diễn ra';
+          const hasAttendanceRecord = !!attendance;
 
-          if (session.status === SessionStatus.COMPLETED || session.status === SessionStatus.IN_PROGRESS) {
-            if (attendance && attendance.isPresent) {
+          if (hasAttendanceRecord) {
+            if (attendance.isPresent) {
               attendanceColor = 'green';
               attendanceText = 'Có tham gia';
             } else {
               attendanceColor = 'red';
               attendanceText = 'Vắng mặt';
             }
+          } else if (session.status === SessionStatus.COMPLETED || session.status === SessionStatus.IN_PROGRESS) {
+            attendanceColor = 'gray';
+            attendanceText = 'Chưa điểm danh';
           }
 
           return {
@@ -456,13 +473,14 @@ export class DashboardController {
             isPresent: attendance ? attendance.isPresent : false,
             note: attendance ? attendance.note : null,
             reason: attendance ? attendance.reason : null,
+            hasAttendanceRecord,
           };
         }),
       );
     }
 
-    // 5. Calculate attendance statistics
-    const completedSessions = sessionsList.filter((s) => s.status === SessionStatus.COMPLETED);
+    // 5. Calculate attendance statistics (only count sessions with actual attendance records)
+    const completedSessions = sessionsList.filter((s) => s.status === SessionStatus.COMPLETED && s.hasAttendanceRecord);
     const totalSessionsCompleted = completedSessions.length;
     const presentCount = completedSessions.filter((s) => s.isPresent).length;
     const absentCount = totalSessionsCompleted - presentCount;
