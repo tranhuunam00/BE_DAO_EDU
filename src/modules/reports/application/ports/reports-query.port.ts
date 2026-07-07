@@ -126,6 +126,11 @@ export abstract class ReportsQueryPort {
   abstract getStudentsSummary(filters: ReportFilters): Promise<StudentsSummary>;
   abstract getNewStudentsByMonth(filters: ReportFilters): Promise<NewStudentsByMonthRow[]>;
   abstract getNewStudentsList(filters: ReportFilters): Promise<NewStudentRow[]>;
+  // New reports
+  abstract getClassStudentsStats(filters: ReportFilters): Promise<any[]>;
+  abstract getSaleOrdersReport(filters: ReportFilters): Promise<any[]>;
+  abstract getStudentAttendanceReport(filters: ReportFilters): Promise<any[]>;
+  abstract getStudentDebtsReport(filters: ReportFilters): Promise<any[]>;
 }
 
 export interface StudentsSummary {

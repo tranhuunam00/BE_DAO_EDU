@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
-import { ReportFilters } from '../../modules/reports/application/ports/reports-query.port';
+import { ReportFilters, ReportsQueryPort } from '../../modules/reports/application/ports/reports-query.port';
 import { GetRevenueReportUseCase } from '../../modules/reports/application/use-cases/get-revenue-report.use-case';
 import { GetSalaryReportUseCase } from '../../modules/reports/application/use-cases/get-salary-report.use-case';
 import { GetAttendanceReportUseCase } from '../../modules/reports/application/use-cases/get-attendance-report.use-case';
@@ -23,6 +23,7 @@ export class ReportController {
     private readonly attendanceReport: GetAttendanceReportUseCase,
     private readonly assignmentReport: GetAssignmentReportUseCase,
     private readonly studentsReport: GetStudentsReportUseCase,
+    private readonly reportsQuery: ReportsQueryPort,
   ) {}
 
   @Get('revenue')
@@ -77,5 +78,54 @@ export class ReportController {
   ) {
     const filters: ReportFilters = { month, centerId, classId };
     return this.studentsReport.execute(filters);
+  }
+
+  @Get('class-students-stats')
+  @ApiOperation({ summary: 'Thống kê học viên theo lớp' })
+  getClassStudentsStats(
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.reportsQuery.getClassStudentsStats({ centerId, classId });
+  }
+
+  @Get('sale-orders')
+  @ApiOperation({ summary: 'Báo cáo SALE ORDER' })
+  getSaleOrders(
+    @Query('month') month?: string,
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.reportsQuery.getSaleOrdersReport({ month, centerId, classId });
+  }
+
+  @Get('class-attendance')
+  @ApiOperation({ summary: 'BC điểm danh theo lớp' })
+  getClassAttendance(
+    @Query('month') month?: string,
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.reportsQuery.getAttendanceByClass({ month, centerId, classId });
+  }
+
+  @Get('student-attendance')
+  @ApiOperation({ summary: 'BC điểm danh theo học viên' })
+  getStudentAttendance(
+    @Query('month') month?: string,
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.reportsQuery.getStudentAttendanceReport({ month, centerId, classId });
+  }
+
+  @Get('student-debts')
+  @ApiOperation({ summary: 'BC theo dõi công nợ học viên' })
+  getStudentDebts(
+    @Query('month') month?: string,
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+  ) {
+    return this.reportsQuery.getStudentDebtsReport({ month, centerId, classId });
   }
 }

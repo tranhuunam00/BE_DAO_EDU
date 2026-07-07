@@ -598,4 +598,162 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
+
+  // Implementation of new reports
+  async getClassStudentsStats(filters: ReportFilters): Promise<any[]> {
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters.centerId) {
+      conditions.push(`cl.center_id = $${idx++}`);
+      params.push(filters.centerId);
+    }
+    if (filters.classId) {
+      conditions.push(`cl.id = $${idx++}`);
+      params.push(filters.classId);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.ds.query(
+      `SELECT
+         cl.id AS "classId",
+         cl.class_code AS "classCode",
+         cl.class_name AS "className",
+         ct.name AS "centerName",
+         COALESCE(COUNT(cs.id) FILTER (WHERE cs.status = 'Active'), 0)::int AS "activeCount",
+         COALESCE(COUNT(cs.id) FILTER (WHERE cs.status = 'Dropped'), 0)::int AS "droppedCount",
+         COALESCE(COUNT(cs.id), 0)::int AS "totalCount"
+       FROM classes cl
+       LEFT JOIN centers ct ON ct.id = cl.center_id
+       LEFT JOIN class_students cs ON cs.class_id = cl.id
+       ${where}
+       GROUP BY cl.id, cl.class_code, cl.class_name, ct.name
+       ORDER BY cl.class_code ASC`,
+      params,
+    );
+  }
+
+  async getSaleOrdersReport(filters: ReportFilters): Promise<any[]> {
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters.month) {
+      conditions.push(`b.month = $${idx++}`);
+      params.push(filters.month);
+    }
+    if (filters.centerId) {
+      conditions.push(`cl.center_id = $${idx++}`);
+      params.push(filters.centerId);
+    }
+    if (filters.classId) {
+      conditions.push(`cs.class_id = $${idx++}`);
+      params.push(filters.classId);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.ds.query(
+      `SELECT
+         b.id AS "billId",
+         b.month AS "month",
+         b.receipt_code AS "receiptCode",
+         s.student_id AS "studentCode",
+         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         cl.class_code AS "classCode",
+         cl.class_name AS "className",
+         b.total_amount AS "totalAmount",
+         b.paid_amount AS "paidAmount",
+         b.status AS "status",
+         b.payment_method AS "paymentMethod",
+         b.payment_date AS "paymentDate"
+       FROM student_monthly_bills b
+       JOIN students s ON s.id = b.student_id
+       LEFT JOIN class_students cs ON cs.student_id = s.id AND cs.status = 'Active'
+       LEFT JOIN classes cl ON cl.id = cs.class_id
+       ${where}
+       ORDER BY b.created_at DESC`,
+      params,
+    );
+  }
+
+  async getStudentAttendanceReport(filters: ReportFilters): Promise<any[]> {
+    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters.month) {
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx++}`);
+      params.push(filters.month);
+    }
+    if (filters.centerId) {
+      conditions.push(`cl.center_id = $${idx++}`);
+      params.push(filters.centerId);
+    }
+    if (filters.classId) {
+      conditions.push(`cl.id = $${idx++}`);
+      params.push(filters.classId);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.ds.query(
+      `SELECT
+         s.id AS "studentId",
+         s.student_id AS "studentCode",
+         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         cl.class_code AS "classCode",
+         cl.class_name AS "className",
+         COUNT(sa.id)::int AS "totalSessions",
+         COUNT(sa.id) FILTER (WHERE sa.is_present = true)::int AS "presentCount",
+         COUNT(sa.id) FILTER (WHERE sa.is_present = false)::int AS "absentCount"
+       FROM student_attendance sa
+       JOIN class_sessions cs ON cs.id = sa.class_session_id
+       JOIN classes cl ON cl.id = cs.class_id
+       JOIN students s ON s.id = sa.student_id
+       ${where}
+       GROUP BY s.id, s.student_id, s.last_name, s.first_name, cl.id, cl.class_code, cl.class_name
+       ORDER BY "absentCount" DESC, s.last_name ASC`,
+      params,
+    );
+  }
+
+  async getStudentDebtsReport(filters: ReportFilters): Promise<any[]> {
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters.month) {
+      conditions.push(`b.month = $${idx++}`);
+      params.push(filters.month);
+    }
+    if (filters.centerId) {
+      conditions.push(`cl.center_id = $${idx++}`);
+      params.push(filters.centerId);
+    }
+    if (filters.classId) {
+      conditions.push(`cs.class_id = $${idx++}`);
+      params.push(filters.classId);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.ds.query(
+      `SELECT
+         s.id AS "studentId",
+         s.student_id AS "studentCode",
+         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         cl.class_code AS "classCode",
+         cl.class_name AS "className",
+         COALESCE(SUM(b.total_amount), 0)::numeric AS "totalExpected",
+         COALESCE(SUM(b.paid_amount), 0)::numeric AS "totalPaid",
+         COALESCE(SUM(b.total_amount - b.paid_amount), 0)::numeric AS "debtAmount"
+       FROM students s
+       JOIN student_monthly_bills b ON b.student_id = s.id
+       LEFT JOIN class_students cs ON cs.student_id = s.id AND cs.status = 'Active'
+       LEFT JOIN classes cl ON cl.id = cs.class_id
+       ${where}
+       GROUP BY s.id, s.student_id, s.last_name, s.first_name, cl.id, cl.class_code, cl.class_name
+       ORDER BY "debtAmount" DESC`,
+      params,
+    );
+  }
 }
