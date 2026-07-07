@@ -781,7 +781,15 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month) {
+    if (filters.startMonth) {
+      conditions.push(`b.month >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`b.month <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth) {
       conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
@@ -821,7 +829,15 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month) {
+    if (filters.startMonth) {
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth) {
       conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
@@ -858,7 +874,15 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month) {
+    if (filters.startMonth) {
+      conditions.push(`b.month >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`b.month <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth) {
       conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
