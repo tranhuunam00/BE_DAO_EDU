@@ -26,15 +26,32 @@ export class ReportController {
     private readonly reportsQuery: ReportsQueryPort,
   ) {}
 
+  private parseFilters(
+    month?: string,
+    centerId?: string,
+    classId?: string,
+    classIds?: string,
+    classStatus?: string,
+  ): ReportFilters {
+    return {
+      month,
+      centerId,
+      classId,
+      classIds: classIds ? classIds.split(',').filter(Boolean) : undefined,
+      classStatus,
+    };
+  }
+
   @Get('revenue')
   @ApiOperation({ summary: 'Báo cáo doanh thu học phí' })
   getRevenue(
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    const filters: ReportFilters = { month, centerId, classId };
-    return this.revenueReport.execute(filters);
+    return this.revenueReport.execute(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('salary')
@@ -42,9 +59,11 @@ export class ReportController {
   getSalary(
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    const filters: ReportFilters = { month, centerId };
-    return this.salaryReport.execute(filters);
+    return this.salaryReport.execute(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('attendance')
@@ -53,9 +72,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    const filters: ReportFilters = { month, centerId, classId };
-    return this.attendanceReport.execute(filters);
+    return this.attendanceReport.execute(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('assignments')
@@ -64,9 +84,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    const filters: ReportFilters = { month, centerId, classId };
-    return this.assignmentReport.execute(filters);
+    return this.assignmentReport.execute(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('students')
@@ -75,9 +96,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    const filters: ReportFilters = { month, centerId, classId };
-    return this.studentsReport.execute(filters);
+    return this.studentsReport.execute(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('class-students-stats')
@@ -85,8 +107,10 @@ export class ReportController {
   getClassStudentsStats(
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    return this.reportsQuery.getClassStudentsStats({ centerId, classId });
+    return this.reportsQuery.getClassStudentsStats(this.parseFilters(undefined, centerId, classId, classIds, classStatus));
   }
 
   @Get('sale-orders')
@@ -95,8 +119,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    return this.reportsQuery.getSaleOrdersReport({ month, centerId, classId });
+    return this.reportsQuery.getSaleOrdersReport(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('class-attendance')
@@ -105,8 +131,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    return this.reportsQuery.getAttendanceByClass({ month, centerId, classId });
+    return this.reportsQuery.getAttendanceByClass(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('student-attendance')
@@ -115,8 +143,10 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    return this.reportsQuery.getStudentAttendanceReport({ month, centerId, classId });
+    return this.reportsQuery.getStudentAttendanceReport(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 
   @Get('student-debts')
@@ -125,7 +155,9 @@ export class ReportController {
     @Query('month') month?: string,
     @Query('centerId') centerId?: string,
     @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
   ) {
-    return this.reportsQuery.getStudentDebtsReport({ month, centerId, classId });
+    return this.reportsQuery.getStudentDebtsReport(this.parseFilters(month, centerId, classId, classIds, classStatus));
   }
 }

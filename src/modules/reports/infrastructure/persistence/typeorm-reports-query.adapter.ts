@@ -498,23 +498,41 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   // ── Filter helpers ───────────────────────────────────
 
+  private applyClassFilters(
+    filters: ReportFilters,
+    conditions: string[],
+    params: any[],
+    idx: { value: number },
+    columnPrefix = 'cs.class_id'
+  ) {
+    if (filters.classIds && filters.classIds.length > 0) {
+      const placeHolders = filters.classIds.map(() => `$${idx.value++}`).join(', ');
+      conditions.push(`${columnPrefix} IN (${placeHolders})`);
+      params.push(...filters.classIds);
+    } else if (filters.classId) {
+      conditions.push(`${columnPrefix} = $${idx.value++}`);
+      params.push(filters.classId);
+    }
+    if (filters.classStatus) {
+      conditions.push(`cl.status = $${idx.value++}`);
+      params.push(filters.classStatus);
+    }
+  }
+
   private studentWhereClause(filters: ReportFilters, skipMonth = false) {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month && !skipMonth) {
-      conditions.push(`TO_CHAR(s.created_at, 'YYYY-MM') = $${idx++}`);
+      conditions.push(`TO_CHAR(s.created_at, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cs.class_id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cs.class_id');
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
@@ -522,20 +540,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   private billWhereClause(filters: ReportFilters, skipMonth = false) {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month && !skipMonth) {
-      conditions.push(`b.month = $${idx++}`);
+      conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cs.class_id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cs.class_id');
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
@@ -543,20 +558,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   private attendanceWhereClause(filters: ReportFilters, skipMonth = false) {
     const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month && !skipMonth) {
-      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx++}`);
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cl.id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cl.id');
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
@@ -564,20 +576,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   private assignmentWhereClause(filters: ReportFilters) {
     const conditions: string[] = [`a.status = 'published'`];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month) {
-      conditions.push(`TO_CHAR(a.created_at, 'YYYY-MM') = $${idx++}`);
+      conditions.push(`TO_CHAR(a.created_at, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cl.id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cl.id');
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
@@ -585,16 +594,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   private salaryWhereClause(filters: ReportFilters, skipMonth = false) {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month && !skipMonth) {
-      conditions.push(`w.month = $${idx++}`);
+      conditions.push(`w.month = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
+    this.applyClassFilters(filters, conditions, params, idx, 'cl.id');
 
     return { where: `WHERE ${conditions.join(' AND ')}`, params };
   }
@@ -603,16 +613,13 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   async getClassStudentsStats(filters: ReportFilters): Promise<any[]> {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cl.id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cl.id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
 
@@ -633,7 +640,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     // Fetch enrolled students based on month filter if present
     const studentConditions: string[] = ['1=1'];
     const studentParams: any[] = [];
-    let sIdx = 1;
+    const sIdx = { value: 1 };
 
     if (filters.month) {
       const startOfMonth = `${filters.month}-01`;
@@ -643,12 +650,18 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       const lastDay = new Date(y, m, 0).getDate();
       const endOfMonth = `${filters.month}-${String(lastDay).padStart(2, '0')}`;
 
-      studentConditions.push(`cs.joined_date <= $${sIdx++}::date`);
+      studentConditions.push(`cs.joined_date <= $${sIdx.value++}::date`);
       studentParams.push(endOfMonth);
 
-      studentConditions.push(`NOT (cs.status = 'Dropped' AND cs.updated_at::date < $${sIdx++}::date)`);
+      studentConditions.push(`NOT (cs.status = 'Dropped' AND cs.updated_at::date < $${sIdx.value++}::date)`);
       studentParams.push(startOfMonth);
     }
+
+    if (filters.centerId) {
+      studentConditions.push(`cl.center_id = $${sIdx.value++}`);
+      studentParams.push(filters.centerId);
+    }
+    this.applyClassFilters(filters, studentConditions, studentParams, sIdx, 'cl.id');
 
     const studentWhere = `WHERE ${studentConditions.join(' AND ')}`;
     const enrolledStudents = await this.ds.query(
@@ -662,6 +675,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          cs.updated_at AS "updatedAt"
        FROM class_students cs
        JOIN students s ON s.id = cs.student_id
+       LEFT JOIN classes cl ON cl.id = cs.class_id
        ${studentWhere}
        ORDER BY cs.joined_date DESC, s.last_name ASC`,
       studentParams,
@@ -716,20 +730,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   async getSaleOrdersReport(filters: ReportFilters): Promise<any[]> {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month) {
-      conditions.push(`b.month = $${idx++}`);
+      conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cs.class_id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cs.class_id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.ds.query(
@@ -759,20 +770,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   async getStudentAttendanceReport(filters: ReportFilters): Promise<any[]> {
     const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month) {
-      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx++}`);
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cl.id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cl.id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.ds.query(
@@ -799,20 +807,17 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   async getStudentDebtsReport(filters: ReportFilters): Promise<any[]> {
     const conditions: string[] = ['1=1'];
     const params: any[] = [];
-    let idx = 1;
+    const idx = { value: 1 };
 
     if (filters.month) {
-      conditions.push(`b.month = $${idx++}`);
+      conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
     if (filters.centerId) {
-      conditions.push(`cl.center_id = $${idx++}`);
+      conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    if (filters.classId) {
-      conditions.push(`cs.class_id = $${idx++}`);
-      params.push(filters.classId);
-    }
+    this.applyClassFilters(filters, conditions, params, idx, 'cs.class_id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.ds.query(

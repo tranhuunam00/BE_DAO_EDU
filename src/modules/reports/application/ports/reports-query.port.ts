@@ -2,6 +2,8 @@ export interface ReportFilters {
   month?: string;       // e.g. '2026-06'
   centerId?: string;
   classId?: string;
+  classIds?: string[];  // Support selecting multiple classes
+  classStatus?: string; // Filter by class status
 }
 
 export interface RevenueSummary {
