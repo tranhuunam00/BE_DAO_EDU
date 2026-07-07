@@ -68,6 +68,8 @@ export interface AttendanceByClassRow {
   presentCount: number;
   absentCount: number;
   rate: number;
+  sessions?: any[];
+  students?: any[];
 }
 
 export interface AttendanceByMonth {

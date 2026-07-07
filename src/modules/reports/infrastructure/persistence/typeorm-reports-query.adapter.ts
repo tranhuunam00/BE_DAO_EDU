@@ -256,9 +256,154 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
        ORDER BY "totalSessions" DESC`,
       params,
     );
+
+    if (rows.length === 0) return [];
+
+    // Fetch individual sessions for these classes
+    const sessions = await this.ds.query(
+      `SELECT
+         cs.id AS "sessionId",
+         cs.class_id AS "classId",
+         cs.date AS "date"
+       FROM class_sessions cs
+       LEFT JOIN classes cl ON cl.id = cs.class_id
+       ${where}
+       ORDER BY cs.date ASC`,
+      params,
+    );
+
+    // Fetch detailed student attendance
+    const attendanceRecords = await this.ds.query(
+      `SELECT
+         sa.student_id AS "studentId",
+         s.student_id AS "studentCode",
+         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         s.mobile AS "mobile",
+         sa.class_session_id AS "sessionId",
+         sa.is_present AS "isPresent",
+         cs.class_id AS "classId"
+       FROM student_attendance sa
+       JOIN class_sessions cs ON cs.id = sa.class_session_id
+       JOIN students s ON s.id = sa.student_id
+       LEFT JOIN classes cl ON cl.id = cs.class_id
+       ${where}
+       ORDER BY s.last_name ASC`,
+      params,
+    );
+
+    // Fetch billing items
+    const billConditions: string[] = ['1=1'];
+    const billParams: any[] = [];
+    const bIdx = { value: 1 };
+    if (filters.startMonth) {
+      billConditions.push(`b.month >= $${bIdx.value++}`);
+      billParams.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      billConditions.push(`b.month <= $${bIdx.value++}`);
+      billParams.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth) {
+      billConditions.push(`b.month = $${bIdx.value++}`);
+      billParams.push(filters.month);
+    }
+    this.applyClassFilters(filters, billConditions, billParams, bIdx, 'bi.class_id');
+
+    const billingItems = await this.ds.query(
+      `SELECT
+         bi.class_id AS "classId",
+         b.student_id AS "studentId",
+         bi.rate AS "rate",
+         bi.total_amount AS "totalAmount",
+         b.status AS "paymentStatus"
+       FROM student_monthly_bill_items bi
+       JOIN student_monthly_bills b ON b.id = bi.bill_id
+       WHERE ${billConditions.join(' AND ')}`,
+      billParams,
+    );
+
+    // Fetch default pricing for fallback
+    const defaultPricing = await this.ds.query(
+      `SELECT
+         cl.id AS "classId",
+         COALESCE(p.price_per_session, 0)::numeric AS "rate"
+       FROM classes cl
+       LEFT JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id`
+    );
+    const pricingMap = new Map<string, number>();
+    for (const p of defaultPricing) {
+      pricingMap.set(p.classId, Number(p.rate));
+    }
+
+    // Map sessions to class
+    const sessionsByClass = new Map<string, any[]>();
+    for (const sess of sessions) {
+      if (!sessionsByClass.has(sess.classId)) {
+        sessionsByClass.set(sess.classId, []);
+      }
+      sessionsByClass.get(sess.classId)!.push({
+        sessionId: sess.sessionId,
+        date: sess.date,
+      });
+    }
+
+    // Map students and attendance status to class
+    const studentsByClass = new Map<string, Map<string, any>>();
+    for (const record of attendanceRecords) {
+      if (!studentsByClass.has(record.classId)) {
+        studentsByClass.set(record.classId, new Map());
+      }
+      const classMap = studentsByClass.get(record.classId)!;
+      if (!classMap.has(record.studentId)) {
+        classMap.set(record.studentId, {
+          studentId: record.studentId,
+          studentCode: record.studentCode,
+          studentName: record.studentName,
+          mobile: record.mobile || '—',
+          attendance: {},
+          presentCount: 0,
+          absentCount: 0,
+          pricePerSession: 0,
+          totalTuition: 0,
+          paymentStatus: '—',
+        });
+      }
+      const student = classMap.get(record.studentId)!;
+      student.attendance[record.sessionId] = record.isPresent;
+      if (record.isPresent) {
+        student.presentCount++;
+      } else {
+        student.absentCount++;
+      }
+    }
+
+    for (const item of billingItems) {
+      const classMap = studentsByClass.get(item.classId);
+      if (classMap) {
+        const student = classMap.get(item.studentId);
+        if (student) {
+          student.pricePerSession = Number(item.rate);
+          student.totalTuition = Number(item.totalAmount);
+          student.paymentStatus = item.paymentStatus;
+        }
+      }
+    }
+
+    for (const [classId, classMap] of studentsByClass.entries()) {
+      const defaultRate = pricingMap.get(classId) || 0;
+      for (const student of classMap.values()) {
+        if (student.pricePerSession === 0) {
+          student.pricePerSession = defaultRate;
+          student.totalTuition = student.presentCount * defaultRate;
+        }
+      }
+    }
+
     return rows.map((r: any) => {
       const total = Number(r.totalSessions);
       const present = Number(r.presentCount);
+      const classMap = studentsByClass.get(r.classId);
+      const studentsList = classMap ? Array.from(classMap.values()) : [];
       return {
         classId: r.classId,
         classCode: r.classCode,
@@ -267,6 +412,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         presentCount: present,
         absentCount: Number(r.absentCount),
         rate: total > 0 ? Number(((present / total) * 100).toFixed(1)) : 0,
+        sessions: sessionsByClass.get(r.classId) || [],
+        students: studentsList,
       };
     });
   }
