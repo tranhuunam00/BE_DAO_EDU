@@ -1,5 +1,7 @@
 export interface ReportFilters {
   month?: string;       // e.g. '2026-06'
+  startMonth?: string;  // Range filter start
+  endMonth?: string;    // Range filter end
   centerId?: string;
   classId?: string;
   classIds?: string[];  // Support selecting multiple classes

@@ -524,10 +524,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month && !skipMonth) {
+    if (filters.startMonth) {
+      conditions.push(`TO_CHAR(s.created_at, 'YYYY-MM') >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`TO_CHAR(s.created_at, 'YYYY-MM') <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth && !skipMonth) {
       conditions.push(`TO_CHAR(s.created_at, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
+
     if (filters.centerId) {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
@@ -542,10 +551,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month && !skipMonth) {
+    if (filters.startMonth) {
+      conditions.push(`b.month >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`b.month <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth && !skipMonth) {
       conditions.push(`b.month = $${idx.value++}`);
       params.push(filters.month);
     }
+
     if (filters.centerId) {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
@@ -560,10 +578,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month && !skipMonth) {
+    if (filters.startMonth) {
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth && !skipMonth) {
       conditions.push(`TO_CHAR(cs.date::date, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
+
     if (filters.centerId) {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
@@ -578,10 +605,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month) {
+    if (filters.startMonth) {
+      conditions.push(`TO_CHAR(a.created_at, 'YYYY-MM') >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`TO_CHAR(a.created_at, 'YYYY-MM') <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth) {
       conditions.push(`TO_CHAR(a.created_at, 'YYYY-MM') = $${idx.value++}`);
       params.push(filters.month);
     }
+
     if (filters.centerId) {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
@@ -596,10 +632,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const params: any[] = [];
     const idx = { value: 1 };
 
-    if (filters.month && !skipMonth) {
+    if (filters.startMonth) {
+      conditions.push(`w.month >= $${idx.value++}`);
+      params.push(filters.startMonth);
+    }
+    if (filters.endMonth) {
+      conditions.push(`w.month <= $${idx.value++}`);
+      params.push(filters.endMonth);
+    }
+    if (filters.month && !filters.startMonth && !filters.endMonth && !skipMonth) {
       conditions.push(`w.month = $${idx.value++}`);
       params.push(filters.month);
     }
+
     if (filters.centerId) {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
@@ -670,6 +715,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          s.id AS "studentId",
          s.student_id AS "studentCode",
          CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         s.mobile AS "mobile",
+         s.birthdate AS "birthdate",
          cs.status AS "status",
          cs.joined_date AS "joinedDate",
          cs.updated_at AS "updatedAt"
@@ -706,6 +753,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         studentId: s.studentId,
         studentCode: s.studentCode,
         studentName: s.studentName,
+        mobile: s.mobile,
+        birthdate: s.birthdate,
         status: statusInMonth,
         joinedDate: s.joinedDate,
         updatedAt: s.updatedAt,
