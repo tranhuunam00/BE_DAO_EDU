@@ -318,6 +318,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          b.status AS "paymentStatus"
        FROM student_monthly_bill_items bi
        JOIN student_monthly_bills b ON b.id = bi.bill_id
+       LEFT JOIN classes cl ON cl.id = bi.class_id
        WHERE ${billConditions.join(' AND ')}`,
       billParams,
     );
@@ -383,8 +384,15 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         const student = classMap.get(item.studentId);
         if (student) {
           student.pricePerSession = Number(item.rate);
-          student.totalTuition = Number(item.totalAmount);
-          student.paymentStatus = item.paymentStatus;
+          student.totalTuition += Number(item.totalAmount);
+          // Keep the worst payment status across months
+          if (item.paymentStatus === 'Unpaid') {
+            student.paymentStatus = 'Unpaid';
+          } else if (item.paymentStatus === 'Partially_Paid' && student.paymentStatus !== 'Unpaid') {
+            student.paymentStatus = 'Partially_Paid';
+          } else if (student.paymentStatus === '—') {
+            student.paymentStatus = item.paymentStatus;
+          }
         }
       }
     }
