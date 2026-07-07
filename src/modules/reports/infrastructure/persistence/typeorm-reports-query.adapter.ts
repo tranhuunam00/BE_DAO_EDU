@@ -615,23 +615,102 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     }
 
     const where = `WHERE ${conditions.join(' AND ')}`;
-    return this.ds.query(
+
+    // Fetch classes
+    const classes = await this.ds.query(
       `SELECT
          cl.id AS "classId",
          cl.class_code AS "classCode",
          cl.class_name AS "className",
-         ct.name AS "centerName",
-         COALESCE(COUNT(cs.id) FILTER (WHERE cs.status = 'Active'), 0)::int AS "activeCount",
-         COALESCE(COUNT(cs.id) FILTER (WHERE cs.status = 'Dropped'), 0)::int AS "droppedCount",
-         COALESCE(COUNT(cs.id), 0)::int AS "totalCount"
+         ct.name AS "centerName"
        FROM classes cl
        LEFT JOIN centers ct ON ct.id = cl.center_id
-       LEFT JOIN class_students cs ON cs.class_id = cl.id
        ${where}
-       GROUP BY cl.id, cl.class_code, cl.class_name, ct.name
        ORDER BY cl.class_code ASC`,
       params,
     );
+
+    // Fetch enrolled students based on month filter if present
+    const studentConditions: string[] = ['1=1'];
+    const studentParams: any[] = [];
+    let sIdx = 1;
+
+    if (filters.month) {
+      const startOfMonth = `${filters.month}-01`;
+      const parts = filters.month.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const lastDay = new Date(y, m, 0).getDate();
+      const endOfMonth = `${filters.month}-${String(lastDay).padStart(2, '0')}`;
+
+      studentConditions.push(`cs.joined_date <= $${sIdx++}::date`);
+      studentParams.push(endOfMonth);
+
+      studentConditions.push(`NOT (cs.status = 'Dropped' AND cs.updated_at::date < $${sIdx++}::date)`);
+      studentParams.push(startOfMonth);
+    }
+
+    const studentWhere = `WHERE ${studentConditions.join(' AND ')}`;
+    const enrolledStudents = await this.ds.query(
+      `SELECT
+         cs.class_id AS "classId",
+         s.id AS "studentId",
+         s.student_id AS "studentCode",
+         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         cs.status AS "status",
+         cs.joined_date AS "joinedDate",
+         cs.updated_at AS "updatedAt"
+       FROM class_students cs
+       JOIN students s ON s.id = cs.student_id
+       ${studentWhere}
+       ORDER BY cs.joined_date DESC, s.last_name ASC`,
+      studentParams,
+    );
+
+    // Group students by class
+    const studentsByClassMap = new Map<string, any[]>();
+    for (const s of enrolledStudents) {
+      if (!studentsByClassMap.has(s.classId)) {
+        studentsByClassMap.set(s.classId, []);
+      }
+      
+      // Determine status in selected month
+      let statusInMonth = s.status;
+      if (filters.month && s.status === 'Dropped') {
+        const parts = filters.month.split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const lastDay = new Date(y, m, 0).getDate();
+        const endOfMonth = new Date(y, m - 1, lastDay, 23, 59, 59);
+        const dropDate = new Date(s.updatedAt);
+        if (dropDate > endOfMonth) {
+          statusInMonth = 'Active';
+        }
+      }
+
+      studentsByClassMap.get(s.classId)!.push({
+        studentId: s.studentId,
+        studentCode: s.studentCode,
+        studentName: s.studentName,
+        status: statusInMonth,
+        joinedDate: s.joinedDate,
+        updatedAt: s.updatedAt,
+      });
+    }
+
+    // Map stats back to classes
+    return classes.map((cl: any) => {
+      const list = studentsByClassMap.get(cl.classId) || [];
+      const activeCount = list.filter(s => s.status === 'Active').length;
+      const droppedCount = list.filter(s => s.status === 'Dropped').length;
+      return {
+        ...cl,
+        activeCount,
+        droppedCount,
+        totalCount: activeCount + droppedCount,
+        students: list,
+      };
+    });
   }
 
   async getSaleOrdersReport(filters: ReportFilters): Promise<any[]> {
