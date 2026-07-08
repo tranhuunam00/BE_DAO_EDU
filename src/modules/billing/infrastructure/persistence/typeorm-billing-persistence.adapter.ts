@@ -606,6 +606,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
             status: 'Unpaid',
             billingStartDate: new Date(period.startDate),
             billingEndDate: new Date(period.endDate),
+            billCode: createBillCode(period.month),
           });
         ids.push(bill.id);
         await this.manager.getRepository(StudentMonthlyBillItemOrmEntity).save(
@@ -1063,6 +1064,12 @@ function createReceiptCode(orderId: string) {
   const date = new Date();
   const day = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
   return `PT-${day}-${orderId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
+function createBillCode(month: string) {
+  const monthPart = month.replace('-', '');
+  const random = Math.random().toString(36).slice(2, 10).toUpperCase();
+  return `INV-${monthPart}-${random}`;
 }
 
 function mapAuditLog(log: BillingAuditLogOrmEntity) {

@@ -977,7 +977,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          b.id AS "billId",
          b.status AS "billStatus",
          CONCAT(s.last_name, ' ', s.first_name) AS "fullName",
-         b.id AS "saleOrderId",
+         COALESCE(b.bill_code, b.id::varchar) AS "saleOrderId",
          b.receipt_code AS "receiptCode",
          b.payment_date AS "receiptDate",
          b.payment_method AS "paymentMethod",
@@ -989,13 +989,13 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          b.status AS "saleOrderStatus",
          b.created_at AS "submitDate",
          s.student_id AS "studentCode",
-         COALESCE(bi.class_name || ' - ' || bi.course_name || ' (' || bi.level_name || ')', '') AS "productItemName",
+         COALESCE(MAX(bi.class_name) || ' - ' || MAX(bi.course_name) || ' (' || MAX(bi.level_name) || ')', '') AS "productItemName",
          b.total_amount AS "receiptAmount",
-         bi.total_amount AS "netAmount",
+         SUM(bi.total_amount)::numeric AS "netAmount",
          bi.rate AS "netPrice",
          b.created_at AS "dateCreated",
          b.paid_amount AS "paidAmount",
-         bi.sessions_count AS "quantity",
+         SUM(bi.sessions_count)::int AS "quantity",
          b.month AS "month",
          s.student_id AS "studentId",
          cl.class_code AS "classCode",
@@ -1009,7 +1009,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
        LEFT JOIN classes cl ON cl.id = bi.class_id
        LEFT JOIN tuition_payment_requests tpr ON tpr.bill_id = b.id
        ${where}
-       ORDER BY b.created_at DESC, bi.created_at ASC`,
+       GROUP BY b.id, s.id, bi.class_id, bi.rate, cl.id, tpr.id
+       ORDER BY b.created_at DESC`,
       params,
     );
     return rows;

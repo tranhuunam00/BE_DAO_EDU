@@ -68,6 +68,9 @@ export class StudentMonthlyBillOrmEntity {
   @Column({ type: 'uuid', name: 'processed_by_user_id', nullable: true })
   processedByUserId!: string | null;
 
+  @Column({ type: 'varchar', name: 'bill_code', nullable: true, unique: true })
+  billCode!: string | null;
+
   @Column({ type: 'varchar', name: 'receipt_code', nullable: true, unique: true })
   receiptCode!: string | null;
 
