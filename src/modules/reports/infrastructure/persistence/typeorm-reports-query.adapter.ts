@@ -996,7 +996,6 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          b.created_at AS "dateCreated",
          b.paid_amount AS "paidAmount",
          bi.sessions_count AS "quantity",
-         b.month AS "serviceDurationValue",
          b.month AS "month",
          s.student_id AS "studentId",
          cl.class_code AS "classCode",
