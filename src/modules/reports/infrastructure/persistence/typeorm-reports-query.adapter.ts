@@ -1001,11 +1001,14 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          s.student_id AS "studentId",
          cl.class_code AS "classCode",
          cl.class_name AS "className",
-         b.total_amount AS "totalAmount"
+         b.total_amount AS "totalAmount",
+         tpr.transfer_content AS "transferContent",
+         tpr.status AS "paymentRequestStatus"
        FROM student_monthly_bills b
        JOIN students s ON s.id = b.student_id
        LEFT JOIN student_monthly_bill_items bi ON bi.bill_id = b.id
        LEFT JOIN classes cl ON cl.id = bi.class_id
+       LEFT JOIN tuition_payment_requests tpr ON tpr.bill_id = b.id
        ${where}
        ORDER BY b.created_at DESC, bi.created_at ASC`,
       params,
