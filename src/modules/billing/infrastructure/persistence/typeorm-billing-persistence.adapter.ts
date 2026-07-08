@@ -594,7 +594,27 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
   ): Promise<string[]> {
     const ids: string[] = [];
     if (type === 'tuition') {
+      const monthPart = period.month.replace('-', '').slice(-4);
+      const prefix = `INV-${monthPart}-`;
+      const lastBill = await this.manager
+        .getRepository(StudentMonthlyBillOrmEntity)
+        .createQueryBuilder('bill')
+        .where('bill.billCode LIKE :prefix', { prefix: `${prefix}%` })
+        .orderBy('bill.billCode', 'DESC')
+        .getOne();
+
+      let nextSeq = 1;
+      if (lastBill && lastBill.billCode) {
+        const parts = lastBill.billCode.split('-');
+        const lastSeqStr = parts[parts.length - 1];
+        const lastSeq = parseInt(lastSeqStr, 10);
+        if (!isNaN(lastSeq)) {
+          nextSeq = lastSeq + 1;
+        }
+      }
+
       for (const order of orders) {
+        const billCode = `${prefix}${String(nextSeq++).padStart(4, '0')}`;
         const bill = await this.manager
           .getRepository(StudentMonthlyBillOrmEntity)
           .save({
@@ -606,7 +626,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
             status: 'Unpaid',
             billingStartDate: new Date(period.startDate),
             billingEndDate: new Date(period.endDate),
-            billCode: createBillCode(period.month),
+            billCode,
           });
         ids.push(bill.id);
         await this.manager.getRepository(StudentMonthlyBillItemOrmEntity).save(
@@ -792,7 +812,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
     };
     if (order.type === 'tuition') {
       if (order.status === 'Paid' && !order.receiptCode) {
-        values['receiptCode'] = createReceiptCode(order.id!);
+        values['receiptCode'] = await createReceiptCode(this.manager);
       }
       await this.manager
         .getRepository(StudentMonthlyBillOrmEntity)
@@ -1060,16 +1080,31 @@ function toDateString(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
-function createReceiptCode(orderId: string) {
+async function createReceiptCode(manager: EntityManager) {
   const date = new Date();
-  const day = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-  return `PT-${day}-${orderId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
-}
+  const yy = String(date.getFullYear()).slice(-2);
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const dayPrefix = `PT-${yy}${mm}${dd}-`;
 
-function createBillCode(month: string) {
-  const monthPart = month.replace('-', '');
-  const random = Math.random().toString(36).slice(2, 10).toUpperCase();
-  return `INV-${monthPart}-${random}`;
+  const lastBill = await manager
+    .getRepository(StudentMonthlyBillOrmEntity)
+    .createQueryBuilder('bill')
+    .where('bill.receiptCode LIKE :prefix', { prefix: `${dayPrefix}%` })
+    .orderBy('bill.receiptCode', 'DESC')
+    .getOne();
+
+  let nextSeq = 1;
+  if (lastBill && lastBill.receiptCode) {
+    const parts = lastBill.receiptCode.split('-');
+    const lastSeqStr = parts[parts.length - 1];
+    const lastSeq = parseInt(lastSeqStr, 10);
+    if (!isNaN(lastSeq)) {
+      nextSeq = lastSeq + 1;
+    }
+  }
+
+  return `${dayPrefix}${String(nextSeq).padStart(4, '0')}`;
 }
 
 function mapAuditLog(log: BillingAuditLogOrmEntity) {
