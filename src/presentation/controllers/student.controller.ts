@@ -32,6 +32,7 @@ import { GetStudentsUseCase } from '../../application/use-cases/get-students.use
 import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-by-id.use-case';
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
 import { GetStudentTuitionReportUseCase } from '../../modules/billing/application/use-cases/get-student-tuition-report.use-case';
+import { CalculateStudentTuitionUseCase } from '../../modules/billing/application/use-cases/calculate-student-tuition.use-case';
 import {
   CreateStudentDto,
   UpdateStudentDto,
@@ -54,6 +55,7 @@ export class StudentController {
     private readonly getStudentByIdUseCase: GetStudentByIdUseCase,
     private readonly updateStudentUseCase: UpdateStudentUseCase,
     private readonly getStudentTuitionReportUseCase: GetStudentTuitionReportUseCase,
+    private readonly calculateStudentTuitionUseCase: CalculateStudentTuitionUseCase,
     @InjectRepository(ClassStudentOrmEntity)
     private readonly classStudentRepo: Repository<ClassStudentOrmEntity>,
     @InjectRepository(ClassSessionOrmEntity)
@@ -159,72 +161,18 @@ export class StudentController {
     const results: any[] = [];
 
     for (const student of students) {
-      const enrollments = await this.classStudentRepo.find({
-        where: { studentId: student.id },
-        relations: { classEntity: { course: true, courseLevel: true } },
+      const { summaries } = await this.calculateStudentTuitionUseCase.execute({
+        studentId: student.id,
+        startDate,
+        endDate,
+        onlyLockedSessions: true,
       });
-      if (enrollments.length === 0) {
-        results.push({
-          studentId: student.id,
-          studentCode: student.studentId,
-          name: `${student.lastName} ${student.firstName}`,
-          mobile: student.mobile,
-          status: student.status,
-          totalSessions: 0,
-          totalAmount: 0,
-        });
-        continue;
-      }
-      const classIds = enrollments.map((e) => e.classId);
-      const sessions = await this.sessionRepo
-        .createQueryBuilder('session')
-        .leftJoinAndSelect('session.classEntity', 'classEntity')
-        .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-        .leftJoinAndMapOne(
-          'session.attendance',
-          StudentAttendanceOrmEntity,
-          'attendance',
-          'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
-          { studentId: student.id },
-        )
-        .where('session.class_id IN (:...classIds)', { classIds })
-        .andWhere('session.date >= :startDate', { startDate })
-        .andWhere('session.date <= :endDate', { endDate })
-        .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
-          s: SessionStatus.COMPLETED,
-          l: true,
-        })
-        .getMany();
-
-      const levelIds = Array.from(
-        new Set(sessions.map((s) => s.classEntity.courseLevelId)),
-      );
-      let pricingList: CourseLevelPricingOrmEntity[] = [];
-      if (levelIds.length > 0) {
-        pricingList = await this.sessionRepo.manager.find(
-          CourseLevelPricingOrmEntity,
-          { where: { courseLevelId: In(levelIds) } },
-        );
-      }
 
       let totalAmount = 0;
       let totalSessions = 0;
-      for (const session of sessions) {
-        const date = session.date;
-        const levelId = session.classEntity.courseLevelId;
-        const pricing = pricingList.find(
-          (p) =>
-            p.courseLevelId === levelId &&
-            p.effectiveFrom <= date &&
-            (p.effectiveTo === null || p.effectiveTo >= date),
-        );
-        const rate = pricing ? Number(pricing.pricePerSession) : 0;
-        const attendance = (session as any).attendance;
-        const isPresent = attendance ? attendance.isPresent : false;
-        if (isPresent) {
-          totalAmount += rate;
-          totalSessions++;
-        }
+      for (const summary of summaries) {
+        totalAmount += summary.totalTuitionAmount;
+        totalSessions += summary.sessions.filter((s) => s.isBilled).length;
       }
 
       results.push({
@@ -321,113 +269,37 @@ export class StudentController {
     startDate: string,
     endDate: string,
   ) {
-    const enrollments = await this.classStudentRepo.find({
-      where: { studentId },
-      relations: {
-        classEntity: {
-          course: true,
-          courseLevel: true,
-        },
-      },
+    const { summaries } = await this.calculateStudentTuitionUseCase.execute({
+      studentId,
+      startDate,
+      endDate,
+      onlyLockedSessions: true,
     });
-
-    if (enrollments.length === 0) {
-      return { items: [], totalAmount: 0 };
-    }
-
-    const classIds = enrollments.map((e) => e.classId);
-    const sessions = await this.sessionRepo
-      .createQueryBuilder('session')
-      .leftJoinAndSelect('session.classEntity', 'classEntity')
-      .leftJoinAndSelect('classEntity.course', 'course')
-      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .leftJoinAndMapOne(
-        'session.attendance',
-        StudentAttendanceOrmEntity,
-        'attendance',
-        'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
-        { studentId },
-      )
-      .where('session.class_id IN (:...classIds)', { classIds })
-      .andWhere('session.date >= :startDate', { startDate })
-      .andWhere('session.date <= :endDate', { endDate })
-      .andWhere('(session.status = :s OR session.attendance_locked = :l)', {
-        s: SessionStatus.COMPLETED,
-        l: true,
-      })
-      .getMany();
-
-    const levelIds = Array.from(
-      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
-    );
-    let pricingList: CourseLevelPricingOrmEntity[] = [];
-    if (levelIds.length > 0) {
-      pricingList = await this.sessionRepo.manager.find(
-        CourseLevelPricingOrmEntity,
-        {
-          where: { courseLevelId: In(levelIds) },
-        },
-      );
-    }
-
-    // Group sessions by class
-    const classSessionMap = new Map<
-      string,
-      { sessions: any[]; classEntity: any }
-    >();
-    for (const session of sessions) {
-      const attendance = (session as any).attendance;
-      const isPresent = attendance ? attendance.isPresent : false;
-      if (!isPresent) continue;
-
-      const classId = session.classId;
-      if (!classSessionMap.has(classId)) {
-        classSessionMap.set(classId, {
-          sessions: [],
-          classEntity: session.classEntity,
-        });
-      }
-      classSessionMap.get(classId)!.sessions.push(session);
-    }
 
     const items: any[] = [];
     let grandTotal = 0;
 
-    for (const [classId, group] of classSessionMap.entries()) {
-      let classTotalAmount = 0;
-      let latestRate = 0;
-      let latestDate = '';
+    for (const summary of summaries) {
+      const billedSessions = summary.sessions.filter((s) => s.isBilled);
+      if (billedSessions.length === 0) continue;
 
-      for (const session of group.sessions) {
-        const date = session.date;
-        const levelId = group.classEntity.courseLevelId;
-        const pricing = pricingList.find(
-          (p) =>
-            p.courseLevelId === levelId &&
-            p.effectiveFrom <= date &&
-            (p.effectiveTo === null || p.effectiveTo >= date),
-        );
-        const rate = pricing ? Number(pricing.pricePerSession) : 0;
-        classTotalAmount += rate;
+      const sorted = [...summary.sessions].sort((a, b) => b.date.localeCompare(a.date));
+      const latestRate = sorted[0] ? sorted[0].rate : 0;
 
-        if (!latestDate || date > latestDate) {
-          latestDate = date;
-          latestRate = rate;
-        }
-      }
+      const firstSess = summary.sessions[0];
+      const courseName = firstSess ? firstSess.courseName : '';
+      const levelName = firstSess ? firstSess.levelName : '';
 
-      if (group.sessions.length > 0) {
-        items.push({
-          classId,
-          className: group.classEntity.name,
-          courseName: group.classEntity.course?.name || '',
-          levelName: group.classEntity.courseLevel?.name || '',
-          sessionsCount: group.sessions.length,
-          rate: latestRate,
-          totalAmount: classTotalAmount,
-        });
-        grandTotal += classTotalAmount;
-      }
+      items.push({
+        classId: summary.classId,
+        className: summary.className,
+        courseName,
+        levelName,
+        sessionsCount: billedSessions.length,
+        rate: latestRate,
+        totalAmount: summary.totalTuitionAmount,
+      });
+      grandTotal += summary.totalTuitionAmount;
     }
 
     return { items, totalAmount: grandTotal };

@@ -79,6 +79,7 @@ export interface StudentTuitionReportSession {
   levelName: string;
   isPresent: boolean;
   reason: string | null;
+  isEnrolled: boolean;
 }
 
 export abstract class BillingPersistencePort {
@@ -103,5 +104,22 @@ export abstract class BillingPersistencePort {
   ): Promise<{
     sessions: StudentTuitionReportSession[];
     pricingList: PricingRule[];
+  }>;
+  abstract getTuitionCalculationData(
+    studentId: string,
+    classIds?: string[],
+    startDate?: string,
+    endDate?: string,
+    onlyLockedSessions?: boolean,
+  ): Promise<{
+    sessions: StudentTuitionReportSession[];
+    pricingList: PricingRule[];
+    billingItems: {
+      classId: string;
+      studentId: string;
+      month: string;
+      rate: number;
+      paymentStatus: string;
+    }[];
   }>;
 }

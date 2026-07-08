@@ -1,63 +1,56 @@
 import { Injectable } from '@nestjs/common';
-import { BillingPersistencePort } from '../ports/billing-persistence.port';
+import { CalculateStudentTuitionUseCase } from './calculate-student-tuition.use-case';
 
 @Injectable()
 export class GetStudentTuitionReportUseCase {
-  constructor(private readonly persistence: BillingPersistencePort) {}
+  constructor(private readonly calculator: CalculateStudentTuitionUseCase) {}
 
   async execute(studentId: string, startDate: string, endDate: string) {
-    const { sessions, pricingList } =
-      await this.persistence.getStudentTuitionReportData(
-        studentId,
-        startDate,
-        endDate,
-      );
+    const { summaries, pricingHistory } = await this.calculator.execute({
+      studentId,
+      startDate,
+      endDate,
+      onlyLockedSessions: true,
+    });
 
-    const reportSessions = sessions.map((session) => {
-      const date = session.date;
-      const levelId = session.courseLevelId;
+    const reportSessions = [];
+    for (const summary of summaries) {
+      for (const s of summary.sessions) {
+        reportSessions.push({
+          id: s.sessionId,
+          date: s.date,
+          startTime: s.startTime || '',
+          endTime: s.endTime || '',
+          classId: s.classId,
+          className: s.className,
+          classCode: s.classCode,
+          courseName: s.courseName,
+          levelName: s.levelName,
+          isPresent: s.isPresent,
+          rate: s.rate,
+          amount: s.amount,
+          pricingEffectiveFrom: s.pricingEffectiveFrom,
+          pricingEffectiveTo: s.pricingEffectiveTo,
+        });
+      }
+    }
 
-      const pricing = pricingList.find((p) => {
-        return (
-          p.courseLevelId === levelId &&
-          p.effectiveFrom <= date &&
-          (p.effectiveTo === null || p.effectiveTo >= date)
-        );
-      });
-
-      const rate = pricing ? Number(pricing.pricePerSession) : 0;
-      const isPresent = session.isPresent;
-      const reason = session.reason;
-      const isBilled =
-        isPresent || (!isPresent && (!reason || reason.trim() === ''));
-      const amount = isBilled ? rate : 0;
-
-      return {
-        id: session.id,
-        date: session.date,
-        startTime: session.startTime,
-        endTime: session.endTime,
-        classId: session.classId,
-        className: session.className,
-        classCode: session.classCode,
-        courseName: session.courseName,
-        levelName: session.levelName,
-        isPresent,
-        rate,
-        amount,
-        pricingEffectiveFrom: pricing ? pricing.effectiveFrom : null,
-        pricingEffectiveTo: pricing ? pricing.effectiveTo : null,
-      };
+    // Sort sessions chronologically (date ASC, startTime ASC)
+    reportSessions.sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.startTime.localeCompare(b.startTime);
     });
 
     const totalAmount = reportSessions.reduce((sum, s) => sum + s.amount, 0);
+    // count sessions where amount > 0 (which means they are billed)
     const totalSessions = reportSessions.filter((s) => s.amount > 0).length;
 
     return {
       sessions: reportSessions,
       totalSessions,
       totalAmount,
-      pricingHistory: pricingList.map((p) => ({
+      pricingHistory: pricingHistory.map((p) => ({
         id: (p as any).id,
         levelName: (p as any).levelName || '',
         pricePerSession: Number(p.pricePerSession),

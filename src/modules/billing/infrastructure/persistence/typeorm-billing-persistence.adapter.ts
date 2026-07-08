@@ -146,6 +146,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         levelName: session.classEntity.courseLevel?.levelName || '',
         isPresent: attendance ? attendance.isPresent : false,
         reason: attendance ? attendance.reason : null,
+        isEnrolled: !!attendance,
       };
     });
 
@@ -161,6 +162,150 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     return {
       sessions: sessionsMapped,
       pricingList: pricingListMapped,
+    };
+  }
+
+  async getTuitionCalculationData(
+    studentId: string,
+    classIds?: string[],
+    startDate?: string,
+    endDate?: string,
+    onlyLockedSessions?: boolean,
+  ): Promise<{
+    sessions: StudentTuitionReportSession[];
+    pricingList: PricingRule[];
+    billingItems: {
+      classId: string;
+      studentId: string;
+      month: string;
+      rate: number;
+      paymentStatus: string;
+    }[];
+  }> {
+    const classStudentRepo = this.dataSource.getRepository(ClassStudentOrmEntity);
+    const sessionRepo = this.dataSource.getRepository(ClassSessionOrmEntity);
+    const pricingRepo = this.dataSource.getRepository(CourseLevelPricingOrmEntity);
+
+    // 1. Get student enrollments
+    const enrollments = await classStudentRepo.find({
+      where: { studentId },
+    });
+
+    if (enrollments.length === 0) {
+      return { sessions: [], pricingList: [], billingItems: [] };
+    }
+
+    const enrolledClassIds = enrollments.map((e) => e.classId);
+    // Filter classIds if provided, else use enrolled classes
+    const targetClassIds = classIds && classIds.length > 0
+      ? classIds.filter(id => enrolledClassIds.includes(id))
+      : enrolledClassIds;
+
+    if (targetClassIds.length === 0) {
+      return { sessions: [], pricingList: [], billingItems: [] };
+    }
+
+    // 2. Query sessions and attendance
+    const query = sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.classEntity', 'classEntity')
+      .leftJoinAndSelect('classEntity.course', 'course')
+      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
+      .leftJoinAndMapOne(
+        'session.attendance',
+        StudentAttendanceOrmEntity,
+        'attendance',
+        'attendance.class_session_id = session.id AND attendance.student_id = :studentId',
+        { studentId },
+      )
+      .where('session.class_id IN (:...targetClassIds)', { targetClassIds: targetClassIds });
+
+    if (startDate) {
+      query.andWhere('session.date >= :startDate', { startDate });
+    }
+    if (endDate) {
+      query.andWhere('session.date <= :endDate', { endDate });
+    }
+    if (onlyLockedSessions) {
+      query.andWhere(
+        '(session.status = :completedStatus OR session.attendance_locked = :locked)',
+        { completedStatus: SessionStatus.COMPLETED, locked: true },
+      );
+    }
+
+    const sessions = await query
+      .orderBy('session.date', 'ASC')
+      .addOrderBy('session.start_time', 'ASC')
+      .getMany();
+
+    // 3. Query pricings for the course levels
+    const levelIds = Array.from(
+      new Set(sessions.map((s) => s.classEntity.courseLevelId)),
+    );
+    let pricingList: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricingList = await pricingRepo.find({
+        where: { courseLevelId: In(levelIds) },
+      });
+    }
+
+    // 4. Query student monthly bills items
+    const billQuery = this.dataSource
+      .getRepository(StudentMonthlyBillItemOrmEntity)
+      .createQueryBuilder('bi')
+      .select([
+        'bi.class_id AS "classId"',
+        'b.student_id AS "studentId"',
+        'b.month AS "month"',
+        'bi.rate AS "rate"',
+        'b.status AS "paymentStatus"',
+      ])
+      .innerJoin(StudentMonthlyBillOrmEntity, 'b', 'b.id = bi.bill_id')
+      .where('b.student_id = :studentId', { studentId })
+      .andWhere('bi.class_id IN (:...targetClassIds)', { targetClassIds: targetClassIds });
+
+    const billingItems = await billQuery.getRawMany();
+
+    const sessionsMapped: StudentTuitionReportSession[] = sessions.map((session) => {
+      const attendance = (session as any).attendance;
+      return {
+        id: session.id,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        classId: session.classId,
+        className: session.classEntity.className,
+        classCode: session.classEntity.classCode,
+        courseLevelId: session.classEntity.courseLevelId,
+        courseName: session.classEntity.course?.name || '',
+        levelName: session.classEntity.courseLevel?.levelName || '',
+        isPresent: attendance ? attendance.isPresent : false,
+        reason: attendance ? attendance.reason : null,
+        isEnrolled: !!attendance,
+      };
+    });
+
+    const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      courseLevelId: pricing.courseLevelId,
+      pricePerSession: Number(pricing.pricePerSession),
+      teacherWagePerSession: Number(pricing.teacherWagePerSession),
+      taWagePerSession: Number(pricing.taWagePerSession),
+      effectiveFrom: pricing.effectiveFrom,
+      effectiveTo: pricing.effectiveTo,
+    }));
+
+    const billingItemsMapped = billingItems.map((item) => ({
+      classId: item.classId,
+      studentId: item.studentId,
+      month: item.month,
+      rate: Number(item.rate),
+      paymentStatus: item.paymentStatus,
+    }));
+
+    return {
+      sessions: sessionsMapped,
+      pricingList: pricingListMapped,
+      billingItems: billingItemsMapped,
     };
   }
 

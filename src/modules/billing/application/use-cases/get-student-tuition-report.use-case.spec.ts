@@ -1,55 +1,80 @@
 import { GetStudentTuitionReportUseCase } from './get-student-tuition-report.use-case';
-import { BillingPersistencePort } from '../ports/billing-persistence.port';
 
 describe('GetStudentTuitionReportUseCase', () => {
   it('calculates the tuition report correctly separating excused/unexcused absences', async () => {
-    const mockPersistence = {
-      getStudentTuitionReportData: jest.fn().mockResolvedValue({
-        sessions: [
+    const mockCalculator = {
+      execute: jest.fn().mockResolvedValue({
+        summaries: [
           {
-            id: 'session-1',
-            date: '2026-06-10',
-            startTime: '18:00',
-            endTime: '19:30',
             classId: 'class-1',
-            className: 'English A',
             classCode: 'ENG-A',
-            courseLevelId: 'level-1',
-            courseName: 'English',
-            levelName: 'A1',
-            isPresent: true,
-            reason: null,
-          },
-          {
-            id: 'session-2',
-            date: '2026-06-12',
-            startTime: '18:00',
-            endTime: '19:30',
-            classId: 'class-1',
             className: 'English A',
-            classCode: 'ENG-A',
-            courseLevelId: 'level-1',
-            courseName: 'English',
-            levelName: 'A1',
-            isPresent: false,
-            reason: 'Nghỉ có phép',
-          },
-          {
-            id: 'session-3',
-            date: '2026-06-14',
-            startTime: '18:00',
-            endTime: '19:30',
-            classId: 'class-1',
-            className: 'English A',
-            classCode: 'ENG-A',
-            courseLevelId: 'level-1',
-            courseName: 'English',
-            levelName: 'A1',
-            isPresent: false,
-            reason: '', // Nghỉ không phép
+            totalSessions: 3,
+            presentSessionsCount: 1,
+            absentSessionsCount: 2,
+            totalTuitionAmount: 300000,
+            sessions: [
+              {
+                sessionId: 'session-1',
+                date: '2026-06-10',
+                startTime: '18:00',
+                endTime: '19:30',
+                classId: 'class-1',
+                className: 'English A',
+                classCode: 'ENG-A',
+                courseLevelId: 'level-1',
+                courseName: 'English',
+                levelName: 'A1',
+                isPresent: true,
+                reason: null,
+                isBilled: true,
+                rate: 150000,
+                amount: 150000,
+                pricingEffectiveFrom: '2026-01-01',
+                pricingEffectiveTo: null,
+              },
+              {
+                sessionId: 'session-2',
+                date: '2026-06-12',
+                startTime: '18:00',
+                endTime: '19:30',
+                classId: 'class-1',
+                className: 'English A',
+                classCode: 'ENG-A',
+                courseLevelId: 'level-1',
+                courseName: 'English',
+                levelName: 'A1',
+                isPresent: false,
+                reason: 'Nghỉ có phép',
+                isBilled: false,
+                rate: 150000,
+                amount: 0,
+                pricingEffectiveFrom: '2026-01-01',
+                pricingEffectiveTo: null,
+              },
+              {
+                sessionId: 'session-3',
+                date: '2026-06-14',
+                startTime: '18:00',
+                endTime: '19:30',
+                classId: 'class-1',
+                className: 'English A',
+                classCode: 'ENG-A',
+                courseLevelId: 'level-1',
+                courseName: 'English',
+                levelName: 'A1',
+                isPresent: false,
+                reason: '', // Nghỉ không phép
+                isBilled: true,
+                rate: 150000,
+                amount: 150000,
+                pricingEffectiveFrom: '2026-01-01',
+                pricingEffectiveTo: null,
+              },
+            ],
           },
         ],
-        pricingList: [
+        pricingHistory: [
           {
             courseLevelId: 'level-1',
             pricePerSession: 150000,
@@ -61,10 +86,17 @@ describe('GetStudentTuitionReportUseCase', () => {
           },
         ],
       }),
-    } as unknown as BillingPersistencePort;
+    };
 
-    const useCase = new GetStudentTuitionReportUseCase(mockPersistence);
+    const useCase = new GetStudentTuitionReportUseCase(mockCalculator as any);
     const result = await useCase.execute('student-1', '2026-06-01', '2026-06-30');
+
+    expect(mockCalculator.execute).toHaveBeenCalledWith({
+      studentId: 'student-1',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      onlyLockedSessions: true,
+    });
 
     expect(result.sessions).toHaveLength(3);
     
