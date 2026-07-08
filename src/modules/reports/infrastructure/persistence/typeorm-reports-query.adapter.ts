@@ -281,7 +281,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          s.mobile AS "mobile",
          sa.class_session_id AS "sessionId",
          sa.is_present AS "isPresent",
-         cs.class_id AS "classId"
+         cs.class_id AS "classId",
+         TO_CHAR(cs.date::date, 'YYYY-MM') AS "month"
        FROM student_attendance sa
        JOIN class_sessions cs ON cs.id = sa.class_session_id
        JOIN students s ON s.id = sa.student_id
@@ -313,6 +314,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       `SELECT
          bi.class_id AS "classId",
          b.student_id AS "studentId",
+         b.month AS "month",
          bi.rate AS "rate",
          bi.total_amount AS "totalAmount",
          b.status AS "paymentStatus"
@@ -348,7 +350,14 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       });
     }
 
-    // Map students and attendance status to class
+    // Map student monthly rates: key = `${studentId}_${classId}_${month}` -> rate
+    const rateMap = new Map<string, number>();
+    for (const item of billingItems) {
+      const key = `${item.studentId}_${item.classId}_${item.month}`;
+      rateMap.set(key, Number(item.rate));
+    }
+
+    // Initialize and map students and attendance
     const studentsByClass = new Map<string, Map<string, any>>();
     for (const record of attendanceRecords) {
       if (!studentsByClass.has(record.classId)) {
@@ -369,10 +378,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
           paymentStatus: '—',
         });
       }
+      
       const student = classMap.get(record.studentId)!;
-      student.attendance[record.sessionId] = record.isPresent;
+      const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
+      const sessionRate = rateMap.get(rateKey) ?? pricingMap.get(record.classId) ?? 0;
+
+      student.attendance[record.sessionId] = {
+        isPresent: record.isPresent,
+        rate: sessionRate,
+      };
+
       if (record.isPresent) {
         student.presentCount++;
+        student.totalTuition += sessionRate;
       } else {
         student.absentCount++;
       }
@@ -384,7 +402,6 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         const student = classMap.get(item.studentId);
         if (student) {
           student.pricePerSession = Number(item.rate);
-          student.totalTuition += Number(item.totalAmount);
           // Keep the worst payment status across months
           if (item.paymentStatus === 'Unpaid') {
             student.paymentStatus = 'Unpaid';
@@ -402,7 +419,6 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       for (const student of classMap.values()) {
         if (student.pricePerSession === 0) {
           student.pricePerSession = defaultRate;
-          student.totalTuition = student.presentCount * defaultRate;
         }
       }
     }
