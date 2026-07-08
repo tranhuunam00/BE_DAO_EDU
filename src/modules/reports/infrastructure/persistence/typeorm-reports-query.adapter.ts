@@ -378,7 +378,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
           paymentStatus: '—',
         });
       }
-      
+
       const student = classMap.get(record.studentId)!;
       const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
       const sessionRate = rateMap.get(rateKey) ?? pricingMap.get(record.classId) ?? 0;
@@ -905,7 +905,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       if (!studentsByClassMap.has(s.classId)) {
         studentsByClassMap.set(s.classId, []);
       }
-      
+
       // Determine status in selected month
       let statusInMonth = s.status;
       if (filters.month && s.status === 'Dropped') {
@@ -971,6 +971,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     this.applyClassFilters(filters, conditions, params, idx, 'bi.class_id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
+
     const rows = await this.ds.query(
       `SELECT
          b.id AS "billId",
