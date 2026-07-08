@@ -45,3 +45,8 @@ infrastructure -> application/domain
 - Cross-context writes use application ports.
 - Imports point inward and no circular context dependency is introduced.
 - Existing response and error contracts remain stable unless intentionally changed.
+
+## Coding Standards
+
+- **Tiêu chuẩn code**: Một file code nguồn không được vượt quá 500 dòng.
+
