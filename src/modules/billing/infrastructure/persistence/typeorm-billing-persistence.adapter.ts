@@ -442,6 +442,108 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       })),
     };
   }
+
+  async getTeacherWageCalculationData(
+    teacherId: string,
+    classIds?: string[],
+    startDate?: string,
+    endDate?: string,
+    onlyLockedSessions?: boolean,
+  ): Promise<{
+    sessions: any[];
+    pricingList: any[];
+    wageItems: any[];
+  }> {
+    const sessionRepo = this.dataSource.getRepository(ClassSessionOrmEntity);
+    const pricingRepo = this.dataSource.getRepository(CourseLevelPricingOrmEntity);
+    const wageItemRepo = this.dataSource.getRepository(TeacherMonthlyWageItemOrmEntity);
+
+    // 1. Get teacher sessions (either main teacher or assistant)
+    const query = sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.classEntity', 'classEntity')
+      .leftJoinAndSelect('classEntity.course', 'course')
+      .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
+      .where('(session.teacherId = :teacherId OR session.assistantId = :teacherId)', { teacherId });
+
+    if (classIds && classIds.length > 0) {
+      query.andWhere('session.classId IN (:...classIds)', { classIds });
+    }
+    if (startDate) {
+      query.andWhere('session.date >= :startDate', { startDate });
+    }
+    if (endDate) {
+      query.andWhere('session.date <= :endDate', { endDate });
+    }
+    if (onlyLockedSessions) {
+      query.andWhere(
+        '(session.status = :completedStatus OR session.attendance_locked = :locked)',
+        { completedStatus: SessionStatus.COMPLETED, locked: true },
+      );
+    }
+
+    const sessions = await query
+      .orderBy('session.date', 'ASC')
+      .addOrderBy('session.start_time', 'ASC')
+      .getMany();
+
+    if (sessions.length === 0) {
+      return { sessions: [], pricingList: [], wageItems: [] };
+    }
+
+    // 2. Get pricing list for matching levelIds
+    const levelIds = Array.from(new Set(sessions.map((s) => s.classEntity?.courseLevelId).filter(Boolean)));
+    let pricingList: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricingList = await pricingRepo.find({
+        where: { courseLevelId: In(levelIds) },
+        relations: { courseLevel: true },
+      });
+    }
+
+    // 3. Get wage items (overrides)
+    const wageItems = await wageItemRepo.find({
+      where: {
+        wage: {
+          teacherId,
+        },
+      },
+      relations: { wage: true },
+    });
+
+    return {
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        classId: s.classId,
+        className: s.classEntity?.className || '',
+        classCode: s.classEntity?.classCode || '',
+        courseLevelId: s.classEntity?.courseLevelId || '',
+        courseName: s.classEntity?.course?.name || '',
+        levelName: s.classEntity?.courseLevel?.levelName || '',
+        teacherId: s.teacherId,
+        assistantId: s.assistantId,
+      })),
+      pricingList: pricingList.map((p) => ({
+        id: p.id,
+        courseLevelId: p.courseLevelId,
+        levelName: p.courseLevel?.levelName || '',
+        pricePerSession: Number(p.pricePerSession),
+        teacherWagePerSession: Number(p.teacherWagePerSession),
+        taWagePerSession: Number(p.taWagePerSession),
+        effectiveFrom: p.effectiveFrom,
+        effectiveTo: p.effectiveTo,
+      })),
+      wageItems: wageItems.map((item) => ({
+        classId: item.classId,
+        month: item.wage?.month || '',
+        rate: Number(item.rate),
+        paymentStatus: item.wage?.status || '',
+      })),
+    };
+  }
 }
 
 class TypeOrmBillingTransactionContext implements BillingTransactionContext {

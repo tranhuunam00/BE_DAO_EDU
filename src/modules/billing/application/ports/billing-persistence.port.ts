@@ -122,4 +122,20 @@ export abstract class BillingPersistencePort {
       paymentStatus: string;
     }[];
   }>;
+  abstract getTeacherWageCalculationData(
+    teacherId: string,
+    classIds?: string[],
+    startDate?: string,
+    endDate?: string,
+    onlyLockedSessions?: boolean,
+  ): Promise<{
+    sessions: any[];
+    pricingList: PricingRule[];
+    wageItems: {
+      classId: string | null;
+      month: string;
+      rate: number;
+      paymentStatus: string;
+    }[];
+  }>;
 }

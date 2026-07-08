@@ -15,11 +15,13 @@ import { TypeOrmTeacherRepository } from '../../infrastructure/persistence/typeo
 import { StorageModule } from '../../infrastructure/storage/storage.module';
 import { TeacherController } from '../../presentation/controllers/teacher.controller';
 import { IdentityModule } from '../identity/identity.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
     IdentityModule,
     StorageModule,
+    BillingModule,
     TypeOrmModule.forFeature([
       TeacherOrmEntity,
       ClassSessionOrmEntity,
