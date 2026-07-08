@@ -38,7 +38,7 @@ export class TeacherController {
     private readonly monthlyWageRepo: Repository<TeacherMonthlyWageOrmEntity>,
     @InjectRepository(TeacherMonthlyWageItemOrmEntity)
     private readonly monthlyWageItemRepo: Repository<TeacherMonthlyWageItemOrmEntity>,
-  ) {}
+  ) { }
 
   @Post()
   @Roles(Role.ADMIN)
@@ -182,7 +182,6 @@ export class TeacherController {
       const computedEndDateStr = month === todayMonthStr
         ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         : lastDayStr;
-
       waveEndDate = new Date(computedEndDateStr);
 
       const latestWage = await this.monthlyWageRepo
