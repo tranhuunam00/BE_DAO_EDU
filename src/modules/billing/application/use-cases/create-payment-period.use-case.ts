@@ -107,7 +107,7 @@ function applyAdjustments(
       lines: [
         ...order.lines,
         {
-          sourceId: `adjustment-${order.ownerId}`,
+          sourceIds: [`adjustment-${order.ownerId}`],
           classId: order.lines[0]?.classId ?? order.ownerId,
           className: `Điều chỉnh: ${adjustment.reason.trim()}`,
           courseName: '',

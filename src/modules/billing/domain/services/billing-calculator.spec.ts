@@ -44,7 +44,7 @@ const pricing: PricingRule[] = [
 ];
 
 describe('BillingCalculator', () => {
-  it('groups sessions by owner and preserves one line per session', () => {
+  it('groups sessions by owner and class+rate into aggregated lines', () => {
     const result = BillingCalculator.calculate(
       [
         source('attendance-1', 'student-1', '2026-06-01'),
@@ -62,7 +62,10 @@ describe('BillingCalculator', () => {
         totalAmount: 200000,
       }),
     );
-    expect(result[0].lines).toHaveLength(2);
+    // Same class + same rate → grouped into 1 line
+    expect(result[0].lines).toHaveLength(1);
+    expect(result[0].lines[0].sessionsCount).toBe(2);
+    expect(result[0].lines[0].sourceIds).toEqual(['attendance-1', 'attendance-2']);
     expect(result[1].totalAmount).toBe(120000);
   });
 
@@ -138,13 +141,19 @@ describe('BillingCalculator', () => {
     expect(result[0].totalSessions).toBe(4);
     expect(result[0].totalAmount).toBe(500000); // 100k*2 + 150k*2
 
-    // Check individual line items have the correct prices mapped
+    // Check that lines are grouped by rate: 2 lines (100k and 150k)
     const lines = result[0].lines;
-    expect(lines).toHaveLength(4);
-    expect(lines.find(l => l.sourceId === 'att-1')?.rate).toBe(100000);
-    expect(lines.find(l => l.sourceId === 'att-2')?.rate).toBe(100000);
-    expect(lines.find(l => l.sourceId === 'att-3')?.rate).toBe(150000);
-    expect(lines.find(l => l.sourceId === 'att-4')?.rate).toBe(150000);
+    expect(lines).toHaveLength(2);
+    const line100k = lines.find(l => l.rate === 100000);
+    const line150k = lines.find(l => l.rate === 150000);
+    expect(line100k).toBeDefined();
+    expect(line100k!.sessionsCount).toBe(2);
+    expect(line100k!.totalAmount).toBe(200000);
+    expect(line100k!.sourceIds).toEqual(expect.arrayContaining(['att-1', 'att-2']));
+    expect(line150k).toBeDefined();
+    expect(line150k!.sessionsCount).toBe(2);
+    expect(line150k!.totalAmount).toBe(300000);
+    expect(line150k!.sourceIds).toEqual(expect.arrayContaining(['att-3', 'att-4']));
   });
 
   it('uses TA wage when source role is assistant', () => {

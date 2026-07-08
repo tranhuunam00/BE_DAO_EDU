@@ -627,7 +627,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
               id: In(
                 order.lines
                   .filter((line) => line.sessionsCount > 0)
-                  .map((line) => line.sourceId),
+                  .flatMap((line) => line.sourceIds),
               ),
             },
             { billId: bill.id },
@@ -665,11 +665,11 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       
       const teacherSessionIds = order.lines
         .filter((line) => line.sessionsCount > 0 && line.roleInSession !== 'assistant')
-        .map((line) => line.sourceId);
+        .flatMap((line) => line.sourceIds);
 
       const assistantSessionIds = order.lines
         .filter((line) => line.sessionsCount > 0 && line.roleInSession === 'assistant')
-        .map((line) => line.sourceId);
+        .flatMap((line) => line.sourceIds);
 
       if (teacherSessionIds.length > 0) {
         await this.manager

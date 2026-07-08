@@ -27,7 +27,7 @@ export interface BillingSource {
 }
 
 export interface BillingLine {
-  sourceId: string;
+  sourceIds: string[];
   classId: string;
   className: string;
   courseName: string;
@@ -82,22 +82,32 @@ export class BillingCalculator {
         totalAmount: 0,
         lines: [],
       };
-      const dateParts = source.date.split('-');
-      const formattedDate =
-        dateParts.length === 3
-          ? `${dateParts[2]}/${dateParts[1]}`
-          : source.date;
-      order.lines.push({
-        sourceId: source.id,
-        classId: source.classId,
-        className: `${source.className} (Buổi ${formattedDate})`,
-        courseName: source.courseName,
-        levelName: source.levelName,
-        sessionsCount: 1,
-        rate,
-        totalAmount: rate,
-        roleInSession: source.roleInSession,
-      });
+
+      // Group by classId + rate + role → 1 line per unique combination
+      const lineKey = `${source.classId}_${rate}_${source.roleInSession ?? ''}`;
+      let existingLine = order.lines.find(
+        (l) =>
+          `${l.classId}_${l.rate}_${l.roleInSession ?? ''}` === lineKey,
+      );
+      if (existingLine) {
+        existingLine.sourceIds.push(source.id);
+        existingLine.sessionsCount += 1;
+        existingLine.totalAmount = Money.vnd(existingLine.totalAmount)
+          .plus(Money.vnd(rate)).value;
+      } else {
+        order.lines.push({
+          sourceIds: [source.id],
+          classId: source.classId,
+          className: source.className,
+          courseName: source.courseName,
+          levelName: source.levelName,
+          sessionsCount: 1,
+          rate,
+          totalAmount: rate,
+          roleInSession: source.roleInSession,
+        });
+      }
+
       order.totalSessions += 1;
       order.totalAmount = Money.vnd(order.totalAmount).plus(
         Money.vnd(rate),
