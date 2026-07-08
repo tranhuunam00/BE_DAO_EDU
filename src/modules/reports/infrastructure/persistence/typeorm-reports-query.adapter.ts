@@ -968,31 +968,48 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       conditions.push(`cl.center_id = $${idx.value++}`);
       params.push(filters.centerId);
     }
-    this.applyClassFilters(filters, conditions, params, idx, 'cs.class_id');
+    this.applyClassFilters(filters, conditions, params, idx, 'bi.class_id');
 
     const where = `WHERE ${conditions.join(' AND ')}`;
-    return this.ds.query(
+    const rows = await this.ds.query(
       `SELECT
          b.id AS "billId",
-         b.month AS "month",
+         b.status AS "billStatus",
+         CONCAT(s.last_name, ' ', s.first_name) AS "fullName",
+         b.id AS "saleOrderId",
          b.receipt_code AS "receiptCode",
+         b.payment_date AS "receiptDate",
+         b.payment_method AS "paymentMethod",
+         b.billing_end_date AS "dueDate",
+         CASE
+           WHEN b.paid_amount > 0 AND b.paid_amount < b.total_amount THEN 'Yes'
+           ELSE 'No'
+         END AS "splitPayments",
+         b.status AS "saleOrderStatus",
+         b.created_at AS "submitDate",
          s.student_id AS "studentCode",
-         CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         COALESCE(bi.class_name || ' - ' || bi.course_name || ' (' || bi.level_name || ')', '') AS "productItemName",
+         b.total_amount AS "receiptAmount",
+         bi.total_amount AS "netAmount",
+         bi.rate AS "netPrice",
+         b.created_at AS "dateCreated",
+         b.paid_amount AS "paidAmount",
+         bi.sessions_count AS "quantity",
+         b.month AS "serviceDurationValue",
+         b.month AS "month",
+         s.student_id AS "studentId",
          cl.class_code AS "classCode",
          cl.class_name AS "className",
-         b.total_amount AS "totalAmount",
-         b.paid_amount AS "paidAmount",
-         b.status AS "status",
-         b.payment_method AS "paymentMethod",
-         b.payment_date AS "paymentDate"
+         b.total_amount AS "totalAmount"
        FROM student_monthly_bills b
        JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id AND cs.status = 'Active'
-       LEFT JOIN classes cl ON cl.id = cs.class_id
+       LEFT JOIN student_monthly_bill_items bi ON bi.bill_id = b.id
+       LEFT JOIN classes cl ON cl.id = bi.class_id
        ${where}
-       ORDER BY b.created_at DESC`,
+       ORDER BY b.created_at DESC, bi.created_at ASC`,
       params,
     );
+    return rows;
   }
 
   async getStudentAttendanceReport(filters: ReportFilters): Promise<any[]> {
