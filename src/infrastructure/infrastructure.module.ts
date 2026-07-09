@@ -7,14 +7,7 @@ import { TypeOrmExceptionFilter } from './persistence/typeorm/typeorm-exception.
 
 @Module({
   imports: [
-<<<<<<< Updated upstream
     ConfigModule.forRoot({ isGlobal: true }),
-=======
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
->>>>>>> Stashed changes
     DatabaseModule,
     SecurityModule,
   ],
@@ -25,4 +18,4 @@ import { TypeOrmExceptionFilter } from './persistence/typeorm/typeorm-exception.
     },
   ],
 })
-export class InfrastructureModule {}
+export class InfrastructureModule { }
