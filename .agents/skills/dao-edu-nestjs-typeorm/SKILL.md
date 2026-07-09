@@ -24,6 +24,12 @@ description: Implement NestJS 11 and TypeORM persistence features in the DAO EDU
 ## Migrations
 
 - Create a new timestamped migration for every schema change.
+- **Tách biệt cấu trúc (Schema) và Dữ liệu mẫu (Seed Data)**:
+  - Các file migrations chỉ chứa cấu trúc cơ sở dữ liệu (DDL: `CREATE TABLE`, `ALTER TABLE`, `ADD INDEX`, `ADD CONSTRAINT`).
+  - **Không** viết các lệnh chèn dữ liệu mẫu, dữ liệu thử nghiệm hoặc tài khoản ảo (`INSERT INTO`) trong migrations để tránh ô nhiễm dữ liệu trên Production và lỗi xung đột ràng buộc dữ liệu.
+- **Tập trung Seed vào thư mục `seeds/`**:
+  - Dữ liệu mẫu Dev lưu tại `seeds/dev.js`.
+  - Dữ liệu khởi tạo Production lưu tại `seeds/prod.js`.
 - Never edit an already-applied migration to represent a new change.
 - Write reversible `up` and `down` operations where safely possible.
 - Add indexes, unique constraints, foreign keys, and PostgreSQL constraints needed to enforce invariants.
