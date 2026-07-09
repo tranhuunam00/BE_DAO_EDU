@@ -146,7 +146,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 8. Kiểm tra logs để đảm bảo Backend chạy không lỗi:
    ```bash
-   pm2 logs dao-edu-api
+   pm2 logs dao-edu-production-api
    ```
 
 ---
@@ -177,14 +177,14 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
 5. Sử dụng PM2 để phục vụ ứng dụng Frontend (Single Page Application - SPA):
    ```bash
    # Triển khai trực tiếp file tĩnh qua PM2 serve ở cổng 5001
-   pm2 serve dist 5001 --name dao-edu-web --spa
+   pm2 serve dist 5001 --name dao-edu-production-web --spa
    pm2 save
    ```
 6. Kiểm tra trạng thái các service qua PM2:
    ```bash
    pm2 status
    ```
-   *Bạn sẽ thấy hai dịch vụ: `dao-edu-api` (BE) chạy cổng 5000 và `dao-edu-web` (FE) chạy cổng 5001.*
+   *Bạn sẽ thấy hai dịch vụ: `dao-edu-production-api` (BE) chạy cổng 5000 và `dao-edu-production-web` (FE) chạy cổng 5001.*
 
 ---
 
@@ -268,8 +268,8 @@ sudo ufw reload
     ```
 *   **Xem logs thời gian thực của ứng dụng**:
     ```bash
-    pm2 logs dao-edu-api   # Backend
-    pm2 logs dao-edu-web   # Frontend
+    pm2 logs dao-edu-production-api   # Backend
+    pm2 logs dao-edu-production-web   # Frontend
     ```
 *   **Khởi động lại/Dừng ứng dụng**:
     ```bash

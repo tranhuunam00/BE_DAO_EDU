@@ -55,7 +55,7 @@ password database hoặc private key lên Git.
 
 ```bash
 pm2 status
-pm2 logs dao-edu-api
+pm2 logs dao-edu-production-api
 ```
 
 Script dùng khóa `flock`, từ chối deploy khi tracked file trên server bị sửa,

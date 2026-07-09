@@ -4,7 +4,7 @@ set -Eeuo pipefail
 BRANCH="${1:-master}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LOCK_FILE="${TMPDIR:-/tmp}/dao-edu-api-deploy.lock"
+LOCK_FILE="${TMPDIR:-/tmp}/dao-edu-production-api-deploy.lock"
 
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
@@ -65,7 +65,7 @@ if ! curl \
   --retry-connrefused \
   "${API_HEALTH_URL}" >/dev/null; then
   echo "Backend health check failed. Recent PM2 logs:"
-  pm2 logs dao-edu-api --lines 80 --nostream
+  pm2 logs dao-edu-production-api --lines 80 --nostream
   exit 1
 fi
 

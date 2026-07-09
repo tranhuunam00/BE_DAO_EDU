@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'dao-edu-api',
+      name: 'dao-edu-production-api',
       cwd: __dirname,
       script: 'dist/main.js',
       instances: 1,
