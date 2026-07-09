@@ -62,7 +62,7 @@ async function main() {
       'course_level_pricing', 'course_levels', 'courses', 'rooms', 'centers', 
       'teachers', 'students', 'audit_logs', 'billing_audit_logs', 'notifications', 
       'vietqr_callback_logs', 'leave_requests', 'holidays', 'contact_requests', 
-      'facebook_lead_scans', 'leads', 'study_materials'
+      'facebook_lead_scans', 'leads', 'study_materials', 'payment_periods'
     ];
 
     for (const table of tablesToTruncate) {
