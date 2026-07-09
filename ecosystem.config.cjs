@@ -1,3 +1,4 @@
+const path = require('path');
 const { execSync } = require('child_process');
 
 let appName = 'dao-edu-api';
@@ -18,7 +19,7 @@ module.exports = {
     {
       name: appName,
       cwd: __dirname,
-      script: 'dist/main.js',
+      script: path.join(__dirname, 'dist/main.js'),
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
