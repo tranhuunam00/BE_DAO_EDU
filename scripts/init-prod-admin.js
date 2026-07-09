@@ -4,9 +4,16 @@ const fs = require('fs');
 const path = require('path');
 
 // Load environment variables manually
-const envPath = path.join(__dirname, '../.env');
+let envFile = '.env';
+if (fs.existsSync(path.join(__dirname, '../.env.production'))) {
+  envFile = '.env.production';
+  console.log('Phát hiện file .env.production. Đang tải cấu hình từ .env.production...');
+} else {
+  console.log('Đang tải cấu hình từ .env...');
+}
+const envPath = path.join(__dirname, '../', envFile);
 if (!fs.existsSync(envPath)) {
-  console.error('Error: .env file not found at ' + envPath + '. Please create it first.');
+  console.error('Error: Environment file not found at ' + envPath + '. Please create it first.');
   process.exit(1);
 }
 

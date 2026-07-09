@@ -7,7 +7,10 @@ import { TypeOrmExceptionFilter } from './persistence/typeorm/typeorm-exception.
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env',
+    }),
     DatabaseModule,
     SecurityModule,
   ],
