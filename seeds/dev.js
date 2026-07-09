@@ -141,19 +141,19 @@ async function main() {
 
     // 7. Students
     const students = [
-      ['50000000-0000-4000-8000-000000000001', 'HV-2026-001', 'An', 'Nguyễn Minh', 'An', 'Male', '0912 000 001', 'an.nguyen@student.dao.edu.vn', '2012-03-18', 'Nguyễn Thanh Bình', 'Father', 'Hà Nội', 'Đống Đa', '12 Huỳnh Thúc Kháng', 'Active', users[6][0]],
-      ['50000000-0000-4000-8000-000000000002', 'HV-2026-002', 'Bảo', 'Trần Gia', 'Bảo', 'Male', '0912 000 002', 'bao.tran@student.dao.edu.vn', '2011-07-09', 'Trần Mỹ Hạnh', 'Mother', 'Hà Nội', 'Ba Đình', '45 Kim Mã', 'Active', users[7][0]],
-      ['50000000-0000-4000-8000-000000000003', 'HV-2026-003', 'Chi', 'Phạm Hà', 'Chi', 'Female', '0912 000 003', 'chi.pham@student.dao.edu.vn', '2013-11-22', 'Phạm Minh Đức', 'Father', 'Hà Nội', 'Cầu Giấy', '88 Duy Tân', 'Active', users[8][0]],
-      ['50000000-0000-4000-8000-000000000004', 'HV-2026-004', 'Duy', 'Lê Anh', 'Duy', 'Male', '0912 000 004', 'duy.le@student.dao.edu.vn', '2010-05-14', 'Lê Ngọc Mai', 'Mother', 'Hà Nội', 'Thanh Xuân', '19 Nguyễn Trãi', 'Active', users[9][0]],
-      ['50000000-0000-4000-8000-000000000005', 'HV-2026-005', 'Hà', 'Võ Thanh', 'Hà', 'Female', '0912 000 005', 'ha.vo@student.dao.edu.vn', '2012-12-01', 'Võ Hoàng Nam', 'Father', 'TP. Hồ Chí Minh', 'Quận 3', '31 Võ Văn Tần', 'Active', users[10][0]],
-      ['50000000-0000-4000-8000-000000000006', 'HV-2026-006', 'Khánh', 'Đặng Gia', 'Ken', 'Male', '0912 000 006', 'khanh.dang@student.dao.edu.vn', '2014-02-27', 'Đặng Thu Hà', 'Mother', 'TP. Hồ Chí Minh', 'Quận 1', '5 Lê Lợi', 'Active', null],
-      ['50000000-0000-4000-8000-000000000007', 'HV-2026-007', 'Linh', 'Bùi Ngọc', 'Linh', 'Female', '0912 000 007', 'linh.bui@student.dao.edu.vn', '2011-10-30', 'Bùi Quốc Thái', 'Father', 'TP. Hồ Chí Minh', 'Bình Thạnh', '42 Xô Viết Nghệ Tĩnh', 'Active', null],
-      ['50000000-0000-4000-8000-000000000008', 'HV-2026-008', 'Nam', 'Hoàng Phúc', 'Nam', 'Male', '0912 000 008', 'nam.hoang@student.dao.edu.vn', '2012-08-16', 'Hoàng Minh Phương', 'Mother', 'Hà Nội', 'Hoàn Kiếm', '23 Hàng Bài', 'Waiting for class', null]
+      ['50000000-0000-4000-8000-000000000001', 'HV-2026-001', 'An', 'Nguyễn Minh', 'An', 'Male', '0912 000 001', 'an.nguyen@student.dao.edu.vn', '2012-03-18', 'Nguyễn Thanh Bình', 'Father', 'Hà Nội', 'Đống Đa', '12 Huỳnh Thúc Kháng', 'Active', users[6][0], '2026-01-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000002', 'HV-2026-002', 'Bảo', 'Trần Gia', 'Bảo', 'Male', '0912 000 002', 'bao.tran@student.dao.edu.vn', '2011-07-09', 'Trần Mỹ Hạnh', 'Mother', 'Hà Nội', 'Ba Đình', '45 Kim Mã', 'Active', users[7][0], '2026-02-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000003', 'HV-2026-003', 'Chi', 'Phạm Hà', 'Chi', 'Female', '0912 000 003', 'chi.pham@student.dao.edu.vn', '2013-11-22', 'Phạm Minh Đức', 'Father', 'Hà Nội', 'Cầu Giấy', '88 Duy Tân', 'Active', users[8][0], '2026-03-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000004', 'HV-2026-004', 'Duy', 'Lê Anh', 'Duy', 'Male', '0912 000 004', 'duy.le@student.dao.edu.vn', '2010-05-14', 'Lê Ngọc Mai', 'Mother', 'Hà Nội', 'Thanh Xuân', '19 Nguyễn Trãi', 'Active', users[9][0], '2026-04-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000005', 'HV-2026-005', 'Hà', 'Võ Thanh', 'Hà', 'Female', '0912 000 005', 'ha.vo@student.dao.edu.vn', '2012-12-01', 'Võ Hoàng Nam', 'Father', 'TP. Hồ Chí Minh', 'Quận 3', '31 Võ Văn Tần', 'Active', users[10][0], '2026-05-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000006', 'HV-2026-006', 'Khánh', 'Đặng Gia', 'Ken', 'Male', '0912 000 006', 'khanh.dang@student.dao.edu.vn', '2014-02-27', 'Đặng Thu Hà', 'Mother', 'TP. Hồ Chí Minh', 'Quận 1', '5 Lê Lợi', 'Active', null, '2026-06-15 10:00:00'],
+      ['50000000-0000-4000-8000-000000000007', 'HV-2026-007', 'Linh', 'Bùi Ngọc', 'Linh', 'Female', '0912 000 007', 'linh.bui@student.dao.edu.vn', '2011-10-30', 'Bùi Quốc Thái', 'Father', 'TP. Hồ Chí Minh', 'Bình Thạnh', '42 Xô Viết Nghệ Tĩnh', 'Active', null, '2026-07-01 10:00:00'],
+      ['50000000-0000-4000-8000-000000000008', 'HV-2026-008', 'Nam', 'Hoàng Phúc', 'Nam', 'Male', '0912 000 008', 'nam.hoang@student.dao.edu.vn', '2012-08-16', 'Hoàng Minh Phương', 'Mother', 'Hà Nội', 'Hoàn Kiếm', '23 Hàng Bài', 'Waiting for class', null, '2026-07-02 10:00:00']
     ];
     for (const s of students) {
       await client.query(`
-        INSERT INTO "students" ("id", "student_id", "first_name", "last_name", "nick_name", "gender", "mobile", "email", "birthdate", "parent_guardian_1", "relationship_1", "country", "province", "district_ward", "primary_address", "status", "user_id")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Việt Nam', $12, $13, $14, $15, $16);
+        INSERT INTO "students" ("id", "student_id", "first_name", "last_name", "nick_name", "gender", "mobile", "email", "birthdate", "parent_guardian_1", "relationship_1", "country", "province", "district_ward", "primary_address", "status", "user_id", "created_at")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Việt Nam', $12, $13, $14, $15, $16, $17);
       `, s);
     }
 
@@ -249,6 +249,10 @@ async function main() {
 
     // 14. Periods
     const periods = [
+      ['80000000-0000-4000-8000-000000000005', 'Học phí tháng 01/2026', 'tuition', '2026-01', '2026-01-01', '2026-01-31', 'Closed'],
+      ['80000000-0000-4000-8000-000000000006', 'Học phí tháng 02/2026', 'tuition', '2026-02', '2026-02-01', '2026-02-28', 'Closed'],
+      ['80000000-0000-4000-8000-000000000007', 'Học phí tháng 03/2026', 'tuition', '2026-03', '2026-03-01', '2026-03-31', 'Closed'],
+      ['80000000-0000-4000-8000-000000000008', 'Học phí tháng 04/2026', 'tuition', '2026-04', '2026-04-01', '2026-04-30', 'Closed'],
       ['80000000-0000-4000-8000-000000000001', 'Học phí tháng 05/2026', 'tuition', '2026-05', '2026-05-01', '2026-05-31', 'Closed'],
       ['80000000-0000-4000-8000-000000000002', 'Học phí tháng 06/2026', 'tuition', '2026-06', '2026-06-01', '2026-06-30', 'Active'],
       ['80000000-0000-4000-8000-000000000003', 'Lương giáo viên tháng 05/2026', 'salary', '2026-05', '2026-05-01', '2026-05-31', 'Closed'],
@@ -280,12 +284,16 @@ async function main() {
 
     // 16. Bills
     const bills = [
-      ['81000000-0000-4000-8000-000000000001', students[0][0], periods[0][0], '2026-05', 1260000, 1260000, 'Paid', '2026-05-28', 'Đã thanh toán qua chuyển khoản.'],
-      ['81000000-0000-4000-8000-000000000002', students[1][0], periods[0][0], '2026-05', 840000, 840000, 'Paid', '2026-05-27', 'Đã thanh toán tại quầy.'],
-      ['81000000-0000-4000-8000-000000000003', students[0][0], periods[1][0], '2026-06', 1260000, 1260000, 'Paid', '2026-06-10', 'Ưu tiên hiển thị demo doanh thu đã thu.'],
-      ['81000000-0000-4000-8000-000000000004', students[2][0], periods[1][0], '2026-06', 1260000, 0, 'Unpaid', null, 'Phụ huynh hẹn thanh toán phần còn lại trong tuần.'],
-      ['81000000-0000-4000-8000-000000000005', students[4][0], periods[1][0], '2026-06', 1540000, 0, 'Unpaid', null, 'Cần nhắc lịch thanh toán.'],
-      ['81000000-0000-4000-8000-000000000006', students[6][0], periods[1][0], '2026-06', 1540000, 1540000, 'Paid', '2026-06-12', 'Đã thanh toán đủ.']
+      ['81000000-0000-4000-8000-000000000011', students[0][0], periods[0][0], '2026-01', 1000000, 1000000, 'Paid', '2026-01-25', 'Đã thanh toán'],
+      ['81000000-0000-4000-8000-000000000012', students[1][0], periods[1][0], '2026-02', 1500000, 1500000, 'Paid', '2026-02-24', 'Đã thanh toán'],
+      ['81000000-0000-4000-8000-000000000013', students[2][0], periods[2][0], '2026-03', 2000000, 2000000, 'Paid', '2026-03-26', 'Đã thanh toán'],
+      ['81000000-0000-4000-8000-000000000014', students[3][0], periods[3][0], '2026-04', 3000000, 3000000, 'Paid', '2026-04-28', 'Đã thanh toán'],
+      ['81000000-0000-4000-8000-000000000001', students[0][0], periods[4][0], '2026-05', 1260000, 1260000, 'Paid', '2026-05-28', 'Đã thanh toán qua chuyển khoản.'],
+      ['81000000-0000-4000-8000-000000000002', students[1][0], periods[4][0], '2026-05', 840000, 840000, 'Paid', '2026-05-27', 'Đã thanh toán tại quầy.'],
+      ['81000000-0000-4000-8000-000000000003', students[0][0], periods[5][0], '2026-06', 1260000, 1260000, 'Paid', '2026-06-10', 'Ưu tiên hiển thị demo doanh thu đã thu.'],
+      ['81000000-0000-4000-8000-000000000004', students[2][0], periods[5][0], '2026-06', 1260000, 0, 'Unpaid', null, 'Phụ huynh hẹn thanh toán phần còn lại trong tuần.'],
+      ['81000000-0000-4000-8000-000000000005', students[4][0], periods[5][0], '2026-06', 1540000, 0, 'Unpaid', null, 'Cần nhắc lịch thanh toán.'],
+      ['81000000-0000-4000-8000-000000000006', students[6][0], periods[5][0], '2026-06', 1540000, 1540000, 'Paid', '2026-06-12', 'Đã thanh toán đủ.']
     ];
     for (const b of bills) {
       await client.query(`
