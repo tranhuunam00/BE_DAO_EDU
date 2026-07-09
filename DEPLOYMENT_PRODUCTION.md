@@ -163,9 +163,9 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 3. Chỉnh sửa file `.env.production` (`nano .env.production`):
    ```env
-   VITE_API_URL=http://<IP_SERVER_CUA_BAN>/api
+   VITE_API_URL=http://apiedu.home-care.vn/api
    ```
-   *(Nếu server chạy HTTPS, hãy sử dụng `https://<DOMAIN_CUA_BAN>/api`)*
+   *(Nếu server chạy HTTPS, hãy sử dụng `https://apiedu.home-care.vn/api`)*
 
 4. Cài đặt các thư viện và tiến hành build dự án:
    ```bash
@@ -198,33 +198,38 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 2. Dán nội dung cấu hình sau vào (thay thế địa chỉ IP/domain tương ứng):
    ```nginx
-   server {
-       listen 80;
-       server_name 103.90.227.173; # Thay thế bằng IP public hoặc domain của bạn
+    # 1. Cấu hình Nginx cho Frontend (Ví dụ: edu.home-care.vn hoặc IP Public của bạn)
+    server {
+        listen 80;
+        server_name 103.90.227.173; # Thay thế bằng IP public hoặc domain Frontend của bạn
 
-       # 1. Định tuyến Frontend SPA
-       location / {
-           proxy_pass http://127.0.0.1:5001;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-       }
+        location / {
+            proxy_pass http://127.0.0.1:5001;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
 
-       # 2. Định tuyến Backend NestJS API
-       location /api {
-           proxy_pass http://127.0.0.1:5005;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-           
-           # Cho phép tải file dung lượng lớn (Tài liệu học tập/Bài tập)
-           client_max_body_size 50M;
-       }
-   }
+    # 2. Cấu hình Nginx cho Backend API (apiedu.home-care.vn)
+    server {
+        listen 80;
+        server_name apiedu.home-care.vn;
+
+        location / {
+            proxy_pass http://127.0.0.1:5005;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+            
+            # Cho phép tải file dung lượng lớn (Tài liệu học tập/Bài tập)
+            client_max_body_size 50M;
+        }
+    }
    ```
 3. Kích hoạt cấu hình mới và vô hiệu hóa cấu hình mặc định (nếu cần):
    ```bash
