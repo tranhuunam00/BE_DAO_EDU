@@ -3,15 +3,9 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 
-// Load environment variables manually
-let envFile = '.env';
-if (fs.existsSync(path.join(__dirname, '../.env.production'))) {
-  envFile = '.env.production';
-  console.log('Phát hiện file .env.production. Đang tải cấu hình từ .env.production...');
-} else {
-  console.log('Đang tải cấu hình từ .env...');
-}
-const envPath = path.join(__dirname, '../', envFile);
+// Load environment variables from .env only (never auto-detect .env.production to avoid accidents)
+const envPath = path.join(__dirname, '../.env');
+console.log('Đang tải cấu hình từ .env...');
 if (!fs.existsSync(envPath)) {
   console.error('Error: Environment file not found at ' + envPath + '. Please create it first.');
   process.exit(1);
