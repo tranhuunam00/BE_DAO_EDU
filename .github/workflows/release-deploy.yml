@@ -3,19 +3,22 @@ name: Release deploy
 on:
   push:
     branches:
+      - main
       - master
 
 concurrency:
-  group: dao-edu-production
+  group: dao-edu-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     if: >-
-      github.event.head_commit != null &&
-      contains(github.event.head_commit.message, 'release_production v')
+      github.event.head_commit != null && (
+        (github.ref_name == 'main' && contains(github.event.head_commit.message, 'release v')) ||
+        (github.ref_name == 'master' && contains(github.event.head_commit.message, 'release_production v'))
+      )
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref_name == 'master' && 'production' || 'development' }}
     timeout-minutes: 20
 
     steps:
@@ -53,7 +56,7 @@ jobs:
                echo 'Git repository not found at DEPLOY_PATH: $DEPLOY_PATH'
                exit 1
              }
-             git fetch --prune origin master
-             git checkout master
-             git merge --ff-only origin/master
-             bash scripts/deploy-pm2.sh master"
+             git fetch --prune origin ${{ github.ref_name }}
+             git checkout ${{ github.ref_name }}
+             git merge --ff-only origin/${{ github.ref_name }}
+             bash scripts/deploy-pm2.sh ${{ github.ref_name }}"
