@@ -176,15 +176,15 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
 
 5. Sử dụng PM2 để phục vụ ứng dụng Frontend (Single Page Application - SPA):
    ```bash
-   # Triển khai trực tiếp file tĩnh qua PM2 serve ở cổng 5001
-   pm2 serve dist 5001 --name dao-edu-production-web --spa
+   # Triển khai trực tiếp file tĩnh qua PM2 serve ở cổng 5006
+   pm2 serve dist 5006 --name dao-edu-production-web --spa
    pm2 save
    ```
 6. Kiểm tra trạng thái các service qua PM2:
    ```bash
    pm2 status
    ```
-    *Bạn sẽ thấy hai dịch vụ: `dao-edu-production-api` (BE) chạy cổng 5005 và `dao-edu-production-web` (FE) chạy cổng 5001.*
+    *Bạn sẽ thấy hai dịch vụ: `dao-edu-production-api` (BE) chạy cổng 5005 và `dao-edu-production-web` (FE) chạy cổng 5006.*
 
 ---
 
@@ -198,13 +198,13 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 2. Dán nội dung cấu hình sau vào (thay thế địa chỉ IP/domain tương ứng):
    ```nginx
-    # 1. Cấu hình Nginx cho Frontend (Ví dụ: edu.home-care.vn hoặc IP Public của bạn)
+    # 1. Cấu hình Nginx cho Frontend (edu.home-care.vn)
     server {
         listen 80;
-        server_name 103.90.227.173; # Thay thế bằng IP public hoặc domain Frontend của bạn
+        server_name edu.home-care.vn;
 
         location / {
-            proxy_pass http://127.0.0.1:5001;
+            proxy_pass http://127.0.0.1:5006;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
