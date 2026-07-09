@@ -7,21 +7,10 @@ import { TypeOrmExceptionFilter } from './persistence/typeorm/typeorm-exception.
 
 @Module({
   imports: [
-<<<<<<< HEAD
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env',
-    }),
-=======
-<<<<<<< Updated upstream
-    ConfigModule.forRoot({ isGlobal: true }),
-=======
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
->>>>>>> Stashed changes
->>>>>>> origin/main
     DatabaseModule,
     SecurityModule,
   ],
@@ -32,4 +21,4 @@ import { TypeOrmExceptionFilter } from './persistence/typeorm/typeorm-exception.
     },
   ],
 })
-export class InfrastructureModule {}
+export class InfrastructureModule { }
