@@ -194,7 +194,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
 
 1. Tạo file cấu hình Nginx mới:
    ```bash
-   sudo nano /etc/nginx/sites-available/dao-edu
+   sudo nano /etc/nginx/sites-available/dao-edu-production
    ```
 2. Dán nội dung cấu hình sau vào (thay thế địa chỉ IP/domain tương ứng):
    ```nginx
@@ -233,7 +233,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 3. Kích hoạt cấu hình mới và vô hiệu hóa cấu hình mặc định (nếu cần):
    ```bash
-   sudo ln -sf /etc/nginx/sites-available/dao-edu /etc/nginx/sites-enabled/
+   sudo ln -sf /etc/nginx/sites-available/dao-edu-production /etc/nginx/sites-enabled/
    sudo rm -f /etc/nginx/sites-enabled/default
    ```
 4. Kiểm tra cú pháp cấu hình Nginx:
@@ -244,6 +244,28 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```bash
    sudo systemctl reload nginx
    ```
+
+### BƯỚC 5.5: CẤU HÌNH SSL/HTTPS MIỄN PHÍ BẰNG CERTBOT (LET'S ENCRYPT)
+
+Để bảo mật dữ liệu truyền tải và chạy API qua giao thức `https://`, hãy cài đặt SSL miễn phí cho tên miền của bạn:
+
+1. Cài đặt Certbot và plugin Nginx:
+   ```bash
+   sudo apt install -y certbot python3-certbot-nginx
+   ```
+2. Yêu cầu cấp chứng chỉ SSL và tự động cấu hình Nginx (thay thế bằng tên miền thực tế của bạn):
+   ```bash
+   sudo certbot --nginx -d apiedu.home-care.vn -d edu.home-care.vn
+   ```
+   *(Nhập Email và chọn `Y` để đồng ý các điều khoản. Certbot sẽ tự cấu hình SSL vào file `/etc/nginx/sites-available/dao-edu-production` và tự động thiết lập chuyển hướng từ HTTP sang HTTPS).*
+
+3. **Lưu ý quan trọng sau khi có SSL**: 
+   * Hãy quay lại **Bước 4.3** để cập nhật lại cấu hình Frontend `.env.production` sử dụng **`https://`**:
+     ```env
+     VITE_API_URL=https://apiedu.home-care.vn/api
+     ```
+   * Cần build lại Frontend để cập nhật đường dẫn mới: `npm run build && pm2 restart dao-edu-production-web`.
+   * Kiểm tra tự động gia hạn SSL hàng tháng: `sudo certbot renew --dry-run`.
 
 ---
 
