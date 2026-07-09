@@ -28,9 +28,9 @@ const password = process.argv[3];
 const name = process.argv[4] || 'DAO EDU Admin';
 
 if (!email || !password) {
-  console.log('\n--- KHỞI TẠO TÀI KHOẢN ADMIN PRODUCTION ---');
-  console.log('Cách dùng: npm run db:seed:prod -- <email> <password> [name]');
-  console.log('Ví dụ  : npm run db:seed:prod -- admin@daogroup.com MyPassword2026 "DAO Admin"');
+  console.log('\n--- DAO EDU PRODUCTION ADMIN INITIALIZATION ---');
+  console.log('Cách dùng: node scripts/init-prod-admin.js <email> <password> [name]');
+  console.log('Ví dụ  : node scripts/init-prod-admin.js admin@domain.com MyStrongPassword123 "Admin Đào EDU"');
   process.exit(1);
 }
 
@@ -43,7 +43,7 @@ const client = new Client({
 });
 
 async function main() {
-  console.log('Đang kết nối tới cơ sở dữ liệu để khởi tạo Admin Production...');
+  console.log('Đang kết nối tới cơ sở dữ liệu...');
   try {
     await client.connect();
     console.log('Đã kết nối thành công.');
@@ -58,11 +58,11 @@ async function main() {
     const tablesToTruncate = [
       'student_attendance', 'student_monthly_bill_items', 'student_monthly_bills', 
       'teacher_monthly_wage_items', 'teacher_monthly_wages', 'tuition_payment_logs', 
-      'tuition_payment_requests', 'class_students', 'class_schedules', 'class_sessions', 'classes', 
+      'tuition_payment_requests', 'class_students', 'class_sessions', 'classes', 
       'course_level_pricing', 'course_levels', 'courses', 'rooms', 'centers', 
       'teachers', 'students', 'audit_logs', 'billing_audit_logs', 'notifications', 
       'vietqr_callback_logs', 'leave_requests', 'holidays', 'contact_requests', 
-      'facebook_lead_scans', 'leads', 'study_materials'
+      'facebook_lead_scans', 'leads'
     ];
 
     for (const table of tablesToTruncate) {
