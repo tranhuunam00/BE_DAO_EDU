@@ -6,7 +6,7 @@ on:
       - main
 
 concurrency:
-  group: dao-edu-production
+  group: dao-edu-development
   cancel-in-progress: false
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       github.event.head_commit != null &&
       contains(github.event.head_commit.message, 'release v')
     runs-on: ubuntu-latest
-    environment: production
+    environment: development
     timeout-minutes: 20
 
     steps:
