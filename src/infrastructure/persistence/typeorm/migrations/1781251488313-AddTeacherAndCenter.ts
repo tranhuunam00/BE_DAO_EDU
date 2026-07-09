@@ -4,6 +4,8 @@ export class AddTeacherAndCenter1781251488313 implements MigrationInterface {
     name = 'AddTeacherAndCenter1781251488313'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // Clear old teacher seeds to prevent NOT NULL constraint errors on existing data
+        await queryRunner.query(`DELETE FROM "teachers"`);
         await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_users_role"`);
         await queryRunner.query(`ALTER TABLE "students" DROP CONSTRAINT "FK_students_user"`);
         await queryRunner.query(`ALTER TABLE "teachers" DROP CONSTRAINT "FK_teachers_user"`);

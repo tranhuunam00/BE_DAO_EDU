@@ -57,10 +57,29 @@ Hệ thống cơ sở dữ liệu và lưu trữ file được đóng gói sẵn
    ```
 
 ### Thiết lập ban đầu trên MinIO:
-1. Truy cập vào giao diện quản trị Web của MinIO qua trình duyệt: `http://<IP_SERVER>:9006`.
+
+Bạn có thể cấu hình bằng một trong hai cách dưới đây:
+
+#### CÁCH A: Thiết lập nhanh qua dòng lệnh (CLI)
+Chạy trực tiếp các lệnh sau trên Server (các lệnh này chạy trình khách `mc` tích hợp sẵn trong container MinIO):
+```bash
+# 1. Đăng nhập/Liên kết client mc (Lưu ý bao bọc mật khẩu trong dấu nháy đơn '' nếu có ký tự đặc biệt như !)
+docker exec -it dao-edu-infra_production-minio mc alias set myminio http://localhost:9000 <MINIO_ROOT_USER> '<MINIO_ROOT_PASSWORD>'
+
+# 2. Tạo bucket tên là "edu"
+docker exec -it dao-edu-infra_production-minio mc mb myminio/edu
+
+# 3. Cấp quyền tải/đọc công khai (download) cho bucket "edu" để hiển thị tệp trên web/app
+docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio/edu
+```
+*(Nếu bạn đổi tên project docker compose khác, hãy kiểm tra lại tên container chạy thực tế bằng `docker ps` để thay thế cho chính xác).*
+
+#### CÁCH B: Thiết lập qua giao diện Web (Web UI)
+1. Truy cập vào giao diện quản trị Web của MinIO qua trình duyệt: `http://<IP_SERVER>:9009` (hoặc cổng cấu hình của bạn).
 2. Đăng nhập bằng `MINIO_ROOT_USER` (mặc định: `minio_admin`) và mật khẩu `MINIO_ROOT_PASSWORD` bạn vừa cấu hình.
 3. Vào mục **Buckets** -> chọn **Create Bucket**.
-4. Tạo một bucket tên là: **`edu`** (bắt buộc đúng tên này để khớp cấu hình Backend).
+4. Tạo một bucket tên là: **`edu`** (bắt buộc đúng tên này).
+5. Sau khi tạo xong, vào phần cấu hình của Bucket đó, đặt **Access Policy** từ `private` thành `public` hoặc `custom` (cho phép tải công khai).
 
 ---
 
