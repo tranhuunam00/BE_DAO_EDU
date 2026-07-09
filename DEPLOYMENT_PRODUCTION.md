@@ -1,0 +1,264 @@
+# HƯỚNG DẪN TRIỂN KHAI PRODUCTION (FE, BE, DB & MINIO)
+Tài liệu này hướng dẫn chi tiết từng bước để thiết lập và khởi chạy toàn bộ hệ thống DAO EDU trên môi trường Production (Server Ubuntu/Linux), bao gồm:
+1. Cơ sở dữ liệu **PostgreSQL 15** và Kho lưu trữ **MinIO** chạy qua Docker Compose.
+2. **Backend (NestJS API)** chạy qua PM2.
+3. **Frontend (React SPA)** chạy qua PM2 (serve) và được định tuyến qua **Nginx Reverse Proxy**.
+
+---
+
+## BƯỚC 1: CHUẨN BỊ MÔI TRƯỜNG SERVER
+
+Đảm bảo server của bạn đã cài đặt các công cụ sau:
+*   **Docker & Docker Compose**: Để chạy Postgres và MinIO.
+*   **Node.js (Khuyến nghị v20.x hoặc v22.x LTS) & npm**: Để build & chạy dự án Node.
+*   **PM2**: Quản lý tiến trình Node.js chạy ngầm (`npm install -g pm2`).
+*   **Nginx**: Làm reverse proxy.
+*   **Git**: Đồng bộ mã nguồn.
+
+Cài đặt nhanh trên Ubuntu nếu chưa có:
+```bash
+sudo apt update
+sudo apt install -y git curl nginx build-essential
+
+# Cài đặt Node.js v20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Cài đặt PM2 toàn cục
+sudo npm install -g pm2
+```
+
+---
+
+## BƯỚC 2: CẤU HÌNH & CHẠY DOCKER INFRASTRUCTURE (DB & MINIO)
+
+Hệ thống cơ sở dữ liệu và lưu trữ file được đóng gói sẵn trong thư mục `BE_DAO_EDU/infra`.
+
+1. Di chuyển vào thư mục hạ tầng:
+   ```bash
+   cd /root/BE_DAO_EDU/infra
+   ```
+2. Tạo file cấu hình môi trường `.env` từ file ví dụ:
+   ```bash
+   cp .env.example .env
+   ```
+3. Chỉnh sửa nội dung file `.env` bằng công cụ soạn thảo (ví dụ: `nano .env`):
+   *   **POSTGRES_PASSWORD**: Đổi thành một mật khẩu mạnh và an toàn.
+   *   **MINIO_ROOT_PASSWORD**: Đổi thành mật khẩu quản trị MinIO mạnh (tối thiểu 8 ký tự).
+   *   *(Lưu ý: Mặc định cổng Postgres được cấu hình là `5435` và MinIO API là `9005` để tránh trùng lặp với các dịch vụ khác có sẵn trên hệ thống của bạn).*
+
+4. Khởi động các dịch vụ cơ sở dữ liệu & lưu trữ:
+   ```bash
+   docker compose up -d
+   ```
+5. Kiểm tra trạng thái hoạt động:
+   ```bash
+   docker compose ps
+   ```
+
+### Thiết lập ban đầu trên MinIO:
+1. Truy cập vào giao diện quản trị Web của MinIO qua trình duyệt: `http://<IP_SERVER>:9006`.
+2. Đăng nhập bằng `MINIO_ROOT_USER` (mặc định: `minio_admin`) và mật khẩu `MINIO_ROOT_PASSWORD` bạn vừa cấu hình.
+3. Vào mục **Buckets** -> chọn **Create Bucket**.
+4. Tạo một bucket tên là: **`edu`** (bắt buộc đúng tên này để khớp cấu hình Backend).
+
+---
+
+## BƯỚC 3: CẤU HÌNH & TRIỂN KHAI BACKEND (BE)
+
+1. Di chuyển vào thư mục Backend:
+   ```bash
+   cd /root/BE_DAO_EDU
+   ```
+2. Tạo file cấu hình `.env` cho Backend:
+   ```bash
+   cp .env.example .env
+   ```
+3. Chỉnh sửa file `.env` (`nano .env`) và thay thế các thông tin chính xác:
+   ```env
+   PORT=5000
+   JWT_SECRET=Thay_Bang_Mot_Chuoi_Random_Sieu_Bao_Mat
+
+   # CẤU HÌNH KẾT NỐI DATABASE (Khớp với thông tin ở Bước 2)
+   DATABASE_HOST=127.0.0.1
+   DATABASE_PORT=5435
+   DATABASE_USER=dao_edu_admin
+   DATABASE_PASSWORD=mat_khau_database_ban_da_dat_o_buoc_2
+   DATABASE_NAME=dao_edu_db
+
+   # CẤU HÌNH KẾT NỐI MINIO (Khớp với thông tin ở Bước 2)
+   MINIO_ENDPOINT=127.0.0.1
+   MINIO_PORT=9005
+   MINIO_USE_SSL=false
+   MINIO_ACCESS_KEY=minio_admin
+   MINIO_SECRET_KEY=mat_khau_minio_ban_da_dat_o_buoc_2
+   MINIO_BUCKET_NAME=edu
+
+   # QUAN TRỌNG: Địa chỉ IP public hoặc tên miền của Server để hiển thị ảnh/tệp tải lên
+   MINIO_EXTERNAL_ENDPOINT=103.90.227.173 # Thay thế bằng IP public của bạn
+   
+   # CẤU HÌNH VIETQR (Nếu có)
+   VIETQR_BANK_CODE=MB
+   VIETQR_ACCOUNT_NUMBER=123456789
+   VIETQR_ACCOUNT_NAME=CONG TY DAO GROUP
+   VIETQR_DEMO_ENABLED=false
+   ```
+4. Cài đặt các gói thư viện và biên dịch (build) dự án:
+   ```bash
+   npm ci
+   npm run build
+   ```
+5. Chạy cơ chế di cư dữ liệu để tạo cấu trúc bảng (Migrations):
+   ```bash
+   npm run migration:run
+   ```
+6. Khởi tạo tài khoản quản trị (ADMIN) duy nhất cho Production và xóa sạch dữ liệu demo:
+   ```bash
+   node scripts/init-prod-admin.js <email_admin_cua_ban> <mat_khau_admin_cua_ban> "Tên hiển thị Admin"
+   ```
+   *Ví dụ:*
+   ```bash
+   node scripts/init-prod-admin.js admin@daogroup.com TruongThanhCong2026! "DAO GROUP Admin"
+   ```
+7. Khởi động Backend bằng PM2:
+   ```bash
+   pm2 start ecosystem.config.cjs --env production
+   pm2 save
+   ```
+8. Kiểm tra logs để đảm bảo Backend chạy không lỗi:
+   ```bash
+   pm2 logs dao-edu-api
+   ```
+
+---
+
+## BƯỚC 4: CẤU HÌNH & TRIỂN KHAI FRONTEND (FE)
+
+1. Di chuyển vào thư mục Frontend:
+   ```bash
+   cd /root/FE-Dao-EDU
+   ```
+2. Tạo file cấu hình môi trường `.env.production`:
+   ```bash
+   cp .env.production.example .env.production
+   ```
+3. Chỉnh sửa file `.env.production` (`nano .env.production`):
+   ```env
+   VITE_API_URL=http://<IP_SERVER_CUA_BAN>/api
+   ```
+   *(Nếu server chạy HTTPS, hãy sử dụng `https://<DOMAIN_CUA_BAN>/api`)*
+
+4. Cài đặt các thư viện và tiến hành build dự án:
+   ```bash
+   npm ci
+   npm run build
+   ```
+   *Quá trình này sẽ tạo ra một thư mục tĩnh tên là `dist` chứa toàn bộ mã nguồn Frontend đã biên dịch tối ưu.*
+
+5. Sử dụng PM2 để phục vụ ứng dụng Frontend (Single Page Application - SPA):
+   ```bash
+   # Triển khai trực tiếp file tĩnh qua PM2 serve ở cổng 5001
+   pm2 serve dist 5001 --name dao-edu-web --spa
+   pm2 save
+   ```
+6. Kiểm tra trạng thái các service qua PM2:
+   ```bash
+   pm2 status
+   ```
+   *Bạn sẽ thấy hai dịch vụ: `dao-edu-api` (BE) chạy cổng 5000 và `dao-edu-web` (FE) chạy cổng 5001.*
+
+---
+
+## BƯỚC 5: CẤU HÌNH NGINX REVERSE PROXY
+
+Để người dùng truy cập trực tiếp qua cổng mặc định `80` (HTTP) hoặc `443` (HTTPS) thay vì gõ cổng `5000` hay `5001`, chúng ta cấu hình Nginx để điều phối yêu cầu:
+
+1. Tạo file cấu hình Nginx mới:
+   ```bash
+   sudo nano /etc/nginx/sites-available/dao-edu
+   ```
+2. Dán nội dung cấu hình sau vào (thay thế địa chỉ IP/domain tương ứng):
+   ```nginx
+   server {
+       listen 80;
+       server_name 103.90.227.173; # Thay thế bằng IP public hoặc domain của bạn
+
+       # 1. Định tuyến Frontend SPA
+       location / {
+           proxy_pass http://127.0.0.1:5001;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_cache_bypass $http_upgrade;
+       }
+
+       # 2. Định tuyến Backend NestJS API
+       location /api {
+           proxy_pass http://127.0.0.1:5000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_cache_bypass $http_upgrade;
+           
+           # Cho phép tải file dung lượng lớn (Tài liệu học tập/Bài tập)
+           client_max_body_size 50M;
+       }
+   }
+   ```
+3. Kích hoạt cấu hình mới và vô hiệu hóa cấu hình mặc định (nếu cần):
+   ```bash
+   sudo ln -sf /etc/nginx/sites-available/dao-edu /etc/nginx/sites-enabled/
+   sudo rm -f /etc/nginx/sites-enabled/default
+   ```
+4. Kiểm tra cú pháp cấu hình Nginx:
+   ```bash
+   sudo nginx -t
+   ```
+5. Khởi động lại dịch vụ Nginx để áp dụng thay đổi:
+   ```bash
+   sudo systemctl reload nginx
+   ```
+
+---
+
+## BƯỚC 6: CẤU HÌNH FIREWALL (TƯỜNG LỬA)
+
+Do hệ thống lưu trữ file **MinIO** sinh ra liên kết pre-signed tải ảnh/file trực tiếp thông qua cổng API của nó (`9005`), bạn cần đảm bảo cổng này có thể truy cập được từ bên ngoài:
+
+```bash
+# Mở cổng 80 (HTTP), 443 (HTTPS nếu có)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# Mở cổng 9005 để người dùng tải lên/tải về tài liệu trực tiếp từ MinIO
+sudo ufw allow 9005/tcp
+
+# Reload firewall
+sudo ufw reload
+```
+
+---
+
+## MỘT SỐ LỆNH VẬN HÀNH THƯỜNG DÙNG
+
+*   **Xem danh sách các dịch vụ đang chạy của PM2**:
+    ```bash
+    pm2 status
+    ```
+*   **Xem logs thời gian thực của ứng dụng**:
+    ```bash
+    pm2 logs dao-edu-api   # Backend
+    pm2 logs dao-edu-web   # Frontend
+    ```
+*   **Khởi động lại/Dừng ứng dụng**:
+    ```bash
+    pm2 restart all
+    pm2 stop all
+    ```
+*   **Xem logs của Database và MinIO**:
+    ```bash
+    cd /root/BE_DAO_EDU/infra
+    docker compose logs -f
+    ```

@@ -1,6 +1,6 @@
 # Backend PM2 release deployment
 
-Mỗi lần push lên nhánh `main`, workflow chỉ deploy khi commit mới nhất chứa:
+Mỗi lần push lên nhánh `master`, workflow chỉ deploy khi commit mới nhất chứa:
 
 ```text
 release v
@@ -10,7 +10,7 @@ Ví dụ:
 
 ```bash
 git commit -m "release v1.0.0"
-git push origin main
+git push origin master
 ```
 
 ## Chuẩn bị server một lần
@@ -30,7 +30,7 @@ Chạy lần đầu:
 
 ```bash
 cd /var/www/dao-edu/BE_DAO_EDU
-bash scripts/deploy-pm2.sh main
+bash scripts/deploy-pm2.sh master
 pm2 startup
 pm2 save
 ```
