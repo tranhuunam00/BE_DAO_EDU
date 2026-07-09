@@ -35,7 +35,7 @@ pm2 startup
 pm2 save
 ```
 
-Nên đặt Nginx/Caddy để chuyển `/api` tới `127.0.0.1:5000`.
+Nên đặt Nginx/Caddy để chuyển `/api` tới `127.0.0.1:5005`.
 
 ## GitHub Actions secrets
 

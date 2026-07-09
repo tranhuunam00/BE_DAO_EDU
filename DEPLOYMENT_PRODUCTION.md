@@ -95,7 +95,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 3. Chỉnh sửa file `.env` (`nano .env`) và thay thế các thông tin chính xác:
    ```env
-   PORT=5000
+   PORT=5005
    JWT_SECRET=Thay_Bang_Mot_Chuoi_Random_Sieu_Bao_Mat
 
    # CẤU HÌNH KẾT NỐI DATABASE (Khớp với thông tin ở Bước 2)
@@ -184,7 +184,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```bash
    pm2 status
    ```
-   *Bạn sẽ thấy hai dịch vụ: `dao-edu-production-api` (BE) chạy cổng 5000 và `dao-edu-production-web` (FE) chạy cổng 5001.*
+    *Bạn sẽ thấy hai dịch vụ: `dao-edu-production-api` (BE) chạy cổng 5005 và `dao-edu-production-web` (FE) chạy cổng 5001.*
 
 ---
 
@@ -214,7 +214,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
 
        # 2. Định tuyến Backend NestJS API
        location /api {
-           proxy_pass http://127.0.0.1:5000;
+           proxy_pass http://127.0.0.1:5005;
            proxy_http_version 1.1;
            proxy_set_header Upgrade $http_upgrade;
            proxy_set_header Connection 'upgrade';

@@ -53,7 +53,7 @@ echo "Reloading backend with PM2..."
 pm2 startOrReload ecosystem.config.cjs --env production --update-env
 pm2 save
 
-API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:5000/api}"
+API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:5005/api}"
 
 echo "Checking backend health..."
 if ! curl \
