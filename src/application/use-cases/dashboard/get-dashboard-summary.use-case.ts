@@ -23,13 +23,26 @@ export class GetDashboardSummaryUseCase {
   ) {}
 
   async execute() {
+    const months: string[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      months.push(`${year}-${month}`);
+    }
+
+    const firstMonthStr = months[0];
+    const firstMonthStartDate = new Date(`${firstMonthStr}-01T00:00:00Z`);
+
     const [
       totalStudents,
       totalTeachers,
       totalClasses,
       totalCourses,
       totalCenters,
-      studentGrowth,
+      initialStudentsRes,
+      newStudentsRes,
       courseDistribution,
       salaryRes,
       tuitionRes,
@@ -40,11 +53,15 @@ export class GetDashboardSummaryUseCase {
       this.courseRepo.count(),
       this.centerRepo.count(),
       this.studentRepo.query(
+        `SELECT COUNT(*)::int AS count FROM students WHERE created_at < $1`,
+        [firstMonthStartDate]
+      ),
+      this.studentRepo.query(
         `SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*)::int AS count
          FROM students
-         GROUP BY month
-         ORDER BY month ASC
-         LIMIT 6`
+         WHERE created_at >= $1
+         GROUP BY month`,
+        [firstMonthStartDate]
       ),
       this.studentRepo.query(
         `SELECT c.name AS name, COUNT(DISTINCT cs.student_id)::int AS value
@@ -64,6 +81,25 @@ export class GetDashboardSummaryUseCase {
       ),
     ]);
 
+    const monthlyNewCount = new Map<string, number>();
+    if (Array.isArray(newStudentsRes)) {
+      for (const row of newStudentsRes) {
+        if (row && row.month) {
+          monthlyNewCount.set(row.month, Number(row.count) || 0);
+        }
+      }
+    }
+
+    let cumulative = Number(initialStudentsRes?.[0]?.count || 0);
+    const studentGrowth = months.map((month) => {
+      const newCount = monthlyNewCount.get(month) || 0;
+      cumulative += newCount;
+      return {
+        month,
+        students: cumulative,
+      };
+    });
+
     return {
       message: 'Lấy thống kê hệ thống thành công',
       statistics: {
@@ -72,13 +108,10 @@ export class GetDashboardSummaryUseCase {
         totalClasses,
         totalCourses,
         totalCenters,
-        totalPaidSalary: Number(salaryRes[0]?.total || 0),
-        totalCollectedTuition: Number(tuitionRes[0]?.total || 0),
-        studentGrowth: studentGrowth.map((g: any) => ({
-          month: g.month,
-          students: Number(g.count),
-        })),
-        courseDistribution: courseDistribution.map((d: any) => ({
+        totalPaidSalary: Number(salaryRes?.[0]?.total || 0),
+        totalCollectedTuition: Number(tuitionRes?.[0]?.total || 0),
+        studentGrowth,
+        courseDistribution: (courseDistribution || []).map((d: any) => ({
           name: d.name,
           value: Number(d.value),
         })),
