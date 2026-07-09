@@ -95,32 +95,33 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 3. Chỉnh sửa file `.env` (`nano .env`) và thay thế các thông tin chính xác:
    ```env
-   PORT=5005
-   JWT_SECRET=Thay_Bang_Mot_Chuoi_Random_Sieu_Bao_Mat
+    PORT=5005
+    JWT_SECRET=Thay_Bang_Mot_Chuoi_Random_Sieu_Bao_Mat
+    APP_VERSION=v1.0.0
 
-   # CẤU HÌNH KẾT NỐI DATABASE (Khớp với thông tin ở Bước 2)
-   DATABASE_HOST=127.0.0.1
-   DATABASE_PORT=5435
-   DATABASE_USER=dao_edu_admin
-   DATABASE_PASSWORD=mat_khau_database_ban_da_dat_o_buoc_2
-   DATABASE_NAME=dao_edu_db
+    # CẤU HÌNH KẾT NỐI DATABASE (Khớp với thông tin ở Bước 2)
+    DATABASE_HOST=127.0.0.1
+    DATABASE_PORT=5436
+    DATABASE_USER=dao_edu_admin
+    DATABASE_PASSWORD=mat_khau_database_ban_da_dat_o_buoc_2
+    DATABASE_NAME=dao_edu_db
 
-   # CẤU HÌNH KẾT NỐI MINIO (Khớp với thông tin ở Bước 2)
-   MINIO_ENDPOINT=127.0.0.1
-   MINIO_PORT=9005
-   MINIO_USE_SSL=false
-   MINIO_ACCESS_KEY=minio_admin
-   MINIO_SECRET_KEY=mat_khau_minio_ban_da_dat_o_buoc_2
-   MINIO_BUCKET_NAME=edu
+    # CẤU HÌNH KẾT NỐI MINIO (Khớp với thông tin ở Bước 2)
+    MINIO_ENDPOINT=127.0.0.1
+    MINIO_PORT=9008
+    MINIO_USE_SSL=false
+    MINIO_ACCESS_KEY=minio_admin
+    MINIO_SECRET_KEY=mat_khau_minio_ban_da_dat_o_buoc_2
+    MINIO_BUCKET_NAME=edu
 
-   # QUAN TRỌNG: Địa chỉ IP public hoặc tên miền của Server để hiển thị ảnh/tệp tải lên
-   MINIO_EXTERNAL_ENDPOINT=103.90.227.173 # Thay thế bằng IP public của bạn
-   
-   # CẤU HÌNH VIETQR (Nếu có)
-   VIETQR_BANK_CODE=MB
-   VIETQR_ACCOUNT_NUMBER=123456789
-   VIETQR_ACCOUNT_NAME=CONG TY DAO GROUP
-   VIETQR_DEMO_ENABLED=false
+    # QUAN TRỌNG: Tên miền và cổng của MinIO ở môi trường mạng bên ngoài để sinh link tải file/ảnh
+    MINIO_EXTERNAL_ENDPOINT=apiedu.home-care.vn:9008
+    
+    # CẤU HÌNH VIETQR (Nếu có)
+    VIETQR_BANK_CODE=MB
+    VIETQR_ACCOUNT_NUMBER=123456789
+    VIETQR_ACCOUNT_NAME=CONG TY DAO GROUP
+    VIETQR_DEMO_ENABLED=false
    ```
 4. Cài đặt các gói thư viện và biên dịch (build) dự án:
    ```bash
@@ -163,9 +164,10 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 3. Chỉnh sửa file `.env.production` (`nano .env.production`):
    ```env
-   VITE_API_URL=http://apiedu.home-care.vn/api
-   ```
-   *(Nếu server chạy HTTPS, hãy sử dụng `https://apiedu.home-care.vn/api`)*
+    VITE_API_URL=http://apiedu.home-care.vn/api
+    VITE_APP_VERSION=v1.0.0
+    ```
+    *(Nếu server chạy HTTPS, hãy sử dụng `https://apiedu.home-care.vn/api`)*
 
 4. Cài đặt các thư viện và tiến hành build dự án:
    ```bash
