@@ -8,7 +8,7 @@ export class GetDashboardRevenueUseCase {
   constructor(
     @InjectRepository(StudentMonthlyBillOrmEntity)
     private readonly billRepo: Repository<StudentMonthlyBillOrmEntity>,
-  ) {}
+  ) { }
 
   async execute() {
     const months: string[] = [];
@@ -21,7 +21,7 @@ export class GetDashboardRevenueUseCase {
     }
 
     const bills = await this.billRepo.find();
-    
+
     // Group by month (format: YYYY-MM)
     const map = new Map<string, { expected: number; actual: number }>();
     for (const m of months) {
@@ -30,11 +30,11 @@ export class GetDashboardRevenueUseCase {
 
     for (const b of bills) {
       if (!b.month || !map.has(b.month)) continue;
-      
+
       const stats = map.get(b.month)!;
       const amount = Number(b.totalAmount) || 0;
       stats.expected += amount;
-      
+
       if (b.status === 'Paid') {
         stats.actual += amount;
       }
@@ -44,6 +44,7 @@ export class GetDashboardRevenueUseCase {
       month: m,
       expected: map.get(m)!.expected,
       actual: map.get(m)!.actual,
+
     }));
 
     return {
