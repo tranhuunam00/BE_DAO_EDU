@@ -126,36 +126,6 @@ export class InitSchemaAndSeed1718116345000 implements MigrationInterface {
       RETURNING "id"
     `);
 
-    // 8. Seed Default Users
-    const salt = await bcrypt.genSalt(10);
-    const adminHash = await bcrypt.hash('admin123', salt);
-    const teacherHash = await bcrypt.hash('teacher123', salt);
-    const studentHash = await bcrypt.hash('student123', salt);
-
-    // Insert Admin
-    await queryRunner.query(`
-      INSERT INTO "users" ("email", "password_hash", "name", "role_id") 
-      VALUES ('admin@class.com', $1, 'Hiệu Trưởng / Quản Trị', $2)
-    `, [adminHash, adminRole.id]);
-
-    // Insert Teacher User
-    const [teacherUser] = await queryRunner.query(`
-      INSERT INTO "users" ("email", "password_hash", "name", "role_id") 
-      VALUES ('teacher@class.com', $1, 'Cô giáo Nguyễn Thị Mai', $2)
-      RETURNING "id"
-    `, [teacherHash, teacherRole.id]);
-
-    // Insert Teacher Profile
-    await queryRunner.query(`
-      INSERT INTO "teachers" ("id", "employee_id", "subject", "phone", "gender", "birthdate", "address")
-      VALUES ($1, 'GV-9988', 'Toán học sơ cấp', '0987654321', 'Nữ', '1985-05-12', 'Thành phố Hải Phòng, Việt Nam')
-    `, [teacherUser.id]);
-
-    // Insert Student User
-    await queryRunner.query(`
-      INSERT INTO "users" ("email", "password_hash", "name", "role_id") 
-      VALUES ('student@class.com', $1, 'Học sinh Trần Văn Tú', $2)
-    `, [studentHash, studentRole.id]);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

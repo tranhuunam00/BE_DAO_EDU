@@ -44,6 +44,35 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Database Migrations & Seeding
+
+Quản lý cấu trúc cơ sở dữ liệu và nạp dữ liệu thử nghiệm/khởi tạo:
+
+### 1. Reset Cơ sở dữ liệu và Migrations từ đầu (Dành cho Dev/Local)
+Để xóa sạch toàn bộ các bảng hiện có, chạy lại toàn bộ migrations và nạp dữ liệu mẫu:
+```bash
+# Xóa sạch cấu trúc cơ sở dữ liệu hiện tại
+$ npm run typeorm -- schema:drop
+
+# Chạy migrations để sinh cấu trúc bảng trống sạch
+$ npm run migration:run
+
+# Nạp dữ liệu mẫu phát triển (tài khoản demo, lớp học, học viên...)
+$ npm run db:seed:dev
+```
+
+### 2. Chạy Migrations và Khởi tạo Admin (Dành cho Production)
+Khi nâng cấp hoặc triển khai hệ thống mới trên production:
+```bash
+# Chạy các migrations mới để cập nhật cấu trúc bảng
+$ npm run migration:run
+
+# Khởi tạo duy nhất tài khoản Admin bảo mật cho Production
+$ npm run db:seed:prod -- <email_admin> <mat_khau_admin> "<ten_hien_thi>"
+```
+*Ví dụ:*
+`$ npm run db:seed:prod -- admin@daogroup.com MyPassword2026 "DAO Admin"`
+
 ## Run tests
 
 ```bash
