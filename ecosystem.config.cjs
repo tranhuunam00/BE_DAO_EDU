@@ -1,7 +1,22 @@
+const { execSync } = require('child_process');
+
+let appName = 'dao-edu-api';
+let defaultPort = 5000;
+
+try {
+  const branch = execSync('git branch --show-current').toString().trim();
+  if (branch === 'master') {
+    appName = 'dao-edu-production-api';
+    defaultPort = 5005;
+  }
+} catch (e) {
+  // fallback
+}
+
 module.exports = {
   apps: [
     {
-      name: 'dao-edu-production-api',
+      name: appName,
       cwd: __dirname,
       script: 'dist/main.js',
       instances: 1,
@@ -15,7 +30,7 @@ module.exports = {
       time: true,
       env_production: {
         NODE_ENV: 'production',
-        PORT: process.env.PORT || 5005,
+        PORT: process.env.PORT || defaultPort,
       },
     },
   ],

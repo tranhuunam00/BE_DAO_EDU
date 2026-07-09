@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BRANCH="${1:-master}"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+BRANCH="${1:-$CURRENT_BRANCH}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LOCK_FILE="${TMPDIR:-/tmp}/dao-edu-production-api-deploy.lock"
+
+if [[ "$BRANCH" == "master" ]]; then
+  LOCK_FILE="${TMPDIR:-/tmp}/dao-edu-production-api-deploy.lock"
+  API_PORT="5005"
+  APP_NAME="dao-edu-production-api"
+else
+  LOCK_FILE="${TMPDIR:-/tmp}/dao-edu-api-deploy.lock"
+  API_PORT="5000"
+  APP_NAME="dao-edu-api"
+fi
 
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
@@ -53,7 +63,7 @@ echo "Reloading backend with PM2..."
 pm2 startOrReload ecosystem.config.cjs --env production --update-env
 pm2 save
 
-API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:5005/api}"
+API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:${API_PORT}/api}"
 
 echo "Checking backend health..."
 if ! curl \
@@ -65,7 +75,7 @@ if ! curl \
   --retry-connrefused \
   "${API_HEALTH_URL}" >/dev/null; then
   echo "Backend health check failed. Recent PM2 logs:"
-  pm2 logs dao-edu-production-api --lines 80 --nostream
+  pm2 logs "${APP_NAME}" --lines 80 --nostream
   exit 1
 fi
 
