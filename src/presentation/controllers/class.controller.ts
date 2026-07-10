@@ -1050,15 +1050,13 @@ export class ClassController {
 
   private async regenerateFutureSessions(classId: string, fromStartDate = false) {
     const today = this.formatUtcDate(new Date());
-    const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    const deleteFrom = fromStartDate ? classEntity.startDate : today;
 
     // Delete future unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
     await this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
-      .andWhere('date >= :deleteFrom', { deleteFrom })
+      .andWhere('date >= :today', { today })
       .andWhere('attendance_locked = false')
       .andWhere('status = :status', { status: SessionStatus.SCHEDULED })
       .execute();

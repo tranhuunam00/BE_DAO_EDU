@@ -472,12 +472,12 @@ describe('ClassController — Session Generation Rules', () => {
         { status: SessionStatus.SCHEDULED },
       );
       expect(deleteQB.andWhere).toHaveBeenCalledWith(
-        'date >= :deleteFrom',
-        expect.objectContaining({ deleteFrom: expect.any(String) }),
+        'date >= :today',
+        expect.objectContaining({ today: expect.any(String) }),
       );
     });
 
-    it('khi fromStartDate = true, câu DELETE phải lọc theo startDate thay vì today', async () => {
+    it('khi fromStartDate = true, câu DELETE vẫn lọc theo today chứ không xóa quá khứ', async () => {
       const { ctrl, repos } = makeController();
       const deleteQB = makeQueryBuilder();
       repos.sessionRepo.createQueryBuilder.mockReturnValue(deleteQB);
@@ -498,8 +498,8 @@ describe('ClassController — Session Generation Rules', () => {
         { status: SessionStatus.SCHEDULED },
       );
       expect(deleteQB.andWhere).toHaveBeenCalledWith(
-        'date >= :deleteFrom',
-        expect.objectContaining({ deleteFrom: customStartDate }),
+        'date >= :today',
+        expect.objectContaining({ today: expect.any(String) }),
       );
     });
 
