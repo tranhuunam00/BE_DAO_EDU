@@ -466,7 +466,7 @@ export class DashboardController {
             startTime: session.startTime,
             endTime: session.endTime,
             roomName: session.room?.name || 'Chưa xếp phòng',
-            teacherName: session.teacher ? `${session.teacher.firstName} ${session.teacher.lastName}` : 'Chưa gán',
+            teacherName: session.teacher ? `${session.teacher.lastName} ${session.teacher.firstName}` : 'Chưa gán',
             status: session.status,
             attendanceColor,
             attendanceText,
@@ -606,7 +606,7 @@ export class DashboardController {
       message: 'Chào mừng Học sinh đến với Cổng thông tin học tập',
       studentInfo: {
         id: student.id,
-        name: `${student.firstName} ${student.lastName}`,
+        name: `${student.lastName} ${student.firstName}`,
         role: req.user.role,
       },
       classesCount: classIds.length,
