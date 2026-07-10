@@ -27,7 +27,8 @@ export class TypeOrmOperationsQueryAdapter implements OperationsQueryPort {
         JOIN class_students enrollment ON enrollment.student_id = student.id AND enrollment.status = 'Active'
         JOIN student_attendance attendance ON attendance.student_id = student.id
         JOIN class_sessions session ON session.id = attendance.class_session_id AND session.class_id = enrollment.class_id
-        WHERE session.date < CURRENT_DATE OR session.attendance_locked = true
+        WHERE (session.date < CURRENT_DATE OR session.attendance_locked = true)
+          AND session.date >= enrollment.joined_date
         ORDER BY student.id, session.date DESC, session.start_time DESC
       `),
       this.dataSource.query(`
