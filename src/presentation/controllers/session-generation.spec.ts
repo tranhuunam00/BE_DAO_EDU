@@ -76,6 +76,7 @@ const makeRepos = (overrides: any = {}) => {
       const actualData = data !== undefined ? data : Entity;
       return actualData;
     }),
+    find: jest.fn().mockResolvedValue([]),
   };
 
   const repos = {
@@ -472,12 +473,12 @@ describe('ClassController — Session Generation Rules', () => {
         { status: SessionStatus.SCHEDULED },
       );
       expect(deleteQB.andWhere).toHaveBeenCalledWith(
-        'date >= :today',
-        expect.objectContaining({ today: expect.any(String) }),
+        'date >= :deleteFrom',
+        expect.objectContaining({ deleteFrom: expect.any(String) }),
       );
     });
 
-    it('khi fromStartDate = true, câu DELETE vẫn lọc theo today chứ không xóa quá khứ', async () => {
+    it('khi fromStartDate = true, câu DELETE phải lọc theo startDate thay vì today', async () => {
       const { ctrl, repos } = makeController();
       const deleteQB = makeQueryBuilder();
       repos.sessionRepo.createQueryBuilder.mockReturnValue(deleteQB);
@@ -498,8 +499,8 @@ describe('ClassController — Session Generation Rules', () => {
         { status: SessionStatus.SCHEDULED },
       );
       expect(deleteQB.andWhere).toHaveBeenCalledWith(
-        'date >= :today',
-        expect.objectContaining({ today: expect.any(String) }),
+        'date >= :deleteFrom',
+        expect.objectContaining({ deleteFrom: customStartDate }),
       );
     });
 
@@ -531,9 +532,9 @@ describe('ClassController — Session Generation Rules', () => {
       );
       repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
       repos.classStudentRepo.find.mockResolvedValue([
-        { studentId: 'student-A' },
-        { studentId: 'student-B' },
-        { studentId: 'student-C' },
+        { studentId: 'student-A', joinedDate: '2020-01-01' },
+        { studentId: 'student-B', joinedDate: '2020-01-01' },
+        { studentId: 'student-C', joinedDate: '2020-01-01' },
       ]);
       repos.sessionRepo.find.mockResolvedValue([]);
 
