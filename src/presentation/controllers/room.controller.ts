@@ -14,9 +14,10 @@ export class RoomController {
 
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách phòng học' })
-  async findAll(@Query('centerId') centerId?: string) {
+  async findAll(@Query('centerId') centerId?: string, @Query('status') status?: string) {
     const where: any = {};
     if (centerId) where.centerId = centerId;
+    if (status) where.status = status;
     return this.roomRepo.find({ where, order: { name: 'ASC' } });
   }
 
