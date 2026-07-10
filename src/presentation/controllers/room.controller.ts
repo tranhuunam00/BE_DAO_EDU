@@ -12,6 +12,8 @@ export class RoomController {
     private readonly roomRepo: Repository<RoomOrmEntity>,
   ) {}
 
+
+
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách phòng học' })
   async findAll(@Query('centerId') centerId?: string, @Query('status') status?: string) {
