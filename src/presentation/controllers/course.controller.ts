@@ -5,7 +5,7 @@ import { Repository, IsNull } from 'typeorm';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { CourseLevelOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level.orm-entity';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
-import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto, AddCourseLevelDto } from '../../application/dtos/course.dto';
+import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto, AddCourseLevelDto, UpdateCourseLevelDto } from '../../application/dtos/course.dto';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -188,6 +188,31 @@ export class CourseController {
     await this.pricingRepo.save(pricing);
 
     return this.findOne(id);
+  }
+
+  @Put('levels/:levelId')
+  @ApiOperation({ summary: 'Cập nhật thông tin Level' })
+  async updateLevel(@Param('levelId') levelId: string, @Body() dto: UpdateCourseLevelDto) {
+    const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
+
+    if (dto.levelCode !== undefined && dto.levelCode.trim() !== level.levelCode) {
+      const exists = await this.levelRepo.findOne({
+        where: { courseId: level.courseId, levelCode: dto.levelCode.trim() },
+      });
+      if (exists) {
+        throw new ConflictException('Mã Level này đã tồn tại trong chương trình học.');
+      }
+      level.levelCode = dto.levelCode.trim();
+    }
+
+    if (dto.levelName !== undefined) level.levelName = dto.levelName;
+    if (dto.totalHours !== undefined) level.totalHours = dto.totalHours;
+    if (dto.isFixedHour !== undefined) level.isFixedHour = dto.isFixedHour;
+    if (dto.canUpgrade !== undefined) level.canUpgrade = dto.canUpgrade;
+    if (dto.gradebookSetting !== undefined) level.gradebookSetting = dto.gradebookSetting || null;
+
+    await this.levelRepo.save(level);
+    return this.findOne(level.courseId);
   }
 
   // ========= Level Pricing Endpoints =========
