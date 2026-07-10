@@ -568,7 +568,11 @@ export class ClassController {
 
   @Post(':id/generate-sessions')
   @ApiOperation({ summary: 'Sinh danh sách buổi học từ lịch cố định' })
-  async generateSessionsEndpoint(@Param('id') classId: string) {
+  async generateSessionsEndpoint(
+    @Param('id') classId: string,
+    @Query('fromStartDate') fromStartDateQuery?: string,
+  ) {
+    const fromStartDate = fromStartDateQuery === 'true';
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     if (classEntity.status !== 'Active') {
       throw new ConflictException(
@@ -585,7 +589,7 @@ export class ClassController {
       throw new ConflictException('Lớp học chưa cấu hình ngày khai giảng.');
     }
 
-    await this.regenerateFutureSessions(classId);
+    await this.regenerateFutureSessions(classId, fromStartDate);
     return { message: 'Đã sinh buổi học thành công' };
   }
 
@@ -921,7 +925,7 @@ export class ClassController {
 
   // ── Session generation ───────────────────────────────────────────────────────
 
-  private async generateSessions(classId: string) {
+  private async generateSessions(classId: string, fromStartDate = false) {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
@@ -934,7 +938,7 @@ export class ClassController {
     }
 
     const todayStr = this.formatUtcDate(new Date());
-    const startFromStr = classEntity.startDate > todayStr ? classEntity.startDate : todayStr;
+    const startFromStr = fromStartDate ? classEntity.startDate : (classEntity.startDate > todayStr ? classEntity.startDate : todayStr);
     const endDateStr = classEntity.finishDate
       ? classEntity.finishDate
       : this.formatUtcDate(
@@ -1044,21 +1048,23 @@ export class ClassController {
     });
   }
 
-  private async regenerateFutureSessions(classId: string) {
+  private async regenerateFutureSessions(classId: string, fromStartDate = false) {
     const today = this.formatUtcDate(new Date());
+    const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
+    const deleteFrom = fromStartDate ? classEntity.startDate : today;
 
     // Delete future unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
     await this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
-      .andWhere('date >= :today', { today })
+      .andWhere('date >= :deleteFrom', { deleteFrom })
       .andWhere('attendance_locked = false')
       .andWhere('status = :status', { status: SessionStatus.SCHEDULED })
       .execute();
 
     // Regenerate
-    await this.generateSessions(classId);
+    await this.generateSessions(classId, fromStartDate);
   }
 
   private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {

@@ -472,8 +472,34 @@ describe('ClassController — Session Generation Rules', () => {
         { status: SessionStatus.SCHEDULED },
       );
       expect(deleteQB.andWhere).toHaveBeenCalledWith(
-        'date >= :today',
-        expect.objectContaining({ today: expect.any(String) }),
+        'date >= :deleteFrom',
+        expect.objectContaining({ deleteFrom: expect.any(String) }),
+      );
+    });
+
+    it('khi fromStartDate = true, câu DELETE phải lọc theo startDate thay vì today', async () => {
+      const { ctrl, repos } = makeController();
+      const deleteQB = makeQueryBuilder();
+      repos.sessionRepo.createQueryBuilder.mockReturnValue(deleteQB);
+      const customStartDate = '2026-01-01';
+      repos.classRepo.findOneOrFail.mockResolvedValue(
+        makeActiveClass({ startDate: customStartDate, finishDate: tomorrow }),
+      );
+      repos.scheduleRepo.find.mockResolvedValue([scheduleForDate(tomorrow)]);
+      repos.classStudentRepo.find.mockResolvedValue([]);
+      repos.sessionRepo.find.mockResolvedValue([]);
+
+      await (ctrl as any).regenerateFutureSessions('class-1', true);
+
+      expect(deleteQB.delete).toHaveBeenCalled();
+      expect(deleteQB.andWhere).toHaveBeenCalledWith('attendance_locked = false');
+      expect(deleteQB.andWhere).toHaveBeenCalledWith(
+        'status = :status',
+        { status: SessionStatus.SCHEDULED },
+      );
+      expect(deleteQB.andWhere).toHaveBeenCalledWith(
+        'date >= :deleteFrom',
+        expect.objectContaining({ deleteFrom: customStartDate }),
       );
     });
 
@@ -491,7 +517,7 @@ describe('ClassController — Session Generation Rules', () => {
 
       await (ctrl as any).regenerateFutureSessions('class-1');
 
-      expect(generateSpy).toHaveBeenCalledWith('class-1');
+      expect(generateSpy).toHaveBeenCalledWith('class-1', false);
     });
   });
 
