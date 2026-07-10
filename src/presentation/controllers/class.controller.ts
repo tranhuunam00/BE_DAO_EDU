@@ -630,6 +630,34 @@ export class ClassController {
     return session;
   }
 
+  @Post('sessions/:sessionId/revert-to-scheduled')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Hoàn tác bắt đầu điểm danh (chuyển trạng thái trở lại Chưa diễn ra)' })
+  async revertToScheduled(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const session = await this.sessionRepo.findOneOrFail({
+      where: { id: sessionId },
+      relations: { classEntity: true },
+    });
+
+    await this.validateAttendancePermission(session, req);
+
+    if (session.attendanceLocked) {
+      throw new BadRequestException('Không thể hoàn tác: Buổi học này đã hoàn thành và khóa điểm danh.');
+    }
+
+    if (session.status !== SessionStatus.IN_PROGRESS) {
+      throw new BadRequestException('Chỉ có thể hoàn tác buổi học đang ở trạng thái "Đang học" (In-Progress).');
+    }
+
+    session.status = SessionStatus.SCHEDULED;
+    await this.attendanceRepo.update({ classSessionId: sessionId }, { isPresent: false, reason: null, note: null });
+    await this.sessionRepo.save(session);
+    return session;
+  }
+
   @Post('sessions/:sessionId/attendance')
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Ghi nhận điểm danh cho học sinh' })
