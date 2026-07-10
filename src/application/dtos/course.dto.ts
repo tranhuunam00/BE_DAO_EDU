@@ -143,3 +143,35 @@ export class AddCourseLevelDto extends CourseLevelDto {
   @IsDateString()
   effectiveFrom!: string;
 }
+
+export class UpdateCourseLevelDto {
+  @ApiProperty({ required: false, example: 'TOÁN 6', description: 'Tên Level' })
+  @IsString()
+  @IsOptional()
+  levelName?: string;
+
+  @ApiProperty({ required: false, example: 'TOAN6', description: 'Mã Level' })
+  @IsString()
+  @IsOptional()
+  levelCode?: string;
+
+  @ApiProperty({ required: false, example: 200, description: 'Tổng số giờ học' })
+  @IsNumber()
+  @IsOptional()
+  totalHours?: number;
+
+  @ApiProperty({ required: false, default: false })
+  @IsBoolean()
+  @IsOptional()
+  isFixedHour?: boolean;
+
+  @ApiProperty({ required: false, default: false })
+  @IsBoolean()
+  @IsOptional()
+  canUpgrade?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  gradebookSetting?: string;
+}
