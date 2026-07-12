@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource, IsNull, Not } from 'typeorm';
 import { NotificationLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
 import { NotificationOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { Notification } from '../../domain/entities/notification';
@@ -62,23 +62,93 @@ export class TypeOrmNotificationPersistenceAdapter extends NotificationPersisten
 
   async save(notification: Notification) {
     const repository = this.dataSource.getRepository(NotificationOrmEntity);
+    const logRepo = this.dataSource.getRepository(NotificationLogOrmEntity);
     const existing = notification.id
       ? await repository.findOneBy({ id: notification.id })
       : null;
-    return NotificationMapper.toDomain(
-      await repository.save(
-        NotificationMapper.toOrm(notification, existing ?? undefined),
-      ),
+      
+    const savedOrm = await repository.save(
+      NotificationMapper.toOrm(notification, existing ?? undefined),
     );
+
+    // Ghi log trạng thái tự động
+    try {
+      let eventType = 'CREATED';
+      let shouldLog = false;
+
+      if (!existing) {
+        eventType = 'CREATED';
+        shouldLog = true;
+      } else {
+        if (!existing.readAt && savedOrm.readAt) {
+          eventType = 'READ';
+          shouldLog = true;
+        } else if (existing.readAt && !savedOrm.readAt) {
+          eventType = 'UNREAD';
+          shouldLog = true;
+        } else if (!existing.archivedAt && savedOrm.archivedAt) {
+          eventType = 'ARCHIVED';
+          shouldLog = true;
+        }
+      }
+
+      if (shouldLog) {
+        await logRepo.save({
+          notificationId: savedOrm.id,
+          userId: savedOrm.userId,
+          eventType,
+          notificationType: savedOrm.type || 'SYSTEM',
+          title: savedOrm.title,
+          metadata: { timestamp: new Date() },
+        });
+      }
+    } catch (e) {
+      console.error('Failed to save notification log:', e);
+    }
+
+    return NotificationMapper.toDomain(savedOrm);
   }
 
   async markAllRead(userId: string, now: Date) {
-    await this.dataSource
-      .getRepository(NotificationOrmEntity)
-      .update({ userId, readAt: IsNull(), archivedAt: IsNull() }, { readAt: now });
+    const repository = this.dataSource.getRepository(NotificationOrmEntity);
+    const logRepo = this.dataSource.getRepository(NotificationLogOrmEntity);
+    
+    // Tìm danh sách thông báo chưa đọc của user này để ghi log
+    const unread = await repository.find({
+      where: { userId, readAt: IsNull(), archivedAt: IsNull() },
+    });
+
+    await repository.update(
+      { userId, readAt: IsNull(), archivedAt: IsNull() },
+      { readAt: now },
+    );
+
+    if (unread.length > 0) {
+      try {
+        const logs = unread.map((n) => ({
+          notificationId: n.id,
+          userId: n.userId,
+          eventType: 'READ',
+          notificationType: n.type || 'SYSTEM',
+          title: n.title,
+          metadata: { batch: true, timestamp: now },
+        }));
+        await logRepo.save(logs);
+      } catch (e) {
+        console.error('Failed to log batch read notifications:', e);
+      }
+    }
   }
 
   async archiveAllRead(userId: string, now: Date) {
+    const repository = this.dataSource.getRepository(NotificationOrmEntity);
+    const logRepo = this.dataSource.getRepository(NotificationLogOrmEntity);
+
+    // Tìm danh sách thông báo đã đọc chưa lưu trữ để ghi log
+    const read = await repository.find({
+      where: { userId, readAt: Not(IsNull()), archivedAt: IsNull() },
+    });
+
     await this.dataSource
       .getRepository(NotificationOrmEntity)
       .createQueryBuilder()
@@ -88,7 +158,24 @@ export class TypeOrmNotificationPersistenceAdapter extends NotificationPersisten
       .andWhere('read_at IS NOT NULL')
       .andWhere('archived_at IS NULL')
       .execute();
+
+    if (read.length > 0) {
+      try {
+        const logs = read.map((n) => ({
+          notificationId: n.id,
+          userId: n.userId,
+          eventType: 'ARCHIVED',
+          notificationType: n.type || 'SYSTEM',
+          title: n.title,
+          metadata: { batch: true, timestamp: now },
+        }));
+        await logRepo.save(logs);
+      } catch (e) {
+        console.error('Failed to log batch archive notifications:', e);
+      }
+    }
   }
+
 
   async listLogs(input: {
     page: number;

@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditLogInterceptor } from './audit-log.interceptor';
 
 @Module({
   imports: [
@@ -17,5 +19,12 @@ import { JwtModule } from '@nestjs/jwt';
       }),
     }),
   ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
 })
 export class SecurityModule {}
+
