@@ -18,6 +18,11 @@ import { GetTeacherByIdUseCase } from '../../application/use-cases/get-teacher-b
 import { UpdateTeacherUseCase } from '../../application/use-cases/update-teacher.use-case';
 import { CreateTeacherDto, UpdateTeacherDto } from '../../application/dtos/teacher.dto';
 import { CalculateTeacherWageUseCase } from '../../modules/billing/application/use-cases/calculate-teacher-wage.use-case';
+import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
+import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
+import { AssignmentSubmissionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment-submission.orm-entity';
 
 @ApiTags('Giáo viên (Teachers)')
 @ApiBearerAuth()
@@ -508,5 +513,110 @@ export class TeacherController {
         totalAmount: Number(item.totalAmount)
       }))
     }));
+  }
+
+  @Get(':id/classes-stats')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Lấy thống kê lớp học của giáo viên' })
+  async getClassesStats(@Param('id') teacherId: string) {
+    const sessionClassIdsRaw = await this.sessionRepo.createQueryBuilder('s')
+      .select('DISTINCT s.class_id', 'classId')
+      .where('s.teacher_id = :teacherId OR s.assistant_id = :teacherId', { teacherId })
+      .getRawMany();
+    const sessionClassIds = sessionClassIdsRaw.map(r => r.classId).filter(Boolean);
+
+    const qb = this.sessionRepo.manager.getRepository(ClassOrmEntity).createQueryBuilder('c')
+      .leftJoinAndSelect('c.course', 'course')
+      .leftJoinAndSelect('c.courseLevel', 'level')
+      .leftJoinAndSelect('c.mainTeacher', 'mainTeacher')
+      .leftJoinAndSelect('c.assistant', 'assistant');
+
+    if (sessionClassIds.length > 0) {
+      qb.where('c.main_teacher_id = :teacherId OR c.assistant_id = :teacherId OR c.id IN (:...sessionClassIds)', { teacherId, sessionClassIds });
+    } else {
+      qb.where('c.main_teacher_id = :teacherId OR c.assistant_id = :teacherId', { teacherId });
+    }
+
+    const classes = await qb.orderBy('c.created_at', 'DESC').getMany();
+
+    const results = [];
+    for (const classEntity of classes) {
+      const studentsCount = await this.sessionRepo.manager.count(ClassStudentOrmEntity, {
+        where: { classId: classEntity.id, status: 'Active' }
+      });
+
+      let role = 'Dạy thế';
+      if (classEntity.mainTeacherId === teacherId) {
+        role = 'Giáo viên chính';
+      } else if (classEntity.assistantId === teacherId) {
+        role = 'Trợ giảng';
+      }
+
+      const sessions = await this.sessionRepo.find({ where: { classId: classEntity.id } });
+      const sessionIds = sessions.map(s => s.id);
+      
+      let attendanceRate = 100;
+      let totalSessionsCount = sessions.length;
+      let finishedSessionsCount = sessions.filter(s => s.status === 'Completed' || s.attendanceLocked).length;
+
+      if (sessionIds.length > 0) {
+        const totalMarked = await this.sessionRepo.manager.count(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(sessionIds) }
+        });
+        const totalPresent = await this.sessionRepo.manager.count(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(sessionIds), isPresent: true }
+        });
+        if (totalMarked > 0) {
+          attendanceRate = Math.round((totalPresent / totalMarked) * 100);
+        }
+      }
+
+      const assignments = await this.sessionRepo.manager.find(AssignmentOrmEntity, {
+        where: { classId: classEntity.id, status: 'published' }
+      });
+      const assignmentIds = assignments.map(a => a.id);
+
+      let submissionRate = 0;
+      let averageScore = 0;
+
+      if (assignmentIds.length > 0) {
+        const totalSubmissions = await this.sessionRepo.manager.count(AssignmentSubmissionOrmEntity, {
+          where: { assignmentId: In(assignmentIds) }
+        });
+        const expected = assignmentIds.length * studentsCount;
+        if (expected > 0) {
+          submissionRate = Math.round((totalSubmissions / expected) * 100);
+        }
+
+        const gradedSubmissions = await this.sessionRepo.manager.find(AssignmentSubmissionOrmEntity, {
+          where: { assignmentId: In(assignmentIds), status: 'graded' }
+        });
+        const validGraded = gradedSubmissions.filter(s => s.score !== null);
+        if (validGraded.length > 0) {
+          const sum = validGraded.reduce((acc, s) => acc + Number(s.score), 0);
+          averageScore = Math.round((sum / validGraded.length) * 10) / 10;
+        }
+      }
+
+      results.push({
+        id: classEntity.id,
+        classCode: classEntity.classCode,
+        className: classEntity.className,
+        status: classEntity.status,
+        startDate: classEntity.startDate,
+        finishDate: classEntity.finishDate,
+        courseName: classEntity.course?.name || '-',
+        levelName: classEntity.courseLevel?.levelName || '-',
+        role,
+        studentsCount,
+        attendanceRate,
+        submissionRate,
+        averageScore,
+        totalSessionsCount,
+        finishedSessionsCount,
+      });
+    }
+
+    return results;
   }
 }
