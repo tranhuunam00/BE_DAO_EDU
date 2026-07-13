@@ -200,10 +200,10 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 2. Dán nội dung cấu hình sau vào (thay thế địa chỉ IP/domain tương ứng):
    ```nginx
-    # 1. Cấu hình Nginx cho Frontend (edu.home-care.vn)
+    # 1. Cấu hình Nginx cho Frontend (educare.home-care.vn)
     server {
         listen 80;
-        server_name edu.home-care.vn;
+        server_name educare.home-care.vn;
 
         location / {
             proxy_pass http://127.0.0.1:5006;
@@ -257,7 +257,7 @@ docker exec -it dao-edu-infra_production-minio mc anonymous set download myminio
    ```
 2. Yêu cầu cấp chứng chỉ SSL và tự động cấu hình Nginx (thay thế bằng tên miền thực tế của bạn):
    ```bash
-   sudo certbot --nginx -d apiedu.home-care.vn -d edu.home-care.vn
+   sudo certbot --nginx -d apiedu.home-care.vn -d educare.home-care.vn
    ```
    *(Nhập Email và chọn `Y` để đồng ý các điều khoản. Certbot sẽ tự cấu hình SSL vào file `/etc/nginx/sites-available/dao-edu-production` và tự động thiết lập chuyển hướng từ HTTP sang HTTPS).*
 
