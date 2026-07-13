@@ -552,12 +552,14 @@ export class TeacherController {
         role = 'Trợ giảng';
       }
 
+      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
       const sessions = await this.sessionRepo.find({ where: { classId: classEntity.id } });
-      const sessionIds = sessions.map(s => s.id);
+      const sessionsUpToToday = sessions.filter(s => s.date <= todayStr);
+      const sessionIds = sessionsUpToToday.map(s => s.id);
       
       let attendanceRate = 100;
-      let totalSessionsCount = sessions.length;
-      let finishedSessionsCount = sessions.filter(s => s.status === 'Completed' || s.attendanceLocked).length;
+      let totalSessionsCount = sessionsUpToToday.length;
+      let finishedSessionsCount = sessionsUpToToday.filter(s => s.status === 'Completed' || s.attendanceLocked).length;
 
       if (sessionIds.length > 0) {
         const totalMarked = await this.sessionRepo.manager.count(StudentAttendanceOrmEntity, {
