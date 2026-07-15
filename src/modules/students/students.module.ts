@@ -18,6 +18,9 @@ import { StudentController } from '../../presentation/controllers/student.contro
 import { IdentityModule } from '../identity/identity.module';
 import { BillingModule } from '../billing/billing.module';
 
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { UserOrmEntity } from '../../infrastructure/persistence/typeorm/entities/user.orm-entity';
+
 @Module({
   imports: [
     IdentityModule,
@@ -29,6 +32,8 @@ import { BillingModule } from '../billing/billing.module';
       ClassSessionOrmEntity,
       StudentMonthlyBillOrmEntity,
       StudentMonthlyBillItemOrmEntity,
+      StudentAttendanceOrmEntity,
+      UserOrmEntity,
     ]),
   ],
   controllers: [StudentController],
