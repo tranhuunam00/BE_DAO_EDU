@@ -11,6 +11,7 @@ import {
   Request,
   NotFoundException,
   Put,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -43,6 +44,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { StudentMonthlyBillOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill.orm-entity';
 import { StudentMonthlyBillItemOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-monthly-bill-item.orm-entity';
+import { UserOrmEntity } from '../../infrastructure/persistence/typeorm/entities/user.orm-entity';
 
 @ApiTags('Học sinh (Students)')
 @ApiBearerAuth()
@@ -66,6 +68,10 @@ export class StudentController {
     private readonly monthlyBillRepo: Repository<StudentMonthlyBillOrmEntity>,
     @InjectRepository(StudentMonthlyBillItemOrmEntity)
     private readonly monthlyBillItemRepo: Repository<StudentMonthlyBillItemOrmEntity>,
+    @InjectRepository(StudentAttendanceOrmEntity)
+    private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
+    @InjectRepository(UserOrmEntity)
+    private readonly userRepo: Repository<UserOrmEntity>,
   ) {}
 
   @Post()
@@ -702,4 +708,53 @@ export class StudentController {
       endDate,
     );
   }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  @ApiOperation({
+    summary: 'Xóa học sinh khi chưa bao giờ vào lớp và chưa từng điểm danh (Chỉ dành cho ADMIN)',
+  })
+  @ApiResponse({ status: 200, description: 'Xóa học sinh thành công' })
+  @ApiResponse({
+    status: 400,
+    description: 'Học sinh đã vào lớp hoặc đã điểm danh, không thể xóa',
+  })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
+  async remove(@Param('id') id: string) {
+    const student = await this.studentRepo.findOne({ where: { id } });
+    if (!student) {
+      throw new NotFoundException('Không tìm thấy học sinh');
+    }
+
+    // 1. Kiểm tra xem học sinh đã bao giờ vào lớp nào chưa
+    const classCount = await this.classStudentRepo.count({
+      where: { studentId: id },
+    });
+    if (classCount > 0) {
+      throw new BadRequestException(
+        'Học sinh đã được xếp vào lớp học, không thể xóa.',
+      );
+    }
+
+    // 2. Kiểm tra xem học sinh đã từng điểm danh buổi nào chưa
+    const attendanceCount = await this.attendanceRepo.count({
+      where: { studentId: id },
+    });
+    if (attendanceCount > 0) {
+      throw new BadRequestException(
+        'Học sinh đã có dữ liệu điểm danh trên hệ thống, không thể xóa.',
+      );
+    }
+
+    // 3. Thực hiện xóa học sinh
+    await this.studentRepo.delete(id);
+
+    // 4. Nếu học sinh có tài khoản đăng nhập, thực hiện xóa tài khoản đăng nhập
+    if (student.userId) {
+      await this.userRepo.delete(student.userId);
+    }
+
+    return { success: true, message: 'Đã xóa học sinh thành công.' };
+  }
 }
+
