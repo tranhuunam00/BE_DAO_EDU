@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kế hoạch tích hợp Hệ thống Chấm công & Báo giá - DAOEDU</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+    :root {
+      --bg-primary: #f8fafc; --bg-card: #ffffff; --text-primary: #0f172a; --text-secondary: #475569; --text-light: #64748b;
+      --border-color: #e2e8f0; --primary-color: #4f46e5; --primary-hover: #4338ca; --success-color: #059669; --warning-color: #d97706;
+      --accent-bg: #e0e7ff; --accent-text: #3730a3; --font-title: 'Outfit', sans-serif; --font-body: 'Inter', sans-serif;
+      --radius: 12px; --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    [data-theme="dark"] {
+      --bg-primary: #0f172a; --bg-card: #1e293b; --text-primary: #f8fafc; --text-secondary: #94a3b8; --border-color: #334155;
+      --accent-bg: #1e1b4b; --accent-text: #c7d2fe;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+    body { background-color: var(--bg-primary); color: var(--text-primary); font-family: var(--font-body); line-height: 1.5; padding: 2rem 1rem; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1.5rem; }
+    .header-info h1 { font-family: var(--font-title); font-size: 1.7rem; font-weight: 800; color: var(--primary-color); margin-bottom: 0.5rem; }
+    .header-info p { color: var(--text-secondary); font-size: 0.9rem; }
+    .theme-toggle-btn { background-color: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: var(--radius); cursor: pointer; font-size: 0.85rem; box-shadow: var(--shadow-sm); }
+    .theme-toggle-btn:hover { background-color: var(--bg-primary); border-color: var(--text-light); }
+    .meta-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .meta-card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1rem; box-shadow: var(--shadow-sm); }
+    .meta-label { font-size: 0.75rem; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+    .meta-val { font-weight: 600; font-size: 0.9rem; }
+    .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 1.5rem; gap: 0.5rem; overflow-x: auto; }
+    .tab-btn { background: none; border: none; color: var(--text-secondary); padding: 0.75rem 1rem; cursor: pointer; font-family: var(--font-title); font-size: 0.9rem; font-weight: 600; position: relative; }
+    .tab-btn:hover, .tab-btn.active { color: var(--primary-color); }
+    .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 2px; background-color: var(--primary-color); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+    .card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-md); }
+    .card-title { font-family: var(--font-title); font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; border-left: 4px solid var(--primary-color); padding-left: 0.75rem; }
+    .banner-warning { background-color: var(--accent-bg); color: var(--accent-text); border-radius: var(--radius); padding: 1rem; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .banner-warning strong { display: block; margin-bottom: 0.25rem; }
+    .selection-highlight { border: 2px solid var(--success-color); background-color: rgba(5, 150, 105, 0.02); }
+    .selection-title { border-left-color: var(--success-color); }
+    .table-container { overflow-x: auto; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
+    th, td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); }
+    th { font-family: var(--font-title); font-weight: 600; color: var(--text-secondary); background-color: var(--bg-primary); }
+    tr:hover td { background-color: var(--bg-primary); }
+    .num-col { text-align: right; }
+    .total-row { font-weight: 700; background-color: var(--bg-primary); }
+    .badge { display: inline-block; padding: 0.2rem 0.4rem; font-size: 0.7rem; font-weight: 600; border-radius: 4px; }
+    .badge-success { background-color: #d1fae5; color: #065f46; }
+    .badge-secondary { background-color: #f1f5f9; color: #475569; }
+    .timeline { position: relative; padding-left: 1.5rem; margin-top: 1rem; }
+    .timeline::before { content: ''; position: absolute; left: 4px; top: 0.5rem; bottom: 0.5rem; width: 2px; background-color: var(--border-color); }
+    .timeline-item { position: relative; margin-bottom: 1.5rem; }
+    .timeline-item::before { content: ''; position: absolute; left: -1.5rem; top: 0.5rem; width: 10px; height: 10px; border-radius: 50%; background-color: var(--primary-color); border: 2px solid var(--bg-card); }
+    .timeline-item.active::before { background-color: var(--success-color); }
+    .timeline-title { font-family: var(--font-title); font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .timeline-desc { color: var(--text-secondary); font-size: 0.8rem; }
+    ul { padding-left: 1.2rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; font-size: 0.85rem; color: var(--text-secondary); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 767px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      body { padding: 1rem 0.5rem; }
+      header { flex-direction: column; gap: 1rem; }
+      th, td { padding: 0.5rem; font-size: 0.8rem; }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-info">
+        <h1>Tờ Trình Dự Án & Kế Hoạch Tích Hợp</h1>
+        <p>Hệ thống Kiểm soát Ra vào & Chấm công - Đề xuất triển khai thử nghiệm</p>
+      </div>
+      <button class="theme-toggle-btn" id="themeToggle">Chế độ tối</button>
+    </header>
+
+    <div class="meta-cards">
+      <div class="meta-card"><div class="meta-label">Kính gửi</div><div class="meta-val">Ban Giám Đốc DAOGROUP</div></div>
+      <div class="meta-card"><div class="meta-label">Mục tiêu hệ thống</div><div class="meta-val">daoedu.home-care.vn</div></div>
+      <div class="meta-card"><div class="meta-label">Thiết bị đề xuất</div><div class="meta-val">DS-K1T320MFWX (Wifi & Face ID)</div></div>
+      <div class="meta-card"><div class="meta-label">Tổng chi phí lựa chọn</div><div class="meta-val" style="color: var(--success-color);">2,241,000đ</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event, 'tab-overview')">Tổng Quan Kế Hoạch</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-pricing')">Chi Tiết Báo Giá</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-roadmap')">Lộ Trình Thử Nghiệm</button>
+      <button class="tab-btn" onclick="switchTab(event, 'tab-tech')">Giải Pháp Kỹ Thuật</button>
+    </div>
+
+    <!-- TAB 1: OVERVIEW -->
+    <div id="tab-overview" class="tab-content active">
+      <div class="banner-warning">
+        <strong>Lưu ý quan trọng về hệ thống DotB:</strong>
+        Hiện tại, phía đối tác DotB chưa hỗ trợ mở cổng API để thực hiện việc tích hợp trực tiếp dữ liệu thiết bị chấm công vào hệ thống của họ.
+      </div>
+
+      <div class="card selection-highlight">
+        <h2 class="card-title selection-title" style="color: var(--success-color);">Phương án phần cứng lựa chọn: DS-K1T320MFWX</h2>
+        <p style="margin-bottom: 0.75rem; font-size: 0.9rem; font-weight: 500;">
+          Chúng tôi đề xuất lựa chọn Model thiết bị <strong>DS-K1T320MFWX</strong> (Nhận diện khuôn mặt & kết nối Wifi) với các lý do ưu việt sau:
+        </p>
+        <ul>
+          <li><strong>Có nhận diện khuôn mặt (Face ID):</strong> Đảm bảo tính chính xác cao nhất, loại bỏ hoàn toàn việc chấm công hộ hoặc quên mang thẻ.</li>
+          <li><strong>Tích hợp kết nối Wifi:</strong> Thiết bị tự động kết nối qua mạng không dây của văn phòng, <strong>hoàn toàn không cần kéo dây mạng LAN</strong> phức tạp. Tiết kiệm chi phí vật tư thi công đi dây, giữ nguyên tính thẩm mỹ và sang trọng cho văn phòng Gelexia Riverside.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Phương án triển khai & Vận hành song song</h2>
+        <p style="margin-bottom: 0.75rem; font-size: 0.9rem;">
+          Để đảm bảo tính khả thi và an toàn dữ liệu, quy trình triển khai được thiết lập theo các bước sau:
+        </p>
+        <ul>
+          <li><strong>Mua sắm & Nhận thiết bị (Tuần 1):</strong> Thực hiện thủ tục thanh toán mua sắm thiết bị để đối tác giao hàng trong vòng 2-3 ngày làm việc.</li>
+          <li><strong>Phát triển hệ thống (Tuần 2):</strong> Đội ngũ kỹ thuật nhận thiết bị, cấp nguồn kết nối Wifi tại văn phòng để làm môi trường test. Viết API Endpoint nhận event chấm công trên <strong>daoedu.home-care.vn</strong> và chạy thử nghiệm.</li>
+          <li><strong>Thử nghiệm song song tại trung tâm (3 tháng):</strong> Tiến hành lắp đặt thiết bị thực tế tại địa điểm hoạt động của trung tâm. Vận hành chấm công đồng thời trên cả <strong>daoedu.home-care.vn</strong> và <strong>DotB</strong> để đối soát dữ liệu chéo trước khi ngắt hẳn DotB.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TAB 2: PRICING -->
+    <div id="tab-pricing" class="tab-content">
+      <div class="card selection-highlight">
+        <h2 class="card-title selection-title" style="color: var(--success-color);">Báo giá thiết bị lựa chọn triển khai</h2>
+        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem;">
+          Số báo giá: Q2026071614_DAOGROUP_MCC HIK | Ngày báo giá: 16/07/2026 | Đối tác thực hiện: Việt Nam Smart
+        </p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%">TT</th>
+                <th style="width: 50%">Tên sản phẩm / Thông số kỹ thuật</th>
+                <th style="width: 10%">ĐVT</th>
+                <th style="width: 5%">SL</th>
+                <th style="width: 15%" class="num-col">Đơn giá (VND)</th>
+                <th style="width: 5%" class="num-col">VAT</th>
+                <th style="width: 10%" class="num-col">Thành tiền (VND)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>
+                  <strong>Máy chấm công khuôn mặt kết nối Wifi DS-K1T320MFWX</strong><br>
+                  <span style="font-size: 0.75rem; color: var(--text-light);">Nhận diện khuôn mặt, vân tay, thẻ. Hỗ trợ kết nối Wifi, nguồn cấp 12V. Mới 100%.</span>
+                </td>
+                <td>Chiếc</td>
+                <td>1</td>
+                <td class="num-col">2,075,000</td>
+                <td class="num-col">8%</td>
+                <td class="num-col">2,241,000</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>
+                  <strong>Phần mềm quản lý HikCentral-AC-Package/16Door</strong><br>
+                  <span style="font-size: 0.75rem; color: var(--text-light);">Quản lý 16 thiết bị kiểm soát, chấm công tối đa 3.000 nhân viên. Tặng kèm theo thiết bị.</span>
+                </td>
+                <td>Gói</td>
+                <td>1</td>
+                <td class="num-col">0</td>
+                <td class="num-col">0%</td>
+                <td class="num-col">0</td>
+              </tr>
+              <tr class="total-row">
+                <td colspan="4">TỔNG CHI PHÍ ĐẦU TƯ THỰC TẾ (Đã gồm VAT)</td>
+                <td colspan="3" class="num-col" style="color: var(--success-color); font-size: 1rem;">2,241,000</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Các phương án phần cứng thay thế (Đã xem xét & bỏ qua)</h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%">Model thiết bị</th>
+                <th style="width: 15%">Tổng tiền (VAT)</th>
+                <th style="width: 40%">Đặc tính kỹ thuật</th>
+                <th style="width: 20%">Lý do không chọn</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>DS-K1T804AMF</td>
+                <td>1,994,000đ</td>
+                <td>Chỉ kiểm soát bằng vân tay/thẻ, nguồn 12V.</td>
+                <td><span class="badge badge-secondary">Không có Face ID</span></td>
+              </tr>
+              <tr>
+                <td>DS-K1T320MFX</td>
+                <td>1,980,000đ</td>
+                <td>Có nhận diện khuôn mặt, nhưng chỉ kết nối dây mạng LAN.</td>
+                <td><span class="badge badge-secondary">Bắt buộc đi dây mạng</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2 class="card-title">Điều khoản thương mại</h2>
+          <ul>
+            <li><strong>Địa điểm lắp đặt:</strong> Căn hộ số 10, tầng 3, toà CT1 Gelexia Riverside, Hoàng Mai, Hà Nội.</li>
+            <li><strong>Bảo hành:</strong> Toàn bộ thiết bị bảo hành 12 - 24 tháng theo tiêu chuẩn nhà sản xuất HIKVision.</li>
+            <li><strong>Hình thức thanh toán:</strong> Thanh toán tạm ứng 100% ngay khi xác nhận đơn hàng.</li>
+            <li><strong>Thời gian giao hàng:</strong> 2 - 3 ngày làm việc kể từ ngày hoàn tất thủ tục thanh toán.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2 class="card-title">Thông tin tài khoản thụ hưởng</h2>
+          <p style="font-size: 0.85rem; margin-bottom: 0.25rem;"><strong>Công ty TNHH Công nghệ & Thông tin Thông minh Việt Nam</strong></p>
+          <p style="font-size: 0.8rem; color: var(--text-secondary);">Số tài khoản: 049.1001.797979</p>
+          <p style="font-size: 0.8rem; color: var(--text-secondary);">Ngân hàng: Vietcombank - Chi nhánh Thăng Long</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: ROADMAP -->
+    <div id="tab-roadmap" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Lộ trình triển khai dự án</h2>
+        <div class="timeline">
+          <div class="timeline-item active">
+            <div class="timeline-title">Tuần 1: Mua sắm & Nhận bàn giao thiết bị</div>
+            <div class="timeline-desc">
+              Lập tờ trình mua sắm, thanh toán và nhận máy chấm công DS-K1T320MFWX từ đối tác Việt Nam Smart (giao hàng 2-3 ngày).
+              Đăng ký tài khoản và bàn giao thiết bị cho bộ phận kỹ thuật.
+            </div>
+          </div>
+          <div class="timeline-item active">
+            <div class="timeline-title">Tuần 2: Lập trình & Chạy thử nghiệm nội bộ</div>
+            <div class="timeline-desc">
+              Cấp nguồn thiết bị, kết nối mạng Wifi văn phòng.
+              Lập trình viên xây dựng API Endpoint trên <strong>daoedu.home-care.vn</strong> và cấu hình webhook đẩy dữ liệu thực tế từ máy chấm công để sửa các lỗi kết nối ban đầu.
+            </div>
+          </div>
+          <div class="timeline-item active">
+            <div class="timeline-title">Tháng 1: Triển khai lắp đặt & Chạy song song thực tế</div>
+            <div class="timeline-desc">
+              Lắp đặt thiết bị cố định tại địa điểm hoạt động trung tâm (Gelexia Riverside) qua Wifi.
+              Kích hoạt chạy song song: nhân viên chấm công trên cả thiết bị mới (ghi nhận về DAOEDU) và hệ thống DotB cũ.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-title">Tháng 2: Đối soát dữ liệu chéo định kỳ</div>
+            <div class="timeline-desc">
+              Xuất dữ liệu chấm công từ cả hai hệ thống hàng tuần. So sánh chéo để đảm bảo tính đồng nhất, không lệch công, hiệu chỉnh thuật toán ghi nhận nếu có sai lệch.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-title">Tháng 3: Đào tạo vận hành & Chuẩn bị chuyển đổi</div>
+            <div class="timeline-desc">
+              Tinh chỉnh giao diện xem lịch sử chấm công, quản lý đơn từ, tính lương trên daoedu.home-care.vn.
+              Đào tạo cán bộ quản lý và nhân sự cách vận hành hệ thống mới. Lên kế hoạch ngắt dịch vụ DotB.
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-title">Tháng 4: Go-Live & Nghiệm thu 100%</div>
+            <div class="timeline-desc">
+              Chính thức dừng hoạt động chấm công trên DotB. Chuyển toàn bộ nghiệp vụ quản lý nhân sự và tính lương sang cổng nội bộ daoedu.home-care.vn.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: TECHNICAL -->
+    <div id="tab-tech" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Kiến trúc kết nối mạng không dây (Wifi)</h2>
+        <div style="background-color: var(--bg-primary); padding: 1rem; border-radius: var(--radius); font-family: monospace; font-size: 0.8rem; border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+          [Thiết bị DS-K1T320MFWX] --(Wifi Router Văn Phòng)--> [HikCentral AC Server] --(Webhooks / Web API)--> [daoedu.home-care.vn]
+        </div>
+        <h3 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Ưu điểm giải pháp kết nối Wifi:</h3>
+        <ul>
+          <li><strong>Tối ưu hóa thời gian triển khai:</strong> Rút ngắn việc lắp đặt xuống chỉ còn dưới 1 giờ. Không cần khoan đục hay đi nẹp nhựa chạy dây mạng LAN, giúp bảo toàn thẩm mỹ tuyệt đối cho không gian văn phòng.</li>
+          <li><strong>Khả năng tự động đồng bộ offline:</strong> Trường hợp sóng Wifi gián đoạn tạm thời, thiết bị tự động lưu trữ tối đa 100.000 sự kiện quét offline trong bộ nhớ và tự động đồng bộ bù đầy đủ khi mạng kết nối lại.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(evt, tabId) {
+      const contents = document.getElementsByClassName('tab-content');
+      for (let i = 0; i < contents.length; i++) contents[i].classList.remove('active');
+      const tabs = document.getElementsByClassName('tab-btn');
+      for (let i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      document.getElementById(tabId).classList.add('active');
+      evt.currentTarget.classList.add('active');
+    }
+
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      if (currentTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeToggle.textContent = 'Chế độ tối';
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        themeToggle.textContent = 'Chế độ sáng';
+      }
+    });
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      themeToggle.textContent = 'Chế độ sáng';
+    }
+  </script>
+</body>
+</html>
