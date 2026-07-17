@@ -761,7 +761,7 @@ describe('ClassController.overrideAttendance', () => {
   });
 
   describe('ClassController session evaluations', () => {
-    it('allows updating evaluations with valid scores (e.g. 8.5) and comment', async () => {
+    it('allows updating evaluations with valid scores (e.g. 8.25) and comment', async () => {
       const { controller, repos } = createController();
       const session = {
         id: 'session-1',
@@ -787,21 +787,21 @@ describe('ClassController.overrideAttendance', () => {
       const req = { user: { role: 'TEACHER', sub: 'user-main' } };
       const body = {
         evaluations: [
-          { studentId: 'student-1', evaluationScore: 8.5, evaluationComment: 'Good!' }
+          { studentId: 'student-1', evaluationScore: '8.25', evaluationComment: 'Good!' }
         ]
       };
 
-      const res = await controller.saveEvaluations(req, 'session-1', body);
+      const res = await controller.saveEvaluations(req, 'session-1', body as any);
       expect(res).toEqual({ message: 'Đã cập nhật đánh giá học sinh thành công' });
       expect(repos.attendanceRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          evaluationScore: 8.5,
+          evaluationScore: '8.25',
           evaluationComment: 'Good!',
         })
       );
     });
 
-    it('throws BadRequestException for score not in increments of 0.5', async () => {
+    it('throws BadRequestException for invalid non-numeric score', async () => {
       const { controller, repos } = createController();
       const session = {
         id: 'session-1',
@@ -822,13 +822,13 @@ describe('ClassController.overrideAttendance', () => {
       const req = { user: { role: 'TEACHER', sub: 'user-main' } };
       const body = {
         evaluations: [
-          { studentId: 'student-1', evaluationScore: 8.3, evaluationComment: 'Invalid score' }
+          { studentId: 'student-1', evaluationScore: 'invalid', evaluationComment: 'Invalid score' }
         ]
       };
 
       await expect(
-        controller.saveEvaluations(req, 'session-1', body)
-      ).rejects.toThrow('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        controller.saveEvaluations(req, 'session-1', body as any)
+      ).rejects.toThrow('Điểm đánh giá phải là số từ 0 đến 10.');
     });
 
     it('throws BadRequestException for score greater than 10', async () => {
@@ -852,13 +852,13 @@ describe('ClassController.overrideAttendance', () => {
       const req = { user: { role: 'TEACHER', sub: 'user-main' } };
       const body = {
         evaluations: [
-          { studentId: 'student-1', evaluationScore: 10.5, evaluationComment: 'Invalid score' }
+          { studentId: 'student-1', evaluationScore: '10.5', evaluationComment: 'Invalid score' }
         ]
       };
 
       await expect(
-        controller.saveEvaluations(req, 'session-1', body)
-      ).rejects.toThrow('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        controller.saveEvaluations(req, 'session-1', body as any)
+      ).rejects.toThrow('Điểm đánh giá phải là số từ 0 đến 10.');
     });
 
     it('throws BadRequestException for non-enrolled students', async () => {

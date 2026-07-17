@@ -388,7 +388,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       student.attendance[record.sessionId] = {
         isPresent: record.isPresent,
         rate: sessionRate,
-        evaluationScore: record.evaluationScore !== null && record.evaluationScore !== undefined ? Number(record.evaluationScore) : null,
+        evaluationScore: record.evaluationScore !== null && record.evaluationScore !== undefined ? String(record.evaluationScore) : null,
         evaluationComment: record.evaluationComment,
       };
 
@@ -1054,7 +1054,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          COUNT(sa.id)::int AS "totalSessions",
          COUNT(sa.id) FILTER (WHERE sa.is_present = true)::int AS "presentCount",
          COUNT(sa.id) FILTER (WHERE sa.is_present = false)::int AS "absentCount",
-         ROUND(AVG(sa.evaluation_score)::numeric, 1) AS "avgEvaluationScore"
+         ROUND(AVG(NULLIF(regexp_replace(replace(sa.evaluation_score, ',', '.'), '[^0-9.]', '', 'g'), '')::numeric), 1) AS "avgEvaluationScore"
        FROM student_attendance sa
        JOIN class_sessions cs ON cs.id = sa.class_session_id
        JOIN classes cl ON cl.id = cs.class_id

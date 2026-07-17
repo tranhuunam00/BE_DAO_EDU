@@ -94,12 +94,10 @@ export class StudentEvaluationDto {
   @IsNotEmpty()
   studentId!: string;
 
-  @ApiProperty({ required: false, description: 'Điểm đánh giá (0-10, bước 0.5)' })
-  @IsNumber()
-  @Min(0)
-  @Max(10)
+  @ApiProperty({ required: false, description: 'Điểm đánh giá (dạng chuỗi, ví dụ: 8.25, 8.75)' })
+  @IsString()
   @IsOptional()
-  evaluationScore?: number | null;
+  evaluationScore?: string | null;
 
   @ApiProperty({ required: false, description: 'Nhận xét' })
   @IsString()

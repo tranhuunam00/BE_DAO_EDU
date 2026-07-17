@@ -169,6 +169,23 @@ export class ClassController {
     const total = await qb.getCount();
     const classes = await qb.skip((page - 1) * limit).take(limit).getMany();
 
+    const classIds = classes.map(c => c.id);
+    let counts: { classId: string; count: number }[] = [];
+    if (classIds.length > 0) {
+      const countsRaw = await this.dataSource.getRepository(ClassStudentOrmEntity)
+        .createQueryBuilder('cs')
+        .select('cs.class_id', 'classId')
+        .addSelect('COUNT(cs.id)', 'count')
+        .where('cs.class_id IN (:...classIds)', { classIds })
+        .andWhere('cs.status = :status', { status: 'Active' })
+        .groupBy('cs.class_id')
+        .getRawMany();
+      counts = countsRaw.map(r => ({
+        classId: r.classId,
+        count: parseInt(r.count, 10),
+      }));
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const oneWeekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -180,7 +197,12 @@ export class ClassController {
         const finish = new Date(c.finishDate);
         isEndingSoon = finish >= today && finish <= oneWeekLater;
       }
-      return { ...c, isEndingSoon };
+      const countObj = counts.find(item => item.classId === c.id);
+      return { 
+        ...c, 
+        isEndingSoon,
+        studentCount: countObj ? countObj.count : 0
+      };
     });
 
     return { classes: classesWithEndingSoon, total, page: Number(page), limit: Number(limit) };
@@ -795,7 +817,7 @@ export class ClassController {
   async saveAttendance(
     @Request() req: any,
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: string | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({
       where: { id: sessionId },
@@ -825,10 +847,15 @@ export class ClassController {
       record.note = item.note || null;
 
       if (item.evaluationScore !== undefined) {
-        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        if (item.evaluationScore !== null && item.evaluationScore !== '') {
+          const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+          if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+            throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
+          }
+          record.evaluationScore = String(item.evaluationScore);
+        } else {
+          record.evaluationScore = null;
         }
-        record.evaluationScore = item.evaluationScore;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
@@ -845,7 +872,7 @@ export class ClassController {
   @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
   async overrideAttendance(
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: string | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
     if (!session.attendanceLocked) {
@@ -879,10 +906,15 @@ export class ClassController {
       record.note = item.note || null;
 
       if (item.evaluationScore !== undefined) {
-        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        if (item.evaluationScore !== null && item.evaluationScore !== '') {
+          const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+          if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+            throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
+          }
+          record.evaluationScore = String(item.evaluationScore);
+        } else {
+          record.evaluationScore = null;
         }
-        record.evaluationScore = item.evaluationScore;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
@@ -922,9 +954,10 @@ export class ClassController {
     }
 
     for (const item of body.evaluations) {
-      if (item.evaluationScore !== undefined && item.evaluationScore !== null) {
-        if (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+      if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
+        const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+        if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+          throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
         }
       }
 
@@ -941,7 +974,7 @@ export class ClassController {
       }
 
       if (item.evaluationScore !== undefined) {
-        record.evaluationScore = item.evaluationScore;
+        record.evaluationScore = item.evaluationScore !== null && item.evaluationScore !== '' ? String(item.evaluationScore) : null;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
