@@ -538,6 +538,9 @@ export class ClassController {
       this.removeStudentUseCase.execute(classId, studentId),
     );
 
+    // Automatically regenerate future sessions starting today to remove the dropped student
+    await this.regenerateFutureSessions(classId, false);
+
     return { message: 'Học sinh đã được chuyển sang trạng thái Dropped' };
   }
 

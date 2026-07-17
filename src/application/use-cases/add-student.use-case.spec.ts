@@ -78,6 +78,26 @@ describe('AddStudentUseCase', () => {
     expect(userRepository.save).not.toHaveBeenCalled();
   });
 
+  it('should throw ConflictException if student with same name and mobile already exists', async () => {
+    const dto: CreateStudentDto = {
+      firstName: 'John',
+      lastName: 'Doe',
+      mobile: '0987654321',
+    };
+
+    // Mock existing student in repo
+    studentRepository.findAll.mockResolvedValue([
+      {
+        firstName: 'John',
+        lastName: 'Doe',
+        mobile: '0987654321',
+      }
+    ] as any);
+
+    await expect(useCase.execute(dto)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(dto)).rejects.toThrow('Học sinh với họ tên và số điện thoại này đã tồn tại trên hệ thống');
+  });
+
   it('should successfully add a student and create a user account', async () => {
     const dto: CreateStudentDto = {
       firstName: 'Alice',

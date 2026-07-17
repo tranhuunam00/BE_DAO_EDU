@@ -18,6 +18,17 @@ export class AddStudentUseCase {
   ) {}
 
   async execute(dto: CreateStudentDto): Promise<Student> {
+    // Kiểm tra trùng họ tên và số điện thoại
+    const students = await this.studentRepository.findAll();
+    const isDuplicate = students.some(s => 
+      (s.firstName || '').trim().toLowerCase() === (dto.firstName || '').trim().toLowerCase() &&
+      (s.lastName || '').trim().toLowerCase() === (dto.lastName || '').trim().toLowerCase() &&
+      (s.mobile || '').trim() === (dto.mobile || '').trim()
+    );
+    if (isDuplicate) {
+      throw new ConflictException('Học sinh với họ tên và số điện thoại này đã tồn tại trên hệ thống');
+    }
+
     // 1. Kiểm tra tài khoản đăng nhập nếu được khai báo
     let createdUserId: string | undefined = undefined;
     if (dto.loginEmail) {
@@ -45,7 +56,6 @@ export class AddStudentUseCase {
     }
 
     // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
-    const students = await this.studentRepository.findAll();
     const count = students.length;
     const studentId = `STU-${1001 + count}`;
 
