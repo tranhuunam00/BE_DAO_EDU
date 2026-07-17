@@ -31,7 +31,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { CreateClassDto, UpdateClassDto } from '../../application/dtos/class.dto';
+import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { GetHolidayDatesUseCase } from '../../modules/academics/application/use-cases/manage-holidays.use-cases';
@@ -792,7 +792,7 @@ export class ClassController {
   async saveAttendance(
     @Request() req: any,
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({
       where: { id: sessionId },
@@ -802,7 +802,7 @@ export class ClassController {
     await this.validateAttendancePermission(session, req);
 
     if (session.attendanceLocked) {
-      throw new Error('Điểm danh của buổi học này đã bị khóa.');
+      throw new BadRequestException('Điểm danh của buổi học này đã bị khóa.');
     }
 
     for (const item of body.attendance) {
@@ -820,6 +820,17 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+
+      if (item.evaluationScore !== undefined) {
+        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
+          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        }
+        record.evaluationScore = item.evaluationScore;
+      }
+      if (item.evaluationComment !== undefined) {
+        record.evaluationComment = item.evaluationComment;
+      }
+
       await this.attendanceRepo.save(record);
     }
 
@@ -831,7 +842,7 @@ export class ClassController {
   @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
   async overrideAttendance(
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
     if (!session.attendanceLocked) {
@@ -863,10 +874,79 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+
+      if (item.evaluationScore !== undefined) {
+        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
+          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        }
+        record.evaluationScore = item.evaluationScore;
+      }
+      if (item.evaluationComment !== undefined) {
+        record.evaluationComment = item.evaluationComment;
+      }
+
       await this.attendanceRepo.save(record);
     }
 
     return { message: 'Đã cập nhật điểm danh thành công (Admin override)' };
+  }
+
+  @Post('sessions/:sessionId/evaluations')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Cập nhật đánh giá buổi học của học sinh (Giáo viên, trợ giảng, admin có thể sửa bất kì lúc nào)' })
+  async saveEvaluations(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+    @Body() body: SaveEvaluationsDto,
+  ) {
+    const session = await this.sessionRepo.findOneOrFail({
+      where: { id: sessionId },
+      relations: { classEntity: true },
+    });
+
+    await this.validateAttendancePermission(session, req);
+
+    const enrollments = await this.classStudentRepo.find({
+      where: { classId: session.classId, status: 'Active' },
+    });
+    const enrolledStudentIds = enrollments.map((e) => e.studentId);
+    for (const item of body.evaluations) {
+      if (!enrolledStudentIds.includes(item.studentId)) {
+        throw new BadRequestException(
+          `Học sinh với ID ${item.studentId} không thuộc lớp học này.`,
+        );
+      }
+    }
+
+    for (const item of body.evaluations) {
+      if (item.evaluationScore !== undefined && item.evaluationScore !== null) {
+        if (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0) {
+          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        }
+      }
+
+      let record = await this.attendanceRepo.findOne({
+        where: { classSessionId: sessionId, studentId: item.studentId }
+      });
+
+      if (!record) {
+        record = this.attendanceRepo.create({
+          classSessionId: sessionId,
+          studentId: item.studentId,
+          isPresent: false,
+        });
+      }
+
+      if (item.evaluationScore !== undefined) {
+        record.evaluationScore = item.evaluationScore;
+      }
+      if (item.evaluationComment !== undefined) {
+        record.evaluationComment = item.evaluationComment;
+      }
+      await this.attendanceRepo.save(record);
+    }
+
+    return { message: 'Đã cập nhật đánh giá học sinh thành công' };
   }
 
   @Post('sessions/:sessionId/complete')

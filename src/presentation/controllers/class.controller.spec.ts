@@ -280,8 +280,8 @@ describe('ClassController enrollment and schedule edge cases', () => {
       { weekday: tomorrowWeekday, roomId: 'room-1', startTime: '08:00', endTime: '09:00' },
     ]);
     repos.classStudentRepo.find.mockResolvedValue([
-      { studentId: 'student-1' },
-      { studentId: 'student-2' },
+      { studentId: 'student-1', joinedDate: '2026-06-14' },
+      { studentId: 'student-2', joinedDate: '2026-06-14' },
     ]);
     // No existing sessions (preload returns empty)
     repos.sessionRepo.find.mockResolvedValue([]);
@@ -759,4 +759,137 @@ describe('ClassController.overrideAttendance', () => {
       ).rejects.toThrow('Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.');
     });
   });
+
+  describe('ClassController session evaluations', () => {
+    it('allows updating evaluations with valid scores (e.g. 8.5) and comment', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: true, // evaluations can be updated even when locked
+        teacherId: 'teacher-main',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classStudentRepo.find.mockResolvedValue([
+        { studentId: 'student-1' }
+      ]);
+      repos.attendanceRepo.findOne.mockResolvedValue({
+        id: 'attendance-1',
+        studentId: 'student-1',
+        classSessionId: 'session-1',
+      });
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const body = {
+        evaluations: [
+          { studentId: 'student-1', evaluationScore: 8.5, evaluationComment: 'Good!' }
+        ]
+      };
+
+      const res = await controller.saveEvaluations(req, 'session-1', body);
+      expect(res).toEqual({ message: 'Đã cập nhật đánh giá học sinh thành công' });
+      expect(repos.attendanceRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          evaluationScore: 8.5,
+          evaluationComment: 'Good!',
+        })
+      );
+    });
+
+    it('throws BadRequestException for score not in increments of 0.5', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classStudentRepo.find.mockResolvedValue([
+        { studentId: 'student-1' }
+      ]);
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const body = {
+        evaluations: [
+          { studentId: 'student-1', evaluationScore: 8.3, evaluationComment: 'Invalid score' }
+        ]
+      };
+
+      await expect(
+        controller.saveEvaluations(req, 'session-1', body)
+      ).rejects.toThrow('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+    });
+
+    it('throws BadRequestException for score greater than 10', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classStudentRepo.find.mockResolvedValue([
+        { studentId: 'student-1' }
+      ]);
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const body = {
+        evaluations: [
+          { studentId: 'student-1', evaluationScore: 10.5, evaluationComment: 'Invalid score' }
+        ]
+      };
+
+      await expect(
+        controller.saveEvaluations(req, 'session-1', body)
+      ).rejects.toThrow('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+    });
+
+    it('throws BadRequestException for non-enrolled students', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-20',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classStudentRepo.find.mockResolvedValue([
+        { studentId: 'student-1' }
+      ]);
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const body = {
+        evaluations: [
+          { studentId: 'student-2', evaluationScore: 9.0, evaluationComment: 'Not enrolled' }
+        ]
+      };
+
+      await expect(
+        controller.saveEvaluations(req, 'session-1', body)
+      ).rejects.toThrow('Học sinh với ID student-2 không thuộc lớp học này.');
+    });
+  });
 });
+

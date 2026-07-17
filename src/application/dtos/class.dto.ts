@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNotEmpty, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ClassScheduleDto {
@@ -87,3 +87,31 @@ export class UpdateClassDto {
   @IsOptional()
   schedules?: ClassScheduleDto[];
 }
+
+export class StudentEvaluationDto {
+  @ApiProperty({ description: 'ID học sinh' })
+  @IsString()
+  @IsNotEmpty()
+  studentId!: string;
+
+  @ApiProperty({ required: false, description: 'Điểm đánh giá (0-10, bước 0.5)' })
+  @IsNumber()
+  @Min(0)
+  @Max(10)
+  @IsOptional()
+  evaluationScore?: number | null;
+
+  @ApiProperty({ required: false, description: 'Nhận xét' })
+  @IsString()
+  @IsOptional()
+  evaluationComment?: string | null;
+}
+
+export class SaveEvaluationsDto {
+  @ApiProperty({ type: [StudentEvaluationDto], description: 'Danh sách đánh giá học sinh' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StudentEvaluationDto)
+  evaluations!: StudentEvaluationDto[];
+}
+
