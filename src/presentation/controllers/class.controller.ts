@@ -826,6 +826,11 @@ export class ClassController {
 
     await this.validateAttendancePermission(session, req);
 
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecords.some((r) => r.billId !== null)) {
+      throw new ConflictException('Buổi học này đã được tính tiền vào hóa đơn và không thể sửa điểm danh.');
+    }
+
     if (session.attendanceLocked) {
       throw new BadRequestException('Điểm danh của buổi học này đã bị khóa.');
     }
@@ -1023,6 +1028,13 @@ export class ClassController {
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
 
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecords.some((r) => r.billId !== null)) {
+      throw new ConflictException(
+        'Buổi học này đã có học sinh được tính tiền vào hóa đơn và không thể chỉnh sửa.',
+      );
+    }
+
     if (session.attendanceLocked) {
       throw new ConflictException(
         'Completed or attendance-locked sessions cannot be changed.',
@@ -1202,6 +1214,7 @@ export class ClassController {
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
     if (
+      !classEntity ||
       classEntity.status !== 'Active' ||
       !classEntity.startDate ||
       schedules.length === 0

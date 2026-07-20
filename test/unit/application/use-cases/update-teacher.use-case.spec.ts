@@ -1,0 +1,211 @@
+import { NotFoundException, ConflictException } from '@nestjs/common';
+import { UpdateTeacherUseCase } from '../../../../src/application/use-cases/update-teacher.use-case';
+import { ITeacherRepository } from '../../../../src/domain/repositories/teacher-repository.interface';
+import { IUserRepository } from '../../../../src/domain/repositories/user-repository.interface';
+import { MinioService } from '../../../../src/infrastructure/storage/minio.service';
+import { UpdateTeacherDto } from '../../../../src/application/dtos/teacher.dto';
+import * as bcrypt from 'bcryptjs';
+
+jest.mock('bcryptjs');
+
+describe('UpdateTeacherUseCase', () => {
+  let useCase: UpdateTeacherUseCase;
+  let teacherRepository: jest.Mocked<ITeacherRepository>;
+  let userRepository: jest.Mocked<IUserRepository>;
+  let minioService: jest.Mocked<MinioService>;
+
+  beforeEach(() => {
+    teacherRepository = {
+      save: jest.fn(),
+      findById: jest.fn(),
+      findAll: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
+    userRepository = {
+      save: jest.fn(),
+      findById: jest.fn(),
+      findByEmail: jest.fn(),
+      findAll: jest.fn(),
+      delete: jest.fn(),
+    } as any;
+
+    minioService = {
+      uploadBase64Image: jest.fn(),
+    } as any;
+
+    useCase = new UpdateTeacherUseCase(teacherRepository, userRepository, minioService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should throw NotFoundException if teacher is not found', async () => {
+    teacherRepository.findById.mockResolvedValue(null);
+    await expect(useCase.execute('invalid-id', {})).rejects.toThrow(NotFoundException);
+  });
+
+  it('should update basic teacher information', async () => {
+    const existingTeacher = { id: '1', teacherId: 'TCH-1001', firstName: 'Old', lastName: 'Name' };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+
+    const dto: UpdateTeacherDto = { firstName: 'New', status: 'Inactive' } as any;
+
+    const result = await useCase.execute('1', dto);
+
+    expect(result.firstName).toBe('New');
+    expect(result.status).toBe('Inactive');
+    expect(teacherRepository.save).toHaveBeenCalled();
+  });
+
+  it('should upload avatar to MinIO if base64 is provided', async () => {
+    const existingTeacher = { id: '1', teacherId: 'TCH-1001' };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    minioService.uploadBase64Image.mockResolvedValue('http://minio/avatar.png');
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+
+    const dto: UpdateTeacherDto = { avatar: 'data:image/png;base64,123' } as any;
+
+    const result = await useCase.execute('1', dto);
+
+    expect(minioService.uploadBase64Image).toHaveBeenCalledWith(dto.avatar, 'TCH-1001');
+    expect(result.avatar).toBe('http://minio/avatar.png');
+  });
+
+  it('should throw ConflictException if trying to create user with existing email', async () => {
+    const existingTeacher = { id: '1', teacherId: 'TCH-1001', userId: null };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    userRepository.findByEmail.mockResolvedValue({ id: '2' } as any);
+
+    const dto: UpdateTeacherDto = { loginEmail: 'exists@example.com', loginPassword: '123' } as any;
+
+    await expect(useCase.execute('1', dto)).rejects.toThrow(ConflictException);
+  });
+
+  it('should create a new user account if loginEmail and password are provided', async () => {
+    const existingTeacher = { id: '1', teacherId: 'TCH-1001', userId: null, firstName: 'John', lastName: 'Doe' };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    userRepository.findByEmail.mockResolvedValue(null);
+    userRepository.save.mockImplementation(async (user) => {
+      user.id = 'new-user-id';
+      return user as any;
+    });
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+
+    (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
+    (bcrypt.hash as jest.Mock).mockResolvedValue('hash');
+
+    const dto: UpdateTeacherDto = { loginEmail: 'new@example.com', loginPassword: '123' } as any;
+
+    const result = await useCase.execute('1', dto);
+
+    expect(userRepository.save).toHaveBeenCalled();
+    expect(result.userId).toBe('new-user-id');
+    expect(result.loginEmail).toBe('new@example.com');
+  });
+
+  it('should update the existing login email', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    const existingUser = {
+      id: 'user-1',
+      email: 'old@example.com',
+      passwordHash: 'old-hash',
+      name: 'Doe John',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+    userRepository.findById.mockResolvedValue(existingUser as any);
+    userRepository.findByEmail.mockResolvedValue(null);
+    userRepository.save.mockImplementation(async (user) => user as any);
+
+    const result = await useCase.execute('1', { loginEmail: ' NEW@example.com ' });
+
+    expect(userRepository.findByEmail).toHaveBeenCalledWith('new@example.com');
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'new@example.com' }),
+    );
+    expect(result.loginEmail).toBe('new@example.com');
+  });
+
+  it('should reject an existing login email owned by another user', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    userRepository.findById.mockResolvedValue({
+      id: 'user-1',
+      email: 'old@example.com',
+      passwordHash: 'old-hash',
+    } as any);
+    userRepository.findByEmail.mockResolvedValue({
+      id: 'user-2',
+      email: 'used@example.com',
+    } as any);
+
+    await expect(
+      useCase.execute('1', { loginEmail: 'used@example.com' }),
+    ).rejects.toThrow(ConflictException);
+    expect(userRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('should hash a new password and revoke refresh tokens', async () => {
+    const existingTeacher = {
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'user-1',
+      firstName: 'John',
+      lastName: 'Doe',
+    };
+    const existingUser = {
+      id: 'user-1',
+      email: 'teacher@example.com',
+      passwordHash: 'old-hash',
+      refreshTokenHash: 'old-refresh-hash',
+      name: 'Doe John',
+    };
+    teacherRepository.findById.mockResolvedValue(existingTeacher as any);
+    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
+    userRepository.findById.mockResolvedValue(existingUser as any);
+    userRepository.save.mockImplementation(async (user) => user as any);
+    (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
+    (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+    await useCase.execute('1', { loginPassword: 'new-password' });
+
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 'salt');
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passwordHash: 'new-hash',
+        refreshTokenHash: null,
+      }),
+    );
+  });
+
+  it('should fail when the linked login account no longer exists', async () => {
+    teacherRepository.findById.mockResolvedValue({
+      id: '1',
+      teacherId: 'TCH-1001',
+      userId: 'missing-user',
+      firstName: 'John',
+      lastName: 'Doe',
+    } as any);
+    userRepository.findById.mockResolvedValue(null);
+
+    await expect(useCase.execute('1', { firstName: 'Jane' })).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(teacherRepository.save).not.toHaveBeenCalled();
+  });
+});
