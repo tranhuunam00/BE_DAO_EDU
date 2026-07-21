@@ -663,7 +663,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -683,7 +683,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -702,7 +702,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -720,7 +720,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -743,7 +743,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -767,7 +767,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: true, // evaluations can be updated even when locked
@@ -807,7 +807,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -837,7 +837,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
@@ -867,7 +867,7 @@ describe('ClassController.overrideAttendance', () => {
       const session = {
         id: 'session-1',
         classId: 'class-1',
-        date: '2026-07-20',
+        date: '2099-12-31',
         startTime: '08:00',
         endTime: '09:30',
         attendanceLocked: false,
