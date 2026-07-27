@@ -294,7 +294,7 @@ export class TypeOrmAcademicsPersistenceAdapter
   ): Promise<T> {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        return await this.dataSource.transaction('SERIALIZABLE', work);
+        return await this.dataSource.transaction('READ COMMITTED', work);
       } catch (error) {
         const code = (error as { code?: string; driverError?: { code?: string } })
           .driverError?.code ??

@@ -42,7 +42,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
   }
 
   transaction<T>(work: (context: BillingTransactionContext) => Promise<T>) {
-    return this.dataSource.transaction('SERIALIZABLE', (manager) =>
+    return this.dataSource.transaction('READ COMMITTED', (manager) =>
       work(new TypeOrmBillingTransactionContext(manager)),
     );
   }
