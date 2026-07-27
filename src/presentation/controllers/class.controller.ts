@@ -766,13 +766,17 @@ export class ClassController {
     @Param('sessionId') sessionId: string,
     @Query('bypassTimeCheck') bypassTimeCheck?: string,
   ) {
-    const session = await this.sessionRepo.findOne({
-      where: { id: sessionId },
-      relations: { classEntity: true },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
     }
 
     await this.validateAttendancePermission(session, req);
@@ -793,13 +797,17 @@ export class ClassController {
     @Request() req: any,
     @Param('sessionId') sessionId: string,
   ) {
-    const session = await this.sessionRepo.findOne({
-      where: { id: sessionId },
-      relations: { classEntity: true },
-    });
-
-    if (!session) {
-      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
     }
 
     await this.validateAttendancePermission(session, req);
@@ -1033,9 +1041,14 @@ export class ClassController {
     },
     @Request() req?: any,
   ) {
-    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
-    if (!session) {
-      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
     }
 
     const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
@@ -1370,19 +1383,25 @@ export class ClassController {
     // Regenerate
     await this.generateSessions(classId, fromStartDate);
 
-    await this.notificationRepo.manager.getRepository(NotificationLogOrmEntity).save({
-      notificationId: null,
-      userId: null,
-      eventType: 'UPDATE',
-      notificationType: 'CLASS',
-      title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
-      metadata: {
-        classId,
-        fromStartDate,
-        deletedSessionsCount: deleteResult.affected || 0,
-        source: 'auto_regenerate_future_sessions',
-      },
-    });
+    const logRepo = this.notificationRepo?.manager?.getRepository
+      ? this.notificationRepo.manager.getRepository(NotificationLogOrmEntity)
+      : (this.dataSource?.getRepository ? this.dataSource.getRepository(NotificationLogOrmEntity) : null);
+
+    if (logRepo) {
+      await logRepo.save({
+        notificationId: null,
+        userId: null,
+        eventType: 'UPDATE',
+        notificationType: 'CLASS',
+        title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
+        metadata: {
+          classId,
+          fromStartDate,
+          deletedSessionsCount: deleteResult.affected || 0,
+          source: 'auto_regenerate_future_sessions',
+        },
+      });
+    }
   }
 
   private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {

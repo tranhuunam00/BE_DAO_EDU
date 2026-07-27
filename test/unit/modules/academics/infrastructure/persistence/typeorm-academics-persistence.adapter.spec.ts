@@ -33,13 +33,29 @@ describe('TypeOrmAcademicsPersistenceAdapter transactions', () => {
     return { manager, enrollmentRepo };
   };
 
-  it('uses SERIALIZABLE and pessimistic locks for enrollment capacity', async () => {
-    const { manager, enrollmentRepo } = createManager();
-    manager.findOne
-      .mockResolvedValueOnce({ id: 'class-1', maxSize: 1 })
-      .mockResolvedValueOnce({ id: 'student-1', status: 'Waiting for class' });
-    enrollmentRepo.findOne.mockResolvedValue(null);
-    enrollmentRepo.count.mockResolvedValue(1);
+  it('uses READ COMMITTED and pessimistic locks for enrollment capacity', async () => {
+    const classRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'class-1', maxSize: 2 }),
+    };
+    const studentRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'student-1', status: 'In-Class' }),
+    };
+    const enrollmentRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(2),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    const manager = {
+      findOne: jest.fn((entity: unknown, options: unknown) => {
+        if (String(entity).includes('Class')) {
+          return classRepo.findOne();
+        }
+        return studentRepo.findOne();
+      }),
+      getRepository: jest.fn().mockReturnValue(enrollmentRepo),
+      save: jest.fn(),
+    };
     const dataSource = {
       transaction: jest.fn(
         async (_isolation: string, work: (value: typeof manager) => unknown) =>
@@ -53,7 +69,7 @@ describe('TypeOrmAcademicsPersistenceAdapter transactions', () => {
     ).rejects.toMatchObject<Partial<AcademicError>>({ code: 'CLASS_FULL' });
 
     expect(dataSource.transaction).toHaveBeenCalledWith(
-      'SERIALIZABLE',
+      'READ COMMITTED',
       expect.any(Function),
     );
     expect(manager.findOne).toHaveBeenNthCalledWith(
