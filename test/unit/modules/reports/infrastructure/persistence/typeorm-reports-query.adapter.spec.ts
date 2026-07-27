@@ -130,3 +130,75 @@ describe('TypeOrmReportsQueryAdapter getAttendanceByClass', () => {
     });
   });
 });
+
+describe('TypeOrmReportsQueryAdapter getNewStudentsList', () => {
+  it('should return 1 row per student with birthdate and aggregated classNames', async () => {
+    const mockQuery = jest.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes('STRING_AGG')) {
+        return [
+          {
+            studentId: 'stu-1',
+            studentCode: 'HV-2026-007',
+            studentName: 'Bùi Ngọc Linh',
+            birthdate: '2010-05-15',
+            mobile: '0912000007',
+            status: 'Active',
+            createdAt: '2026-07-01T08:00:00.000Z',
+            classNames: 'Toán 10A1, Lý 10B2',
+          },
+          {
+            studentId: 'stu-2',
+            studentCode: 'HV-2026-008',
+            studentName: 'Hoàng Phúc Nam',
+            birthdate: null,
+            mobile: '0912000008',
+            status: 'Waiting for class',
+            createdAt: '2026-07-02T08:00:00.000Z',
+            classNames: null,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const adapter = new TypeOrmReportsQueryAdapter({ query: mockQuery } as any);
+    const result = await adapter.getNewStudentsList({});
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      studentId: 'stu-1',
+      studentCode: 'HV-2026-007',
+      studentName: 'Bùi Ngọc Linh',
+      birthdate: '2010-05-15',
+      mobile: '0912000007',
+      status: 'Active',
+      createdAt: '2026-07-01T08:00:00.000Z',
+      classNames: 'Toán 10A1, Lý 10B2',
+    });
+    expect(result[1].classNames).toBe('—');
+  });
+
+  it('PERFORMANCE BENCHMARK: getNewStudentsList should process mapping in under 50ms', async () => {
+    const largeDataset = Array.from({ length: 1000 }, (_, i) => ({
+      studentId: `stu-${i}`,
+      studentCode: `HV-2026-${String(i).padStart(3, '0')}`,
+      studentName: `Học sinh ${i}`,
+      birthdate: '2012-01-01',
+      mobile: '0912345678',
+      status: 'Active',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      classNames: `Lớp A${i % 10}, Lớp B${i % 5}`,
+    }));
+
+    const mockQuery = jest.fn().mockResolvedValue(largeDataset);
+    const adapter = new TypeOrmReportsQueryAdapter({ query: mockQuery } as any);
+
+    const start = performance.now();
+    const result = await adapter.getNewStudentsList({});
+    const duration = performance.now() - start;
+
+    expect(result).toHaveLength(1000);
+    expect(duration).toBeLessThan(50); // SLA Time Limit < 50ms
+  });
+});
+

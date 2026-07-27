@@ -650,13 +650,16 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          s.id AS "studentId",
          s.student_id AS "studentCode",
          CONCAT(s.last_name, ' ', s.first_name) AS "studentName",
+         s.birthdate AS "birthdate",
          s.mobile,
          s.status,
-         s.created_at AS "createdAt"
+         s.created_at AS "createdAt",
+         STRING_AGG(DISTINCT cl.class_name, ', ') AS "classNames"
        FROM students s
        LEFT JOIN class_students cs ON cs.student_id = s.id
        LEFT JOIN classes cl ON cl.id = cs.class_id
        ${where}
+       GROUP BY s.id, s.student_id, s.last_name, s.first_name, s.birthdate, s.mobile, s.status, s.created_at
        ORDER BY s.created_at DESC
        LIMIT 50`,
       params,
@@ -665,9 +668,11 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       studentId: r.studentId,
       studentCode: r.studentCode,
       studentName: r.studentName,
+      birthdate: r.birthdate,
       mobile: r.mobile,
       status: r.status,
       createdAt: r.createdAt,
+      classNames: r.classNames || '—',
     }));
   }
 

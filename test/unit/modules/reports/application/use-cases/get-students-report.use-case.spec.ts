@@ -37,7 +37,7 @@ describe('GetStudentsReportUseCase', () => {
       { month: '2026-05', count: 8 },
     ]);
     mockQuery.getNewStudentsList.mockResolvedValue([
-      { studentId: 's1', studentCode: 'HS1', studentName: 'Học sinh 1', mobile: '0900000001', status: 'Active', createdAt: '2026-06-15' },
+      { studentId: 's1', studentCode: 'HS1', studentName: 'Học sinh 1', birthdate: '2010-01-01', mobile: '0900000001', status: 'Active', createdAt: '2026-06-15', classNames: 'Toán 10A1' },
     ]);
 
     const result = await useCase.execute({ month: '2026-06' });
