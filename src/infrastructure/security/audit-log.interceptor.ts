@@ -88,7 +88,7 @@ export class AuditLogInterceptor implements NestInterceptor {
       tap({
         next: async () => {
           try {
-            const userId = user?.sub || user?.id || 'SYSTEM';
+            const userId = user?.sub || user?.id || null;
 
             // Đảm bảo không log password
             const sanitizedBody = { ...body };

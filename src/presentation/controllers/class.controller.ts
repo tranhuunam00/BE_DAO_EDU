@@ -1356,7 +1356,7 @@ export class ClassController {
 
     await this.notificationRepo.manager.getRepository(NotificationLogOrmEntity).save({
       notificationId: null,
-      userId: 'SYSTEM',
+      userId: null,
       eventType: 'UPDATE',
       notificationType: 'CLASS',
       title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,

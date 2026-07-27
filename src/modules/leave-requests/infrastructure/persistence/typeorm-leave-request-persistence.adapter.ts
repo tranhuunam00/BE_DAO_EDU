@@ -195,7 +195,7 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
 
         await manager.getRepository(NotificationLogOrmEntity).save({
           notificationId: null,
-          userId: request.reviewedByUserId || 'SYSTEM',
+          userId: request.reviewedByUserId || null,
           eventType: 'UPDATE',
           notificationType: 'LEAVE_REQUEST',
           title: `Tự động cập nhật điểm danh vắng mặt có phép cho học sinh theo đơn xin nghỉ đã duyệt`,

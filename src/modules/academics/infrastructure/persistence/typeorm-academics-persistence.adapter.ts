@@ -210,7 +210,7 @@ export class TypeOrmAcademicsPersistenceAdapter
 
         await manager.getRepository(NotificationLogOrmEntity).save({
           notificationId: null,
-          userId: 'SYSTEM',
+          userId: null,
           eventType: 'DELETE',
           notificationType: 'CLASS',
           title: `Tự động xóa ${deleteResult.affected || 0} buổi điểm danh tương lai khi học sinh thôi học lớp`,
@@ -260,7 +260,7 @@ export class TypeOrmAcademicsPersistenceAdapter
     if (createdCount > 0) {
       await manager.getRepository(NotificationLogOrmEntity).save({
         notificationId: null,
-        userId: 'SYSTEM',
+        userId: null,
         eventType: 'CREATE',
         notificationType: 'CLASS',
         title: `Tự động sinh ${createdCount} buổi điểm danh tương lai cho học sinh khi vào lớp`,
