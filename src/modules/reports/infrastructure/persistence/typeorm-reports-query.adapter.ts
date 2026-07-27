@@ -660,7 +660,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
        LEFT JOIN classes cl ON cl.id = cs.class_id
        ${where}
        GROUP BY s.id, s.student_id, s.last_name, s.first_name, s.birthdate, s.mobile, s.status, s.created_at
-       ORDER BY s.created_at DESC
+       ORDER BY s.first_name ASC, s.last_name ASC
        LIMIT 50`,
       params,
     );

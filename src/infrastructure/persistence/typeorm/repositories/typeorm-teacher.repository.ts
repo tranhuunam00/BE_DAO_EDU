@@ -37,7 +37,7 @@ export class TypeOrmTeacherRepository implements ITeacherRepository {
     if (query.search) {
       const searchLower = `%${query.search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(teacher.first_name) LIKE :search OR LOWER(teacher.last_name) LIKE :search OR LOWER(teacher.teacher_id) LIKE :search OR teacher.mobile LIKE :search OR LOWER(teacher.email) LIKE :search)',
+        '(LOWER(CONCAT(teacher.last_name, \' \', teacher.first_name)) LIKE :search OR LOWER(CONCAT(teacher.first_name, \' \', teacher.last_name)) LIKE :search OR LOWER(teacher.first_name) LIKE :search OR LOWER(teacher.last_name) LIKE :search OR LOWER(teacher.teacher_id) LIKE :search OR teacher.mobile LIKE :search OR LOWER(teacher.email) LIKE :search)',
         { search: searchLower }
       );
     }
