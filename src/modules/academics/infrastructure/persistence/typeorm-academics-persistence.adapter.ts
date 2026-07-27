@@ -8,6 +8,7 @@ import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/ty
 import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { NotificationLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
 import {
   AcademicsPersistencePort,
   EnrollmentResult,
@@ -197,7 +198,7 @@ export class TypeOrmAcademicsPersistenceAdapter
       });
       const futureSessionIds = sessions.map((session) => session.id);
       if (futureSessionIds.length > 0) {
-        await manager
+        const deleteResult = await manager
           .createQueryBuilder()
           .delete()
           .from(StudentAttendanceOrmEntity)
@@ -206,6 +207,21 @@ export class TypeOrmAcademicsPersistenceAdapter
             sessionIds: futureSessionIds,
           })
           .execute();
+
+        await manager.getRepository(NotificationLogOrmEntity).save({
+          notificationId: null,
+          userId: 'SYSTEM',
+          eventType: 'DELETE',
+          notificationType: 'CLASS',
+          title: `Tự động xóa ${deleteResult.affected || 0} buổi điểm danh tương lai khi học sinh thôi học lớp`,
+          metadata: {
+            classId,
+            studentId,
+            effectiveDate,
+            deletedCount: deleteResult.affected || 0,
+            source: 'auto_remove_future_attendance',
+          },
+        });
       }
     });
   }
@@ -224,6 +240,7 @@ export class TypeOrmAcademicsPersistenceAdapter
       .andWhere('session.attendance_locked = false')
       .getMany();
     const attendance = manager.getRepository(StudentAttendanceOrmEntity);
+    let createdCount = 0;
     for (const session of sessions) {
       const exists = await attendance.findOne({
         where: { classSessionId: session.id, studentId },
@@ -236,7 +253,25 @@ export class TypeOrmAcademicsPersistenceAdapter
             isPresent: false,
           }),
         );
+        createdCount++;
       }
+    }
+
+    if (createdCount > 0) {
+      await manager.getRepository(NotificationLogOrmEntity).save({
+        notificationId: null,
+        userId: 'SYSTEM',
+        eventType: 'CREATE',
+        notificationType: 'CLASS',
+        title: `Tự động sinh ${createdCount} buổi điểm danh tương lai cho học sinh khi vào lớp`,
+        metadata: {
+          classId,
+          studentId,
+          joinedDate,
+          createdCount,
+          source: 'auto_generate_future_attendance',
+        },
+      });
     }
   }
 

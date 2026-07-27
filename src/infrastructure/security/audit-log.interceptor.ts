@@ -17,11 +17,17 @@ const urlMap = [
   { path: '/centers', label: 'trung tâm', type: 'CENTER' },
   { path: '/rooms', label: 'phòng học', type: 'ROOM' },
   { path: '/holidays', label: 'ngày nghỉ lễ', type: 'HOLIDAY' },
+  { path: '/leave-requests', label: 'đơn xin nghỉ', type: 'LEAVE_REQUEST' },
   { path: '/leaves', label: 'đơn xin nghỉ', type: 'LEAVE_REQUEST' },
   { path: '/assignments', label: 'bài tập', type: 'ASSIGNMENT' },
   { path: '/accounting', label: 'kế toán', type: 'ACCOUNTING' },
+  { path: '/payment-periods', label: 'kỳ thanh toán', type: 'PAYMENT' },
+  { path: '/tuition-payment-requests', label: 'yêu cầu thanh toán học phí', type: 'PAYMENT' },
   { path: '/payments', label: 'giao dịch thanh toán', type: 'PAYMENT' },
   { path: '/study-materials', label: 'tài liệu học tập', type: 'STUDY_MATERIAL' },
+  { path: '/contact-requests', label: 'yêu cầu liên hệ', type: 'CONTACT_REQUEST' },
+  { path: '/leads', label: 'lead CRM', type: 'LEAD' },
+  { path: '/facebook-lead-scans', label: 'quét Facebook lead', type: 'LEAD_SCAN' },
 ];
 
 function getActionLabel(method: string, label: string): string {
@@ -82,8 +88,7 @@ export class AuditLogInterceptor implements NestInterceptor {
       tap({
         next: async () => {
           try {
-            const userId = user?.sub || user?.id || null;
-            if (!userId) return; // Chỉ log khi đã login
+            const userId = user?.sub || user?.id || 'SYSTEM';
 
             // Đảm bảo không log password
             const sanitizedBody = { ...body };

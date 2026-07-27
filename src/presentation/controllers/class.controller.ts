@@ -34,6 +34,7 @@ import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entit
 import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
 import { GetHolidayDatesUseCase } from '../../modules/academics/application/use-cases/manage-holidays.use-cases';
 import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 import {
@@ -1341,7 +1342,7 @@ export class ClassController {
     const deleteFrom = fromStartDate ? classEntity.startDate : today;
 
     // Delete future/past unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
-    await this.sessionRepo
+    const deleteResult = await this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
@@ -1352,6 +1353,20 @@ export class ClassController {
 
     // Regenerate
     await this.generateSessions(classId, fromStartDate);
+
+    await this.notificationRepo.manager.getRepository(NotificationLogOrmEntity).save({
+      notificationId: null,
+      userId: 'SYSTEM',
+      eventType: 'UPDATE',
+      notificationType: 'CLASS',
+      title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
+      metadata: {
+        classId,
+        fromStartDate,
+        deletedSessionsCount: deleteResult.affected || 0,
+        source: 'auto_regenerate_future_sessions',
+      },
+    });
   }
 
   private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {
