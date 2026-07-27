@@ -1061,14 +1061,21 @@ export class ClassController {
       }
     }
 
-    // "không được đổi quá khứ"
+    const isScheduleChange =
+      body.date !== undefined ||
+      body.startTime !== undefined ||
+      body.endTime !== undefined ||
+      body.roomId !== undefined ||
+      body.teacherId !== undefined ||
+      body.assistantId !== undefined;
+
     const today = new Date().toISOString().split('T')[0];
-    if (session.date < today) {
-      throw new Error('Không được thay đổi thông tin buổi học trong quá khứ.');
+    if (isScheduleChange && session.date < today) {
+      throw new BadRequestException('Không được thay đổi thời gian, địa điểm hoặc giáo viên của buổi học trong quá khứ.');
     }
 
     if (body.date && body.date < today) {
-      throw new Error('Không được dời buổi học về quá khứ.');
+      throw new BadRequestException('Không được dời buổi học về quá khứ.');
     }
 
     const scope = body.scope || 'single';
