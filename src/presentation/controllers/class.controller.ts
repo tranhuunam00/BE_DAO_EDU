@@ -766,18 +766,20 @@ export class ClassController {
     @Param('sessionId') sessionId: string,
     @Query('bypassTimeCheck') bypassTimeCheck?: string,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({
+    const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: { classEntity: true },
     });
+
+    if (!session) {
+      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    }
 
     await this.validateAttendancePermission(session, req);
 
     if (session.attendanceLocked) {
       throw new BadRequestException('Buổi học này đã hoàn thành và khóa điểm danh.');
     }
-
-
 
     session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
@@ -791,10 +793,14 @@ export class ClassController {
     @Request() req: any,
     @Param('sessionId') sessionId: string,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({
+    const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: { classEntity: true },
     });
+
+    if (!session) {
+      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    }
 
     await this.validateAttendancePermission(session, req);
 
@@ -1027,7 +1033,10 @@ export class ClassController {
     },
     @Request() req?: any,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    const session = await this.sessionRepo.findOne({ where: { id: sessionId } });
+    if (!session) {
+      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    }
 
     const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
     if (existingRecords.some((r) => r.billId !== null)) {
