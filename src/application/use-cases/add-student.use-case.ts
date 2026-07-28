@@ -29,31 +29,31 @@ export class AddStudentUseCase {
       throw new ConflictException('Học sinh với họ tên và số điện thoại này đã tồn tại trên hệ thống');
     }
 
-    // 1. Kiểm tra tài khoản đăng nhập nếu được khai báo
+    // 1. Luôn tự động tạo tài khoản đăng nhập cho học sinh bằng số điện thoại
     let createdUserId: string | undefined = undefined;
-    if (dto.loginEmail) {
-      const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
-      if (existingUser) {
-        throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
-      }
-
-      // Tạo tài khoản User đăng nhập
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
-      
-      const newUserId = randomUUID();
-      const user = new User(
-        newUserId,
-        dto.loginEmail.toLowerCase(),
-        passwordHash,
-        `${dto.lastName} ${dto.firstName}`.trim(),
-        Role.STUDENT,
-        true
-      );
-      
-      const savedUser = await this.userRepository.save(user);
-      createdUserId = savedUser.id;
+    const username = (dto.mobile || '').trim().toLowerCase();
+    
+    const existingUser = await this.userRepository.findByEmail(username);
+    if (existingUser) {
+      throw new ConflictException('Số điện thoại đăng nhập học sinh đã tồn tại trên hệ thống');
     }
+
+    // Tạo tài khoản User đăng nhập
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash('123456', salt);
+    
+    const newUserId = randomUUID();
+    const user = new User(
+      newUserId,
+      username,
+      passwordHash,
+      `${dto.lastName} ${dto.firstName}`.trim(),
+      Role.STUDENT,
+      true
+    );
+    
+    const savedUser = await this.userRepository.save(user);
+    createdUserId = savedUser.id;
 
     // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
     const count = students.length;
