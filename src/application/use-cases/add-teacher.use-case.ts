@@ -18,29 +18,36 @@ export class AddTeacherUseCase {
   ) {}
 
   async execute(dto: CreateTeacherDto): Promise<Teacher> {
+    // Tự động tạo tài khoản đăng nhập cho giáo viên (ưu tiên email, fallback sang mobile)
     let createdUserId: string | undefined = undefined;
-    if (dto.loginEmail) {
-      const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
-      if (existingUser) {
-        throw new ConflictException('Email đăng nhập giáo viên đã tồn tại trên hệ thống');
-      }
+    const emailRaw = (dto.email || '').trim().toLowerCase();
+    const mobileRaw = (dto.mobile || '').trim().toLowerCase();
+    const username = emailRaw || mobileRaw;
 
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.loginPassword || 'teacher123', salt);
-      
-      const newUserId = randomUUID();
-      const user = new User(
-        newUserId,
-        dto.loginEmail.toLowerCase(),
-        passwordHash,
-        `${dto.lastName} ${dto.firstName}`.trim(),
-        Role.TEACHER,
-        true
-      );
-      
-      const savedUser = await this.userRepository.save(user);
-      createdUserId = savedUser.id;
+    if (!username) {
+      throw new ConflictException('Giáo viên phải có email hoặc số điện thoại để tự động tạo tài khoản');
     }
+
+    const existingUser = await this.userRepository.findByEmail(username);
+    if (existingUser) {
+      throw new ConflictException('Tài khoản đăng nhập (Email/SĐT) giáo viên đã tồn tại trên hệ thống');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash('educare123', salt);
+    
+    const newUserId = randomUUID();
+    const user = new User(
+      newUserId,
+      username,
+      passwordHash,
+      `${dto.lastName} ${dto.firstName}`.trim(),
+      Role.TEACHER,
+      true
+    );
+    
+    const savedUser = await this.userRepository.save(user);
+    createdUserId = savedUser.id;
 
     const teachers = await this.teacherRepository.findAll();
     const count = teachers.length;
