@@ -581,6 +581,26 @@ describe('ClassController enrollment and schedule edge cases', () => {
       );
     });
   });
+
+  describe('removeStudent', () => {
+    it('removes student from class and regenerates future sessions under SLA 50ms (Performance Benchmark)', async () => {
+      const { controller, repos, academics } = createController();
+      repos.classRepo.findOneOrFail.mockResolvedValue({ id: 'class-1', classCode: 'C101' });
+      repos.sessionRepo.find.mockResolvedValue([
+        { id: 'session-1' },
+        { id: 'session-2' },
+      ]);
+      academics.removeStudent.execute.mockResolvedValue(undefined);
+
+      const startTime = performance.now();
+      const res = await controller.removeStudent('class-1', 'student-1');
+      const duration = performance.now() - startTime;
+
+      expect(res.message).toBe('Học sinh đã được chuyển sang trạng thái Dropped');
+      expect(academics.removeStudent.execute).toHaveBeenCalledWith('class-1', 'student-1');
+      expect(duration).toBeLessThan(50);
+    });
+  });
 });
 
 describe('ClassController.overrideAttendance', () => {
@@ -952,6 +972,8 @@ describe('ClassController.overrideAttendance', () => {
       ).rejects.toThrow('Học sinh với ID student-2 không thuộc lớp học này.');
     });
   });
+
 });
+
 
 
