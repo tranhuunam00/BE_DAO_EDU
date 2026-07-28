@@ -156,6 +156,7 @@ const makeController = (repoOverrides: any = {}) => {
     { execute: jest.fn().mockResolvedValue(undefined) } as any,  // checkSession
     { execute: jest.fn() } as any,                              // enrollStudent
     { execute: jest.fn().mockResolvedValue(undefined) } as any, // removeStudent
+    { execute: jest.fn().mockResolvedValue(undefined) } as any, // createAdhocSession
     repos.dataSource as any,                                    // DataSource (for transactions)
   );
   return { ctrl, repos };
@@ -596,6 +597,7 @@ describe('ClassController — Session Generation Rules', () => {
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn() } as any,
+        { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         repos.dataSource as any, // Inject dataSource
       );

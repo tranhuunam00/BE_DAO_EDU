@@ -113,3 +113,34 @@ export class SaveEvaluationsDto {
   evaluations!: StudentEvaluationDto[];
 }
 
+export class CreateAdhocSessionDto {
+  @ApiProperty({ description: 'Ngày học (YYYY-MM-DD)' })
+  @IsDateString()
+  @IsNotEmpty()
+  date!: string;
+
+  @ApiProperty({ example: '14:00', description: 'Giờ bắt đầu (HH:mm)' })
+  @IsString()
+  @IsNotEmpty()
+  startTime!: string;
+
+  @ApiProperty({ example: '15:30', description: 'Giờ kết thúc (HH:mm)' })
+  @IsString()
+  @IsNotEmpty()
+  endTime!: string;
+
+  @ApiProperty({ required: false, description: 'ID Phòng học' })
+  @IsString()
+  @IsOptional()
+  roomId?: string;
+
+  @ApiProperty({ required: false, description: 'ID Giáo viên' })
+  @IsString()
+  @IsOptional()
+  teacherId?: string;
+
+  @ApiProperty({ required: false, description: 'ID Trợ giảng' })
+  @IsString()
+  @IsOptional()
+  assistantId?: string;
+}

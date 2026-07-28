@@ -30,4 +30,14 @@ export abstract class AcademicsPersistencePort {
     studentId: string,
     effectiveDate: string,
   ): Promise<void>;
+
+  abstract createAdhocSession(
+    classId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    roomId: string | null,
+    teacherId: string | null,
+    assistantId: string | null,
+  ): Promise<any>;
 }

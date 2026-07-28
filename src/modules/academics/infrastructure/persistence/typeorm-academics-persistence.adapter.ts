@@ -289,6 +289,48 @@ export class TypeOrmAcademicsPersistenceAdapter
     };
   }
 
+  async createAdhocSession(
+    classId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    roomId: string | null,
+    teacherId: string | null,
+    assistantId: string | null,
+  ): Promise<any> {
+    return this.runSerializable(async (manager) => {
+      const session = manager.create(ClassSessionOrmEntity, {
+        classId,
+        roomId,
+        teacherId,
+        assistantId,
+        date,
+        startTime,
+        endTime,
+        status: SessionStatus.SCHEDULED,
+        attendanceLocked: false,
+      });
+      const saved = await manager.save(ClassSessionOrmEntity, session);
+
+      const activeStudents = await manager.find(ClassStudentOrmEntity, {
+        where: { classId, status: 'Active' },
+      });
+
+      if (activeStudents.length > 0) {
+        const attendances = activeStudents.map((cs) =>
+          manager.create(StudentAttendanceOrmEntity, {
+            classSessionId: saved.id,
+            studentId: cs.studentId,
+            isPresent: false,
+          }),
+        );
+        await manager.save(StudentAttendanceOrmEntity, attendances);
+      }
+
+      return saved;
+    });
+  }
+
   private async runSerializable<T>(
     work: (manager: EntityManager) => Promise<T>,
   ): Promise<T> {

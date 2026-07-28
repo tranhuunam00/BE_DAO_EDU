@@ -31,7 +31,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto } from '../../application/dtos/class.dto';
+import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
@@ -45,6 +45,7 @@ import {
   EnrollStudentUseCase,
   RemoveStudentFromClassUseCase,
 } from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
+import { CreateAdhocSessionUseCase } from '../../modules/academics/application/use-cases/create-adhoc-session.use-case';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -139,6 +140,7 @@ export class ClassController {
     private readonly checkSessionScheduleConflict: CheckSessionScheduleConflictUseCase,
     private readonly enrollStudentUseCase: EnrollStudentUseCase,
     private readonly removeStudentUseCase: RemoveStudentFromClassUseCase,
+    private readonly createAdhocSessionUseCase: CreateAdhocSessionUseCase,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) { }
 
@@ -718,6 +720,70 @@ export class ClassController {
 
     qb.orderBy('s.date', 'ASC').addOrderBy('s.start_time', 'ASC');
     return qb.getMany();
+  }
+
+  @Post(':id/sessions')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Tạo buổi học đột xuất (Ad-hoc) cho Lớp' })
+  async createAdhocSession(
+    @Param('id') classId: string,
+    @Body() body: CreateAdhocSessionDto,
+  ) {
+    await this.classRepo.findOneOrFail({ where: { id: classId } });
+
+    const checkTeacher = body.teacherId || null;
+    const checkAssistant = body.assistantId || null;
+
+    if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+      throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
+    }
+
+    validateSchedules([
+      {
+        weekday: 'Mon',
+        startTime: body.startTime,
+        endTime: body.endTime,
+      },
+    ]);
+
+    if (checkTeacher) {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute({
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          roomId: body.roomId || null,
+          teacherId: checkTeacher,
+        })
+      );
+    }
+
+    if (checkAssistant) {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute({
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          roomId: null,
+          teacherId: checkAssistant,
+        })
+      );
+    }
+
+    const savedSession = await this.createAdhocSessionUseCase.execute(
+      classId,
+      body.date,
+      body.startTime,
+      body.endTime,
+      body.roomId || null,
+      body.teacherId || null,
+      body.assistantId || null,
+    );
+
+    return this.sessionRepo.findOneOrFail({
+      where: { id: savedSession.id },
+      relations: { teacher: true, room: true, assistant: true },
+    });
   }
 
   @Post(':id/generate-sessions')

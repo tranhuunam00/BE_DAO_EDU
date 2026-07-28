@@ -95,6 +95,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
       checkSession: { execute: jest.fn().mockResolvedValue(undefined) },
       enrollStudent: { execute: jest.fn() },
       removeStudent: { execute: jest.fn().mockResolvedValue(undefined) },
+      createAdhocSession: { execute: jest.fn() },
     };
 
     const controller = new ClassController(
@@ -113,6 +114,7 @@ describe('ClassController enrollment and schedule edge cases', () => {
       academics.checkSession as any,
       academics.enrollStudent as any,
       academics.removeStudent as any,
+      academics.createAdhocSession as any,
       repos.dataSource as any,
     );
 
@@ -523,6 +525,62 @@ describe('ClassController enrollment and schedule edge cases', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
+
+  describe('createAdhocSession', () => {
+    it('creates a session successfully and initializes student attendance', async () => {
+      const { controller, repos, academics } = createController();
+      repos.classRepo.findOneOrFail.mockResolvedValue({ id: 'class-1' });
+      repos.sessionRepo.findOneOrFail.mockResolvedValue({
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-28',
+        startTime: '10:00:00',
+        endTime: '12:00:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+      });
+
+      academics.createAdhocSession.execute.mockResolvedValue({ id: 'session-1' });
+
+      const dto = {
+        date: '2026-07-28',
+        startTime: '10:00',
+        endTime: '12:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-2',
+      };
+
+      const result = await controller.createAdhocSession('class-1', dto);
+      expect(result.id).toBe('session-1');
+      expect(academics.checkSession.execute).toHaveBeenCalled();
+      expect(academics.createAdhocSession.execute).toHaveBeenCalledWith(
+        'class-1',
+        '2026-07-28',
+        '10:00',
+        '12:00',
+        'room-1',
+        'teacher-1',
+        'teacher-2',
+      );
+    });
+
+    it('throws ConflictException if teacher and assistant are the same', async () => {
+      const { controller } = createController();
+      const dto = {
+        date: '2026-07-28',
+        startTime: '10:00',
+        endTime: '12:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-1',
+      };
+
+      await expect(controller.createAdhocSession('class-1', dto)).rejects.toThrow(
+        'Giáo viên đứng lớp và Trợ giảng không được là cùng một người.'
+      );
+    });
+  });
 });
 
 describe('ClassController.overrideAttendance', () => {
@@ -562,6 +620,8 @@ describe('ClassController.overrideAttendance', () => {
       { execute: jest.fn().mockResolvedValue(undefined) } as any,
       { execute: jest.fn() } as any,
       { execute: jest.fn().mockResolvedValue(undefined) } as any,
+      { execute: jest.fn().mockResolvedValue(undefined) } as any,
+      {} as any,
     );
 
     return { controller, repos };
@@ -893,4 +953,5 @@ describe('ClassController.overrideAttendance', () => {
     });
   });
 });
+
 

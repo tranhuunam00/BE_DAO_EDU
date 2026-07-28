@@ -409,6 +409,7 @@ describe('Comprehensive Academic & Billing System Test Suite', () => {
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn() } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
+        { execute: jest.fn().mockResolvedValue(undefined) } as any,
         repos.dataSource as any,
       );
 
@@ -515,6 +516,7 @@ describe('Comprehensive Academic & Billing System Test Suite', () => {
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn() } as any,
+        { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         repos.dataSource as any,
       );

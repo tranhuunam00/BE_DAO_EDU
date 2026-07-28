@@ -9,6 +9,7 @@ import {
   EnrollStudentUseCase,
   RemoveStudentFromClassUseCase,
 } from '../../../../../../src/modules/academics/application/use-cases/manage-enrollment.use-cases';
+import { CreateAdhocSessionUseCase } from '../../../../../../src/modules/academics/application/use-cases/create-adhoc-session.use-case';
 
 describe('Academics use cases', () => {
   const persistence = {
@@ -16,6 +17,7 @@ describe('Academics use cases', () => {
     findSessionAllocations: jest.fn(),
     enrollStudent: jest.fn(),
     removeStudent: jest.fn(),
+    createAdhocSession: jest.fn(),
   } as jest.Mocked<AcademicsPersistencePort>;
   const policy = new ScheduleConflictPolicy();
 
@@ -101,5 +103,29 @@ describe('Academics use cases', () => {
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     );
     expect(persistence.removeStudent).toHaveBeenCalled();
+  });
+
+  it('delegates ad-hoc session creation to the persistence port', async () => {
+    persistence.createAdhocSession.mockResolvedValue({ id: 'session-1' });
+    const useCase = new CreateAdhocSessionUseCase(persistence);
+    const result = await useCase.execute(
+      'class-1',
+      '2026-07-28',
+      '10:00',
+      '12:00',
+      'room-1',
+      'teacher-1',
+      'teacher-2',
+    );
+    expect(result).toEqual({ id: 'session-1' });
+    expect(persistence.createAdhocSession).toHaveBeenCalledWith(
+      'class-1',
+      '2026-07-28',
+      '10:00',
+      '12:00',
+      'room-1',
+      'teacher-1',
+      'teacher-2',
+    );
   });
 });
