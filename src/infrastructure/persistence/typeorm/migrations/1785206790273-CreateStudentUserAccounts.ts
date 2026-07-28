@@ -16,12 +16,16 @@ export class CreateStudentUserAccounts1785206790273
     }
     const studentRoleId = roles[0].id;
 
-    // Get all students
+    // Get all students that do NOT already have a user_id (skip already linked ones)
     const students = await queryRunner.query(
-      `SELECT id, first_name, last_name, mobile, user_id FROM students`,
+      `SELECT id, first_name, last_name, mobile, user_id FROM students WHERE user_id IS NULL`,
     );
 
     const passwordHash = await bcrypt.hash('123456', 10);
+
+    // Track which user_ids have already been assigned in this migration run
+    // to avoid assigning the same user to multiple students (duplicate phone case)
+    const assignedUserIds = new Set<string>();
 
     for (const student of students) {
       const mobile = (student.mobile || '').trim();
@@ -41,7 +45,28 @@ export class CreateStudentUserAccounts1785206790273
 
       if (existingUsers && existingUsers.length > 0) {
         userId = existingUsers[0].id;
-        // Update user role and details to make sure it matches
+
+        // If this user is already linked to another student, skip this student
+        if (assignedUserIds.has(userId)) {
+          console.warn(
+            `[Migration] Học sinh "${fullName}" (id=${student.id}) có SĐT "${normalizedMobile}" trùng với học sinh khác. Bỏ qua.`,
+          );
+          continue;
+        }
+
+        // Check if this user is already linked to a different student in DB
+        const linkedStudents = await queryRunner.query(
+          `SELECT id FROM students WHERE user_id = $1 AND id != $2`,
+          [userId, student.id],
+        );
+        if (linkedStudents && linkedStudents.length > 0) {
+          console.warn(
+            `[Migration] User "${normalizedMobile}" (id=${userId}) đã được gán cho học sinh khác. Bỏ qua học sinh "${fullName}" (id=${student.id}).`,
+          );
+          continue;
+        }
+
+        // Update user password to 123456 and ensure correct role
         await queryRunner.query(
           `UPDATE users SET password_hash = $1, name = $2, role_id = $3 WHERE id = $4`,
           [passwordHash, fullName, studentRoleId, userId],
@@ -54,6 +79,9 @@ export class CreateStudentUserAccounts1785206790273
         );
         userId = insertResult[0].id;
       }
+
+      // Mark this userId as assigned in this migration run
+      assignedUserIds.add(userId);
 
       // Link student to user account
       await queryRunner.query(
