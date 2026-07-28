@@ -21,7 +21,7 @@ import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, DataSource, Repository } from 'typeorm';
+import { Between, DataSource, Repository, In, MoreThanOrEqual } from 'typeorm';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
@@ -1368,7 +1368,27 @@ export class ClassController {
   private async regenerateFutureSessions(classId: string, fromStartDate = false) {
     const today = this.formatUtcDate(new Date());
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    const deleteFrom = fromStartDate ? classEntity.startDate : today;
+    const deleteFrom = (fromStartDate && classEntity.startDate) ? classEntity.startDate : today;
+
+    // Find the sessions to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
+    const sessionsToDelete = await this.sessionRepo.find({
+      where: {
+        classId,
+        date: MoreThanOrEqual(deleteFrom),
+        attendanceLocked: false,
+        status: SessionStatus.SCHEDULED,
+      },
+      select: { id: true },
+    });
+
+    if (sessionsToDelete.length > 0) {
+      const sessionIds = sessionsToDelete.map((s) => s.id);
+
+      // Delete orphaned attendance records manually to prevent FK constraint violations
+      await this.attendanceRepo.delete({
+        classSessionId: In(sessionIds),
+      });
+    }
 
     // Delete future/past unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
     const deleteResult = await this.sessionRepo

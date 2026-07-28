@@ -38,7 +38,7 @@ export class StudentAttendanceOrmEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 
-  @ManyToOne(() => ClassSessionOrmEntity)
+  @ManyToOne(() => ClassSessionOrmEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'class_session_id' })
   classSession!: ClassSessionOrmEntity;
 

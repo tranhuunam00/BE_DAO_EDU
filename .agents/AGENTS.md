@@ -16,7 +16,11 @@ Chào mừng bạn (Agent) đến với dự án Backend của DAO EDU. Dưới 
     *   Một file code nguồn không được vượt quá **500 dòng**. Nếu file dài hơn, bạn bắt buộc phải tách nhỏ thành các component, use case, helper hoặc module độc lập.
 
 3.  **Quản lý phiên bản Git:**
-    *   Cấm tự ý thực hiện `git commit` hoặc `git push` mã nguồn lên server. Chỉ chỉnh sửa, tối ưu hóa code và chạy các lệnh test/build tại local. Việc commit và push code sẽ do **USER** tự thực hiện.
+    *   **Cấm tự ý thực hiện `git commit` hoặc `git push`** mã nguồn lên server dưới mọi hình thức. Chỉ chỉnh sửa, tối ưu hóa code và chạy các lệnh test/build tại local. Việc commit và push code sẽ do **USER** tự thực hiện.
+
+4.  **Quản lý Migration cơ sở dữ liệu (Database Migrations):**
+    *   **Cấm tự ý tự động chạy các lệnh chạy/áp dụng migration** (`npm run migration:run`, `npm run migration:revert`...) lên hệ thống cơ sở dữ liệu thật/production mà chưa được USER đồng ý và kiểm duyệt rõ ràng.
+    *   Khi cần thay đổi cấu trúc cơ sở dữ liệu (Database Schema) hoặc chỉnh sửa cơ sở dữ liệu, **bắt buộc phải tạo (viết) file migration mới**. Tuyệt đối **không được chỉnh sửa hay thay đổi nội dung các file migration cũ** đã tồn tại và đã được áp dụng trong repo từ trước.
 
 ---
 
