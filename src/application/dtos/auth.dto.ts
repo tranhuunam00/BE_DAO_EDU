@@ -24,9 +24,9 @@ export class RegisterDto {
 }
 
 export class LoginDto {
-  @ApiProperty({ description: 'Email tài khoản đăng nhập', example: 'admin@class.com' })
-  @IsEmail({}, { message: 'Email không hợp lệ' })
-  @IsNotEmpty({ message: 'Email không được để trống' })
+  @ApiProperty({ description: 'Tài khoản đăng nhập (SĐT hoặc Email)', example: 'admin@class.com' })
+  @IsString({ message: 'Tài khoản đăng nhập phải là chuỗi' })
+  @IsNotEmpty({ message: 'Tài khoản đăng nhập không được để trống' })
   email!: string;
 
   @ApiProperty({ description: 'Mật khẩu đăng nhập', example: 'admin123' })

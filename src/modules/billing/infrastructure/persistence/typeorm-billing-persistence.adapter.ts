@@ -42,7 +42,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
   }
 
   transaction<T>(work: (context: BillingTransactionContext) => Promise<T>) {
-    return this.dataSource.transaction('SERIALIZABLE', (manager) =>
+    return this.dataSource.transaction('READ COMMITTED', (manager) =>
       work(new TypeOrmBillingTransactionContext(manager)),
     );
   }
@@ -899,6 +899,7 @@ async function findTuitionSources(
     .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
     .where('attendance.billId IS NULL')
     .andWhere('session.date <= :endDate', { endDate })
+    .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {
@@ -947,6 +948,7 @@ async function findSalarySources(
     .where('session.wageId IS NULL')
     .andWhere('session.teacherId IS NOT NULL')
     .andWhere('session.date <= :endDate', { endDate })
+    .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {
@@ -985,6 +987,7 @@ async function findSalarySources(
     .where('session.assistantWageId IS NULL')
     .andWhere('session.assistantId IS NOT NULL')
     .andWhere('session.date <= :endDate', { endDate })
+    .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
       '(session.status = :completed OR session.attendance_locked = :locked)',
       {

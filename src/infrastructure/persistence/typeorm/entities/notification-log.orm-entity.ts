@@ -16,7 +16,7 @@ export class NotificationLogOrmEntity {
   @Column({ type: 'uuid', name: 'notification_id', nullable: true })
   notificationId!: string | null;
 
-  @Column({ type: 'uuid', name: 'user_id' })
+  @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId!: string | null;
 
   @Column({ type: 'varchar', name: 'event_type' })

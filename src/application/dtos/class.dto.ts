@@ -94,12 +94,10 @@ export class StudentEvaluationDto {
   @IsNotEmpty()
   studentId!: string;
 
-  @ApiProperty({ required: false, description: 'Điểm đánh giá (0-10, bước 0.5)' })
-  @IsNumber()
-  @Min(0)
-  @Max(10)
+  @ApiProperty({ required: false, description: 'Điểm đánh giá (dạng chuỗi, ví dụ: 8.25, 8.75)' })
+  @IsString()
   @IsOptional()
-  evaluationScore?: number | null;
+  evaluationScore?: string | null;
 
   @ApiProperty({ required: false, description: 'Nhận xét' })
   @IsString()
@@ -115,3 +113,34 @@ export class SaveEvaluationsDto {
   evaluations!: StudentEvaluationDto[];
 }
 
+export class CreateAdhocSessionDto {
+  @ApiProperty({ description: 'Ngày học (YYYY-MM-DD)' })
+  @IsDateString()
+  @IsNotEmpty()
+  date!: string;
+
+  @ApiProperty({ example: '14:00', description: 'Giờ bắt đầu (HH:mm)' })
+  @IsString()
+  @IsNotEmpty()
+  startTime!: string;
+
+  @ApiProperty({ example: '15:30', description: 'Giờ kết thúc (HH:mm)' })
+  @IsString()
+  @IsNotEmpty()
+  endTime!: string;
+
+  @ApiProperty({ required: false, description: 'ID Phòng học' })
+  @IsString()
+  @IsOptional()
+  roomId?: string;
+
+  @ApiProperty({ required: false, description: 'ID Giáo viên' })
+  @IsString()
+  @IsOptional()
+  teacherId?: string;
+
+  @ApiProperty({ required: false, description: 'ID Trợ giảng' })
+  @IsString()
+  @IsOptional()
+  assistantId?: string;
+}

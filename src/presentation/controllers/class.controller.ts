@@ -21,7 +21,7 @@ import { Roles } from '../../infrastructure/security/roles.decorator';
 import { Role } from '../../domain/value-objects/role.enum';
 import { SessionStatus } from '../../domain/value-objects/session-status.enum';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, DataSource, Repository } from 'typeorm';
+import { Between, DataSource, Repository, In, MoreThanOrEqual } from 'typeorm';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
@@ -31,9 +31,10 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto } from '../../application/dtos/class.dto';
+import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
 import { GetHolidayDatesUseCase } from '../../modules/academics/application/use-cases/manage-holidays.use-cases';
 import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 import {
@@ -44,6 +45,7 @@ import {
   EnrollStudentUseCase,
   RemoveStudentFromClassUseCase,
 } from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
+import { CreateAdhocSessionUseCase } from '../../modules/academics/application/use-cases/create-adhoc-session.use-case';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -138,6 +140,7 @@ export class ClassController {
     private readonly checkSessionScheduleConflict: CheckSessionScheduleConflictUseCase,
     private readonly enrollStudentUseCase: EnrollStudentUseCase,
     private readonly removeStudentUseCase: RemoveStudentFromClassUseCase,
+    private readonly createAdhocSessionUseCase: CreateAdhocSessionUseCase,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) { }
 
@@ -169,6 +172,23 @@ export class ClassController {
     const total = await qb.getCount();
     const classes = await qb.skip((page - 1) * limit).take(limit).getMany();
 
+    const classIds = classes.map(c => c.id);
+    let counts: { classId: string; count: number }[] = [];
+    if (classIds.length > 0) {
+      const countsRaw = await this.dataSource.getRepository(ClassStudentOrmEntity)
+        .createQueryBuilder('cs')
+        .select('cs.class_id', 'classId')
+        .addSelect('COUNT(cs.id)', 'count')
+        .where('cs.class_id IN (:...classIds)', { classIds })
+        .andWhere('cs.status = :status', { status: 'Active' })
+        .groupBy('cs.class_id')
+        .getRawMany();
+      counts = countsRaw.map(r => ({
+        classId: r.classId,
+        count: parseInt(r.count, 10),
+      }));
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const oneWeekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -180,7 +200,12 @@ export class ClassController {
         const finish = new Date(c.finishDate);
         isEndingSoon = finish >= today && finish <= oneWeekLater;
       }
-      return { ...c, isEndingSoon };
+      const countObj = counts.find(item => item.classId === c.id);
+      return { 
+        ...c, 
+        isEndingSoon,
+        studentCount: countObj ? countObj.count : 0
+      };
     });
 
     return { classes: classesWithEndingSoon, total, page: Number(page), limit: Number(limit) };
@@ -697,6 +722,70 @@ export class ClassController {
     return qb.getMany();
   }
 
+  @Post(':id/sessions')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Tạo buổi học đột xuất (Ad-hoc) cho Lớp' })
+  async createAdhocSession(
+    @Param('id') classId: string,
+    @Body() body: CreateAdhocSessionDto,
+  ) {
+    await this.classRepo.findOneOrFail({ where: { id: classId } });
+
+    const checkTeacher = body.teacherId || null;
+    const checkAssistant = body.assistantId || null;
+
+    if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+      throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
+    }
+
+    validateSchedules([
+      {
+        weekday: 'Mon',
+        startTime: body.startTime,
+        endTime: body.endTime,
+      },
+    ]);
+
+    if (checkTeacher) {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute({
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          roomId: body.roomId || null,
+          teacherId: checkTeacher,
+        })
+      );
+    }
+
+    if (checkAssistant) {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute({
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          roomId: null,
+          teacherId: checkAssistant,
+        })
+      );
+    }
+
+    const savedSession = await this.createAdhocSessionUseCase.execute(
+      classId,
+      body.date,
+      body.startTime,
+      body.endTime,
+      body.roomId || null,
+      body.teacherId || null,
+      body.assistantId || null,
+    );
+
+    return this.sessionRepo.findOneOrFail({
+      where: { id: savedSession.id },
+      relations: { teacher: true, room: true, assistant: true },
+    });
+  }
+
   @Post(':id/generate-sessions')
   @ApiOperation({ summary: 'Sinh danh sách buổi học từ lịch cố định' })
   async generateSessionsEndpoint(
@@ -743,18 +832,24 @@ export class ClassController {
     @Param('sessionId') sessionId: string,
     @Query('bypassTimeCheck') bypassTimeCheck?: string,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({
-      where: { id: sessionId },
-      relations: { classEntity: true },
-    });
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
+    }
 
     await this.validateAttendancePermission(session, req);
 
     if (session.attendanceLocked) {
       throw new BadRequestException('Buổi học này đã hoàn thành và khóa điểm danh.');
     }
-
-
 
     session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
@@ -768,10 +863,18 @@ export class ClassController {
     @Request() req: any,
     @Param('sessionId') sessionId: string,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({
-      where: { id: sessionId },
-      relations: { classEntity: true },
-    });
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
+    }
 
     await this.validateAttendancePermission(session, req);
 
@@ -795,7 +898,7 @@ export class ClassController {
   async saveAttendance(
     @Request() req: any,
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: string | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({
       where: { id: sessionId },
@@ -803,6 +906,11 @@ export class ClassController {
     });
 
     await this.validateAttendancePermission(session, req);
+
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecords.some((r) => r.billId !== null)) {
+      throw new ConflictException('Buổi học này đã được tính tiền vào hóa đơn và không thể sửa điểm danh.');
+    }
 
     if (session.attendanceLocked) {
       throw new BadRequestException('Điểm danh của buổi học này đã bị khóa.');
@@ -825,10 +933,15 @@ export class ClassController {
       record.note = item.note || null;
 
       if (item.evaluationScore !== undefined) {
-        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        if (item.evaluationScore !== null && item.evaluationScore !== '') {
+          const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+          if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+            throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
+          }
+          record.evaluationScore = String(item.evaluationScore);
+        } else {
+          record.evaluationScore = null;
         }
-        record.evaluationScore = item.evaluationScore;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
@@ -845,7 +958,7 @@ export class ClassController {
   @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
   async overrideAttendance(
     @Param('sessionId') sessionId: string,
-    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: number | null; evaluationComment?: string | null }[] }
+    @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: string | null; evaluationComment?: string | null }[] }
   ) {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
     if (!session.attendanceLocked) {
@@ -879,10 +992,15 @@ export class ClassController {
       record.note = item.note || null;
 
       if (item.evaluationScore !== undefined) {
-        if (item.evaluationScore !== null && (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0)) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+        if (item.evaluationScore !== null && item.evaluationScore !== '') {
+          const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+          if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+            throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
+          }
+          record.evaluationScore = String(item.evaluationScore);
+        } else {
+          record.evaluationScore = null;
         }
-        record.evaluationScore = item.evaluationScore;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
@@ -922,9 +1040,10 @@ export class ClassController {
     }
 
     for (const item of body.evaluations) {
-      if (item.evaluationScore !== undefined && item.evaluationScore !== null) {
-        if (item.evaluationScore < 0 || item.evaluationScore > 10 || (item.evaluationScore * 2) % 1 !== 0) {
-          throw new BadRequestException('Điểm đánh giá phải từ 0 đến 10 và là bội số của 0.5.');
+      if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
+        const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+        if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+          throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
         }
       }
 
@@ -941,7 +1060,7 @@ export class ClassController {
       }
 
       if (item.evaluationScore !== undefined) {
-        record.evaluationScore = item.evaluationScore;
+        record.evaluationScore = item.evaluationScore !== null && item.evaluationScore !== '' ? String(item.evaluationScore) : null;
       }
       if (item.evaluationComment !== undefined) {
         record.evaluationComment = item.evaluationComment;
@@ -988,7 +1107,22 @@ export class ClassController {
     },
     @Request() req?: any,
   ) {
-    const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
+    }
+
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecords.some((r) => r.billId !== null)) {
+      throw new ConflictException(
+        'Buổi học này đã có học sinh được tính tiền vào hóa đơn và không thể chỉnh sửa.',
+      );
+    }
 
     if (session.attendanceLocked) {
       throw new ConflictException(
@@ -1015,14 +1149,21 @@ export class ClassController {
       }
     }
 
-    // "không được đổi quá khứ"
+    const isScheduleChange =
+      body.date !== undefined ||
+      body.startTime !== undefined ||
+      body.endTime !== undefined ||
+      body.roomId !== undefined ||
+      body.teacherId !== undefined ||
+      body.assistantId !== undefined;
+
     const today = new Date().toISOString().split('T')[0];
-    if (session.date < today) {
-      throw new Error('Không được thay đổi thông tin buổi học trong quá khứ.');
+    if (isScheduleChange && session.date < today) {
+      throw new BadRequestException('Không được thay đổi thời gian, địa điểm hoặc giáo viên của buổi học trong quá khứ.');
     }
 
     if (body.date && body.date < today) {
-      throw new Error('Không được dời buổi học về quá khứ.');
+      throw new BadRequestException('Không được dời buổi học về quá khứ.');
     }
 
     const scope = body.scope || 'single';
@@ -1169,6 +1310,7 @@ export class ClassController {
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
     if (
+      !classEntity ||
       classEntity.status !== 'Active' ||
       !classEntity.startDate ||
       schedules.length === 0
@@ -1292,10 +1434,30 @@ export class ClassController {
   private async regenerateFutureSessions(classId: string, fromStartDate = false) {
     const today = this.formatUtcDate(new Date());
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    const deleteFrom = fromStartDate ? classEntity.startDate : today;
+    const deleteFrom = (fromStartDate && classEntity.startDate) ? classEntity.startDate : today;
+
+    // Find the sessions to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
+    const sessionsToDelete = await this.sessionRepo.find({
+      where: {
+        classId,
+        date: MoreThanOrEqual(deleteFrom),
+        attendanceLocked: false,
+        status: SessionStatus.SCHEDULED,
+      },
+      select: { id: true },
+    });
+
+    if (sessionsToDelete.length > 0) {
+      const sessionIds = sessionsToDelete.map((s) => s.id);
+
+      // Delete orphaned attendance records manually to prevent FK constraint violations
+      await this.attendanceRepo.delete({
+        classSessionId: In(sessionIds),
+      });
+    }
 
     // Delete future/past unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
-    await this.sessionRepo
+    const deleteResult = await this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
@@ -1306,6 +1468,26 @@ export class ClassController {
 
     // Regenerate
     await this.generateSessions(classId, fromStartDate);
+
+    const logRepo = this.notificationRepo?.manager?.getRepository
+      ? this.notificationRepo.manager.getRepository(NotificationLogOrmEntity)
+      : (this.dataSource?.getRepository ? this.dataSource.getRepository(NotificationLogOrmEntity) : null);
+
+    if (logRepo) {
+      await logRepo.save({
+        notificationId: null,
+        userId: null,
+        eventType: 'UPDATE',
+        notificationType: 'CLASS',
+        title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
+        metadata: {
+          classId,
+          fromStartDate,
+          deletedSessionsCount: deleteResult.affected || 0,
+          source: 'auto_regenerate_future_sessions',
+        },
+      });
+    }
   }
 
   private async notifyStudentAboutOpenAssignments(classId: string, studentId: string) {

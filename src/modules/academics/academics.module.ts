@@ -23,6 +23,7 @@ import {
   EnrollStudentUseCase,
   RemoveStudentFromClassUseCase,
 } from './application/use-cases/manage-enrollment.use-cases';
+import { CreateAdhocSessionUseCase } from './application/use-cases/create-adhoc-session.use-case';
 import { ScheduleConflictPolicy } from './domain/services/schedule-conflict.policy';
 import { TypeOrmAcademicsPersistenceAdapter } from './infrastructure/persistence/typeorm-academics-persistence.adapter';
 import { HolidayOrmEntity } from '../../infrastructure/persistence/typeorm/entities/holiday.orm-entity';
@@ -87,6 +88,12 @@ import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/t
       provide: RemoveStudentFromClassUseCase,
       useFactory: (persistence: AcademicsPersistencePort) =>
         new RemoveStudentFromClassUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
+    {
+      provide: CreateAdhocSessionUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new CreateAdhocSessionUseCase(persistence),
       inject: [AcademicsPersistencePort],
     },
     {

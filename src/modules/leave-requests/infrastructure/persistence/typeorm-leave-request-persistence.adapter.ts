@@ -5,6 +5,7 @@ import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/ty
 import { ClassOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { LeaveRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/leave-request.orm-entity';
 import { NotificationOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
+import { NotificationLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
@@ -191,6 +192,20 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
         attendance.isPresent = false;
         attendance.reason = `Nghỉ có phép: ${request.reason}`;
         await attendanceRepo.save(attendance);
+
+        await manager.getRepository(NotificationLogOrmEntity).save({
+          notificationId: null,
+          userId: request.reviewedByUserId || null,
+          eventType: 'UPDATE',
+          notificationType: 'LEAVE_REQUEST',
+          title: `Tự động cập nhật điểm danh vắng mặt có phép cho học sinh theo đơn xin nghỉ đã duyệt`,
+          metadata: {
+            requestId: request.id,
+            studentId: request.studentId,
+            classSessionId: request.classSessionId,
+            source: 'approve_leave_request_cascade',
+          },
+        });
       }
 
       await this.notifyStudent(manager, request, session);

@@ -154,8 +154,10 @@ export interface NewStudentRow {
   studentId: string;
   studentCode: string;
   studentName: string;
+  birthdate?: string | null;
   mobile: string | null;
   status: string;
   createdAt: string;
+  classNames?: string | null;
 }
 

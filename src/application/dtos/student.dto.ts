@@ -132,8 +132,8 @@ export class CreateStudentDto {
   status!: string;
 
   // Hỗ trợ tạo tài khoản đăng nhập cho học sinh
-  @ApiPropertyOptional({ description: 'Email tạo tài khoản đăng nhập cho học sinh (Nút tạo tùy chọn)', example: 'stu.tu@gmail.com' })
-  @IsEmail({}, { message: 'Email đăng nhập không hợp lệ' })
+  @ApiPropertyOptional({ description: 'Tài khoản đăng nhập cho học sinh (SĐT hoặc Email)', example: '0912345678' })
+  @IsString({ message: 'Tài khoản đăng nhập phải là chuỗi' })
   @IsOptional()
   loginEmail?: string;
 
@@ -173,6 +173,6 @@ export class UpdateStudentDto {
   @IsString() @IsOptional() oldAddress?: string;
   @IsString() @IsIn(STUDENT_STATUSES) @IsOptional() status?: string;
   @IsString() @IsOptional() avatar?: string;
-  @IsEmail({}, { message: 'Email đăng nhập không hợp lệ' }) @IsOptional() loginEmail?: string;
+  @IsString({ message: 'Tài khoản đăng nhập phải là chuỗi' }) @IsOptional() loginEmail?: string;
   @IsString() @IsOptional() loginPassword?: string;
 }

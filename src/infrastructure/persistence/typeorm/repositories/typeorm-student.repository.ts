@@ -45,7 +45,7 @@ export class TypeOrmStudentRepository implements IStudentRepository {
     if (query.search) {
       const searchLower = `%${query.search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(student.first_name) LIKE :search OR LOWER(student.last_name) LIKE :search OR LOWER(student.student_id) LIKE :search OR student.mobile LIKE :search OR LOWER(student.email) LIKE :search)',
+        '(LOWER(CONCAT(student.last_name, \' \', student.first_name)) LIKE :search OR LOWER(CONCAT(student.first_name, \' \', student.last_name)) LIKE :search OR LOWER(student.first_name) LIKE :search OR LOWER(student.last_name) LIKE :search OR LOWER(student.student_id) LIKE :search OR student.mobile LIKE :search OR LOWER(student.email) LIKE :search)',
         { search: searchLower }
       );
     }

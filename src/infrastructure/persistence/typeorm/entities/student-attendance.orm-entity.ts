@@ -26,8 +26,8 @@ export class StudentAttendanceOrmEntity {
   @Column({ type: 'text', nullable: true })
   note!: string | null;
 
-  @Column({ type: 'decimal', precision: 3, scale: 1, name: 'evaluation_score', nullable: true })
-  evaluationScore!: number | null;
+  @Column({ type: 'varchar', name: 'evaluation_score', nullable: true })
+  evaluationScore!: string | null;
 
   @Column({ type: 'text', name: 'evaluation_comment', nullable: true })
   evaluationComment!: string | null;
@@ -38,7 +38,7 @@ export class StudentAttendanceOrmEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 
-  @ManyToOne(() => ClassSessionOrmEntity)
+  @ManyToOne(() => ClassSessionOrmEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'class_session_id' })
   classSession!: ClassSessionOrmEntity;
 
