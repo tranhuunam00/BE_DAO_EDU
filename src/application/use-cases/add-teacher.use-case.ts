@@ -48,6 +48,9 @@ export class AddTeacherUseCase {
     
     const savedUser = await this.userRepository.save(user);
     createdUserId = savedUser.id;
+    console.log(
+      `[Auto-Account] Đã tự động sinh tài khoản giáo viên/TA: username=${username}, password=educare123`,
+    );
 
     const teachers = await this.teacherRepository.findAll();
     const count = teachers.length;

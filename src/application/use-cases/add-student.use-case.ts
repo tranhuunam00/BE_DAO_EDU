@@ -54,6 +54,9 @@ export class AddStudentUseCase {
     
     const savedUser = await this.userRepository.save(user);
     createdUserId = savedUser.id;
+    console.log(
+      `[Auto-Account] Đã tự động sinh tài khoản học sinh: username=${username}, password=123456`,
+    );
 
     // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
     const count = students.length;
