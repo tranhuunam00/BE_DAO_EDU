@@ -580,6 +580,50 @@ describe('ClassController enrollment and schedule edge cases', () => {
         'Giáo viên đứng lớp và Trợ giảng không được là cùng một người.'
       );
     });
+
+    it('checks conflicts for both room, main teacher and assistant', async () => {
+      const { controller, repos, academics } = createController();
+      repos.classRepo.findOneOrFail.mockResolvedValue({ id: 'class-1' });
+      repos.sessionRepo.findOneOrFail.mockResolvedValue({
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-28',
+        startTime: '10:00:00',
+        endTime: '12:00:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-2',
+      });
+
+      academics.createAdhocSession.execute.mockResolvedValue({ id: 'session-1' });
+
+      const dto = {
+        date: '2026-07-28',
+        startTime: '10:00',
+        endTime: '12:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-2',
+      };
+
+      await controller.createAdhocSession('class-1', dto);
+
+      expect(academics.checkSession.execute).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          roomId: 'room-1',
+          teacherId: 'teacher-1',
+        }),
+      );
+
+      expect(academics.checkSession.execute).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          roomId: null,
+          teacherId: 'teacher-2',
+        }),
+      );
+    });
   });
 
   describe('removeStudent', () => {

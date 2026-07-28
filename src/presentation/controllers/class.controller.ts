@@ -731,10 +731,10 @@ export class ClassController {
   ) {
     await this.classRepo.findOneOrFail({ where: { id: classId } });
 
-    const checkTeacher = body.teacherId || null;
-    const checkAssistant = body.assistantId || null;
+    const checkTeacher = body.teacherId;
+    const checkAssistant = body.assistantId;
 
-    if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+    if (checkTeacher === checkAssistant) {
       throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
     }
 
@@ -746,38 +746,34 @@ export class ClassController {
       },
     ]);
 
-    if (checkTeacher) {
-      await this.runAcademic(() =>
-        this.checkSessionScheduleConflict.execute({
-          date: body.date,
-          startTime: body.startTime,
-          endTime: body.endTime,
-          roomId: body.roomId || null,
-          teacherId: checkTeacher,
-        })
-      );
-    }
+    await this.runAcademic(() =>
+      this.checkSessionScheduleConflict.execute({
+        date: body.date,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        roomId: body.roomId,
+        teacherId: checkTeacher,
+      })
+    );
 
-    if (checkAssistant) {
-      await this.runAcademic(() =>
-        this.checkSessionScheduleConflict.execute({
-          date: body.date,
-          startTime: body.startTime,
-          endTime: body.endTime,
-          roomId: null,
-          teacherId: checkAssistant,
-        })
-      );
-    }
+    await this.runAcademic(() =>
+      this.checkSessionScheduleConflict.execute({
+        date: body.date,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        roomId: null,
+        teacherId: checkAssistant,
+      })
+    );
 
     const savedSession = await this.createAdhocSessionUseCase.execute(
       classId,
       body.date,
       body.startTime,
       body.endTime,
-      body.roomId || null,
-      body.teacherId || null,
-      body.assistantId || null,
+      body.roomId,
+      body.teacherId,
+      body.assistantId,
     );
 
     return this.sessionRepo.findOneOrFail({

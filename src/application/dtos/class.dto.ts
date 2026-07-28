@@ -129,18 +129,18 @@ export class CreateAdhocSessionDto {
   @IsNotEmpty()
   endTime!: string;
 
-  @ApiProperty({ required: false, description: 'ID Phòng học' })
+  @ApiProperty({ required: true, description: 'ID Phòng học' })
   @IsString()
-  @IsOptional()
-  roomId?: string;
+  @IsNotEmpty()
+  roomId!: string;
 
-  @ApiProperty({ required: false, description: 'ID Giáo viên' })
+  @ApiProperty({ required: true, description: 'ID Giáo viên' })
   @IsString()
-  @IsOptional()
-  teacherId?: string;
+  @IsNotEmpty()
+  teacherId!: string;
 
-  @ApiProperty({ required: false, description: 'ID Trợ giảng' })
+  @ApiProperty({ required: true, description: 'ID Trợ giảng' })
   @IsString()
-  @IsOptional()
-  assistantId?: string;
+  @IsNotEmpty()
+  assistantId!: string;
 }
