@@ -1,5 +1,10 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+
+// Pre-computed bcrypt hash for the default password '123456' (cost factor 10)
+// Generated with: bcrypt.hashSync('123456', 10)
+// Avoids importing bcryptjs at migration time which can fail under TypeORM CLI module resolution
+const DEFAULT_PASSWORD_HASH =
+  '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
 
 export class CreateStudentUserAccounts1785206790273
   implements MigrationInterface
@@ -21,7 +26,7 @@ export class CreateStudentUserAccounts1785206790273
       `SELECT id, first_name, last_name, mobile, user_id FROM students WHERE user_id IS NULL`,
     );
 
-    const passwordHash = await bcrypt.hash('123456', 10);
+    const passwordHash = DEFAULT_PASSWORD_HASH;
 
     // Track which user_ids have already been assigned in this migration run
     // to avoid assigning the same user to multiple students (duplicate phone case)
