@@ -21,7 +21,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Not } from 'typeorm';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
@@ -197,17 +197,68 @@ export class StudentController {
     return { students: results, grandTotal, startDate, endDate };
   }
 
+  @Get('check-mobile')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Kiểm tra trùng số điện thoại và danh sách học sinh đang sử dụng' })
+  async checkMobile(
+    @Query('mobile') mobile: string,
+    @Query('excludeStudentId') excludeStudentId?: string,
+  ) {
+    if (!mobile) {
+      throw new BadRequestException('Số điện thoại không được để trống.');
+    }
+    const cleanMobile = mobile.trim();
+    const query = this.studentRepo.createQueryBuilder('student')
+      .where('student.mobile = :mobile', { mobile: cleanMobile });
+    if (excludeStudentId) {
+      query.andWhere('student.id != :excludeStudentId', { excludeStudentId });
+    }
+    const students = await query.getMany();
+    return {
+      exists: students.length > 0,
+      students: students.map(s => ({
+        id: s.id,
+        studentId: s.studentId,
+        firstName: s.firstName,
+        lastName: s.lastName,
+      })),
+    };
+  }
+
+  @Get('me/profiles')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Lấy danh sách hồ sơ học sinh (chị em) cùng tài khoản' })
+  async getMyProfiles(@Request() req: any) {
+    const students = await this.studentRepo.find({
+      where: { userId: req.user.sub },
+    });
+    return students;
+  }
+
+  private async getActiveStudent(req: any): Promise<StudentOrmEntity> {
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      const student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+      });
+      if (student) return student;
+    }
+    
+    const student = await this.studentRepo.findOne({
+      where: { userId },
+    });
+    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    return student;
+  }
+
   @Get('me')
   @Roles(Role.STUDENT)
   @ApiOperation({
     summary: 'Lấy thông tin cá nhân của học sinh đang đăng nhập',
   })
   async getMyProfile(@Request() req: any) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
-    return student;
+    return this.getActiveStudent(req);
   }
 
   @Put('me')
@@ -216,10 +267,7 @@ export class StudentController {
     summary: 'Cập nhật thông tin cá nhân của học sinh đang đăng nhập',
   })
   async updateMyProfile(@Request() req: any, @Body() dto: UpdateStudentDto) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    const student = await this.getActiveStudent(req);
 
     // Only allow updating certain fields for student role to prevent privilege escalation
     const allowedDto: UpdateStudentDto = {
@@ -244,10 +292,7 @@ export class StudentController {
     summary: 'Lấy danh sách hóa đơn học phí của học sinh đang đăng nhập',
   })
   async getMyTuition(@Request() req: any) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    const student = await this.getActiveStudent(req);
 
     const bills = await this.monthlyBillRepo.find({
       where: { studentId: student.id },
@@ -719,7 +764,7 @@ export class StudentController {
   @ApiResponse({ status: 200, description: 'Xóa học sinh thành công' })
   @ApiResponse({
     status: 400,
-    description: 'Học sinh đã vào lớp hoặc đã điểm danh, không thể xóa',
+    description: 'Học sinh đã điểm danh, không thể xóa',
   })
   @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
   async remove(@Param('id') id: string) {
@@ -728,17 +773,7 @@ export class StudentController {
       throw new NotFoundException('Không tìm thấy học sinh');
     }
 
-    // 1. Kiểm tra xem học sinh đã bao giờ vào lớp nào chưa
-    const classCount = await this.classStudentRepo.count({
-      where: { studentId: id },
-    });
-    if (classCount > 0) {
-      throw new BadRequestException(
-        'Học sinh đã được xếp vào lớp học, không thể xóa.',
-      );
-    }
-
-    // 2. Kiểm tra xem học sinh đã từng điểm danh buổi nào chưa
+    // 1. Kiểm tra xem học sinh đã từng điểm danh buổi nào chưa
     const attendanceCount = await this.attendanceRepo.count({
       where: { studentId: id },
     });
@@ -748,12 +783,20 @@ export class StudentController {
       );
     }
 
+    // 2. Xóa các liên kết lớp học của học sinh này (cho dù là Active hay Dropped) để tránh lỗi khoá ngoại
+    await this.classStudentRepo.delete({ studentId: id });
+
     // 3. Thực hiện xóa học sinh
     await this.studentRepo.delete(id);
 
-    // 4. Nếu học sinh có tài khoản đăng nhập, thực hiện xóa tài khoản đăng nhập
+    // 4. Nếu học sinh có tài khoản đăng nhập, thực hiện xóa tài khoản đăng nhập nếu không còn ai dùng chung
     if (student.userId) {
-      await this.userRepo.delete(student.userId);
+      const otherStudentsCount = await this.studentRepo.count({
+        where: { userId: student.userId, id: Not(id) },
+      });
+      if (otherStudentsCount === 0) {
+        await this.userRepo.delete(student.userId);
+      }
     }
 
     return { success: true, message: 'Đã xóa học sinh thành công.' };

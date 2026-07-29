@@ -62,45 +62,104 @@ export class UpdateStudentUseCase {
     // Cập nhật hoặc tạo mới thông tin tài khoản đăng nhập
     if (dto.loginEmail) {
       if (student.userId) {
-        // Cập nhật account đã có
         const user = await this.userRepository.findById(student.userId);
         if (user) {
-          if (dto.loginEmail !== user.email) {
+          const allStudents = await this.studentRepository.findAll();
+          const siblingsCount = allStudents.filter(s => s.userId === student.userId).length;
+          
+          if (dto.loginEmail.toLowerCase() !== user.email.toLowerCase()) {
             const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
-            if (existingUser && existingUser.id !== user.id) {
-              throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
+            
+            if (siblingsCount > 1) {
+              // Tách tài khoản (Account Splitting) để không ảnh hưởng đến các anh chị em
+              if (existingUser) {
+                // Liên kết với tài khoản có sẵn
+                student.userId = existingUser.id;
+                student.loginEmail = existingUser.email;
+                if (dto.loginPassword) {
+                  const salt = await bcrypt.genSalt(10);
+                  existingUser.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+                  await this.userRepository.save(existingUser);
+                }
+              } else {
+                // Tạo tài khoản mới hoàn toàn
+                const salt = await bcrypt.genSalt(10);
+                const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
+                const newUserId = randomUUID();
+                const newUser = new User(
+                  newUserId,
+                  dto.loginEmail.toLowerCase(),
+                  passwordHash,
+                  student.getFullName(),
+                  Role.STUDENT,
+                  true
+                );
+                const savedUser = await this.userRepository.save(newUser);
+                student.userId = savedUser.id;
+                student.loginEmail = savedUser.email;
+              }
+            } else {
+              // Tài khoản riêng biệt, có thể thay đổi trực tiếp
+              if (existingUser) {
+                // Nếu email mới trùng với một tài khoản khác đã có:
+                // Xóa tài khoản cũ của học sinh này (vì không ai dùng nữa) và liên kết với tài khoản đã có
+                const oldUserId = student.userId;
+                student.userId = existingUser.id;
+                student.loginEmail = existingUser.email;
+                await this.userRepository.delete(oldUserId);
+                if (dto.loginPassword) {
+                  const salt = await bcrypt.genSalt(10);
+                  existingUser.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+                  await this.userRepository.save(existingUser);
+                }
+              } else {
+                // Cập nhật trực tiếp trên tài khoản cũ
+                user.email = dto.loginEmail.toLowerCase();
+                if (dto.loginPassword) {
+                  const salt = await bcrypt.genSalt(10);
+                  user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+                }
+                await this.userRepository.save(user);
+                student.loginEmail = user.email;
+              }
             }
-            user.email = dto.loginEmail.toLowerCase();
+          } else {
+            // Không thay đổi email, chỉ cập nhật mật khẩu nếu có
+            if (dto.loginPassword) {
+              const salt = await bcrypt.genSalt(10);
+              user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+              await this.userRepository.save(user);
+            }
           }
-          if (dto.loginPassword) {
-            const salt = await bcrypt.genSalt(10);
-            user.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
-          }
-          await this.userRepository.save(user);
-          student.loginEmail = user.email;
         }
       } else {
         // Tạo account mới cho học sinh chưa có tài khoản
         const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
         if (existingUser) {
-          throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
+          // Liên kết với tài khoản có sẵn
+          student.userId = existingUser.id;
+          student.loginEmail = existingUser.email;
+          if (dto.loginPassword) {
+            const salt = await bcrypt.genSalt(10);
+            existingUser.passwordHash = await bcrypt.hash(dto.loginPassword, salt);
+            await this.userRepository.save(existingUser);
+          }
+        } else {
+          const salt = await bcrypt.genSalt(10);
+          const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
+          const newUserId = randomUUID();
+          const newUser = new User(
+            newUserId,
+            dto.loginEmail.toLowerCase(),
+            passwordHash,
+            student.getFullName(),
+            Role.STUDENT,
+            true
+          );
+          const savedUser = await this.userRepository.save(newUser);
+          student.userId = savedUser.id;
+          student.loginEmail = savedUser.email;
         }
-
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
-        const newUserId = randomUUID();
-        const newUser = new User(
-          newUserId,
-          dto.loginEmail.toLowerCase(),
-          passwordHash,
-          student.getFullName(),
-          Role.STUDENT,
-          true
-        );
-        const savedUser = await this.userRepository.save(newUser);
-        
-        student.userId = savedUser.id;
-        student.loginEmail = savedUser.email;
       }
     } else if (dto.loginPassword && student.userId) {
       // Đổi mật khẩu nhưng không đổi email

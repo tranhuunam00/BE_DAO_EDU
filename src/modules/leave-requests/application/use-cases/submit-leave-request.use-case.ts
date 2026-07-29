@@ -8,12 +8,16 @@ export class SubmitLeaveRequestUseCase {
 
   async execute(input: {
     studentUserId: string;
+    studentId?: string;
     classSessionId: string;
     reason: string;
   }) {
-    const studentId = await this.persistence.findStudentIdByUserId(
-      input.studentUserId,
-    );
+    let studentId = input.studentId;
+    if (!studentId) {
+      studentId = (await this.persistence.findStudentIdByUserId(
+        input.studentUserId,
+      )) || undefined;
+    }
     if (!studentId) {
       throw new LeaveRequestError(
         'STUDENT_NOT_FOUND',

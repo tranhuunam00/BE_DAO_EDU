@@ -127,7 +127,7 @@ export class AssignmentController {
   @Get('student')
   @Roles(Role.STUDENT)
   async studentAssignments(@Request() req: any) {
-    const student = await this.getStudentByUser(req.user.sub);
+    const student = await this.getStudentByUser(req);
     const activeEnrollments = await this.classStudentRepo.find({
       where: { studentId: student.id, status: 'Active' },
     });
@@ -412,7 +412,7 @@ export class AssignmentController {
     @Body() dto: SubmitAssignmentDto,
     @UploadedFiles() files: StorageFile[],
   ) {
-    const student = await this.getStudentByUser(req.user.sub);
+    const student = await this.getStudentByUser(req);
     const assignment = await this.assignmentRepo.findOne({ where: { id } });
     if (!assignment || assignment.status === 'draft')
       throw new NotFoundException('Không tìm thấy bài tập');
@@ -479,7 +479,7 @@ export class AssignmentController {
     @Body() dto: SubmitAssignmentDto,
     @UploadedFiles() files: StorageFile[],
   ) {
-    const student = await this.getStudentByUser(req.user.sub);
+    const student = await this.getStudentByUser(req);
     let submission = await this.submissionRepo.findOne({
       where: { id: submissionId, studentId: student.id },
       relations: { assignment: true },
@@ -523,7 +523,7 @@ export class AssignmentController {
     @Param('submissionId') submissionId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    const student = await this.getStudentByUser(req.user.sub);
+    const student = await this.getStudentByUser(req);
     const submission = await this.submissionRepo.findOne({
       where: { id: submissionId, studentId: student.id },
     });
@@ -600,7 +600,16 @@ export class AssignmentController {
     return teacher;
   }
 
-  private async getStudentByUser(userId: string) {
+  private async getStudentByUser(req: any) {
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      const student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+      });
+      if (student) return student;
+    }
+
     const student = await this.studentRepo.findOne({ where: { userId } });
     if (!student) throw new ForbiddenException('Không tìm thấy hồ sơ học sinh');
     return student;

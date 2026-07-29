@@ -76,18 +76,28 @@ describe('AddStudentUseCase', () => {
     expect(result.studentId).toBe('STU-1001');
   });
 
-  it('should throw ConflictException if user with student mobile already exists', async () => {
+  it('should successfully add a student and link to existing user if mobile already exists', async () => {
     const dto: CreateStudentDto = {
       firstName: 'Jane',
       lastName: 'Doe',
+      email: 'jane@example.com',
       mobile: '0987654321',
+      gender: 'Nữ',
+      birthdate: '2012-02-02',
+      status: 'Waiting for class'
     };
 
-    userRepository.findByEmail.mockResolvedValue({ id: 'user-id-123' } as any);
+    const existingUser = { id: 'existing-user-id', email: '0987654321' };
+    userRepository.findByEmail.mockResolvedValue(existingUser as any);
+    studentRepository.save.mockImplementation(async (student) => student as any);
 
-    await expect(useCase.execute(dto)).rejects.toThrow(ConflictException);
-    await expect(useCase.execute(dto)).rejects.toThrow('Số điện thoại đăng nhập học sinh đã tồn tại trên hệ thống');
-    expect(userRepository.save).not.toHaveBeenCalled();
+    const result = await useCase.execute(dto);
+
+    expect(userRepository.findByEmail).toHaveBeenCalledWith('0987654321');
+    expect(userRepository.save).not.toHaveBeenCalled(); // Should not create a new user
+    expect(studentRepository.save).toHaveBeenCalled();
+    expect(result.firstName).toBe('Jane');
+    expect(result.userId).toBe('existing-user-id');
   });
 
   it('should throw ConflictException if student with same name and mobile already exists', async () => {

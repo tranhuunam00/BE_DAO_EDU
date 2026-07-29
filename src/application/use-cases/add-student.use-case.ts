@@ -35,28 +35,32 @@ export class AddStudentUseCase {
     
     const existingUser = await this.userRepository.findByEmail(username);
     if (existingUser) {
-      throw new ConflictException('Số điện thoại đăng nhập học sinh đã tồn tại trên hệ thống');
+      // Dùng chung tài khoản phụ huynh đã tồn tại cho các học sinh chị em
+      createdUserId = existingUser.id;
+      console.log(
+        `[Auto-Account] Số điện thoại ${username} đã có tài khoản. Liên kết học sinh mới với tài khoản có sẵn: userId=${createdUserId}`,
+      );
+    } else {
+      // Tạo tài khoản User đăng nhập mới
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash('123456', salt);
+      
+      const newUserId = randomUUID();
+      const user = new User(
+        newUserId,
+        username,
+        passwordHash,
+        `${dto.lastName} ${dto.firstName}`.trim(),
+        Role.STUDENT,
+        true
+      );
+      
+      const savedUser = await this.userRepository.save(user);
+      createdUserId = savedUser.id;
+      console.log(
+        `[Auto-Account] Đã tự động sinh tài khoản học sinh: username=${username}, password=123456`,
+      );
     }
-
-    // Tạo tài khoản User đăng nhập
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash('123456', salt);
-    
-    const newUserId = randomUUID();
-    const user = new User(
-      newUserId,
-      username,
-      passwordHash,
-      `${dto.lastName} ${dto.firstName}`.trim(),
-      Role.STUDENT,
-      true
-    );
-    
-    const savedUser = await this.userRepository.save(user);
-    createdUserId = savedUser.id;
-    console.log(
-      `[Auto-Account] Đã tự động sinh tài khoản học sinh: username=${username}, password=123456`,
-    );
 
     // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
     const count = students.length;

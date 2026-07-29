@@ -376,11 +376,21 @@ export class DashboardController {
   @Get('student')
   @Roles(Role.STUDENT)
   async getStudentData(@Request() req: any) {
-    // 1. Find the student profile using the user's ID
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-      relations: { user: true },
-    });
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    let student = null;
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+        relations: { user: true },
+      });
+    }
+    if (!student && userId) {
+      student = await this.studentRepo.findOne({
+        where: { userId },
+        relations: { user: true },
+      });
+    }
 
     if (!student) {
       return {
@@ -637,9 +647,19 @@ export class DashboardController {
   @Get('student/tuition-history')
   @Roles(Role.STUDENT)
   async getStudentTuitionHistory(@Request() req: any) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    let student = null;
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+      });
+    }
+    if (!student && userId) {
+      student = await this.studentRepo.findOne({
+        where: { userId },
+      });
+    }
 
     if (!student) {
       return [];
