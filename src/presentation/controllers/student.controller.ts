@@ -141,7 +141,7 @@ export class StudentController {
     @Query('province') province?: string,
     @Query('noClass') noClass?: string,
   ) {
-    return this.getStudentsUseCase.execute({
+    const result = await this.getStudentsUseCase.execute({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search,
@@ -149,6 +149,39 @@ export class StudentController {
       province,
       noClass: noClass === 'true' || noClass === '1',
     });
+
+    const userIds = result.students.map((s) => s.userId).filter((id): id is string => !!id);
+    const siblingMap: Record<string, string[]> = {};
+
+    if (userIds.length > 0) {
+      const allShared = await this.studentRepo.find({
+        where: { userId: In(userIds) },
+      });
+      
+      for (const s of allShared) {
+        if (s.userId) {
+          if (!siblingMap[s.userId]) {
+            siblingMap[s.userId] = [];
+          }
+          siblingMap[s.userId].push(`${s.lastName} ${s.firstName}`);
+        }
+      }
+    }
+
+    const mappedStudents = result.students.map((s) => {
+      const allNames = s.userId ? siblingMap[s.userId] || [] : [];
+      const currentName = `${s.lastName} ${s.firstName}`;
+      const siblings = allNames.filter((name) => name !== currentName);
+      return {
+        ...s,
+        siblings,
+      };
+    });
+
+    return {
+      ...result,
+      students: mappedStudents,
+    };
   }
 
   @Get('tuition-bulk')
