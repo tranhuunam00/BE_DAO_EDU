@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ClassOrmEntity } from './class.orm-entity';
 import { RoomOrmEntity } from './room.orm-entity';
 import { TeacherOrmEntity } from './teacher.orm-entity';
@@ -9,6 +9,7 @@ export class ClassSessionOrmEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Index('idx_class_sessions_class_id')
   @Column({ type: 'uuid', name: 'class_id' })
   classId!: string;
 
@@ -27,6 +28,7 @@ export class ClassSessionOrmEntity {
   @Column({ type: 'uuid', name: 'assistant_wage_id', nullable: true })
   assistantWageId!: string | null;
 
+  @Index('idx_class_sessions_date')
   @Column({ type: 'date' })
   date!: string;
 

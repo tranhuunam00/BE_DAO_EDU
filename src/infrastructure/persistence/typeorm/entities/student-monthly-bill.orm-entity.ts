@@ -8,6 +8,7 @@ import {
   JoinColumn,
   OneToMany,
   OneToOne,
+  Index,
 } from 'typeorm';
 import { StudentOrmEntity } from './student.orm-entity';
 import { PaymentPeriodOrmEntity } from './payment-period.orm-entity';
@@ -20,12 +21,14 @@ export class StudentMonthlyBillOrmEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Index('idx_student_monthly_bills_student_id')
   @Column({ type: 'uuid', name: 'student_id' })
   studentId!: string;
 
   @Column({ type: 'uuid', name: 'period_id', nullable: true })
   periodId!: string | null;
 
+  @Index('idx_student_monthly_bills_month')
   @Column({ type: 'varchar' })
   month!: string;
 
