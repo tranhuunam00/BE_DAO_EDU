@@ -719,7 +719,22 @@ export class ClassController {
     }
 
     qb.orderBy('s.date', 'ASC').addOrderBy('s.start_time', 'ASC');
-    return qb.getMany();
+    const sessions = await qb.getMany();
+    if (sessions.length === 0) return [];
+
+    const sessionIds = sessions.map((s) => s.id);
+    const attendanceRecords = await this.attendanceRepo
+      .createQueryBuilder('att')
+      .select('att.classSessionId', 'classSessionId')
+      .where('att.classSessionId IN (:...sessionIds) AND att.billId IS NOT NULL', { sessionIds })
+      .getRawMany();
+
+    const billedSessionIds = new Set(attendanceRecords.map((r) => r.classSessionId));
+
+    return sessions.map((s) => ({
+      ...s,
+      isBilled: billedSessionIds.has(s.id),
+    }));
   }
 
   @Post(':id/sessions')
