@@ -734,7 +734,7 @@ export class ClassController {
     const checkTeacher = body.teacherId;
     const checkAssistant = body.assistantId;
 
-    if (checkTeacher === checkAssistant) {
+    if (checkAssistant && checkTeacher === checkAssistant) {
       throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
     }
 
@@ -756,15 +756,17 @@ export class ClassController {
       })
     );
 
-    await this.runAcademic(() =>
-      this.checkSessionScheduleConflict.execute({
-        date: body.date,
-        startTime: body.startTime,
-        endTime: body.endTime,
-        roomId: null,
-        teacherId: checkAssistant,
-      })
-    );
+    if (checkAssistant) {
+      await this.runAcademic(() =>
+        this.checkSessionScheduleConflict.execute({
+          date: body.date,
+          startTime: body.startTime,
+          endTime: body.endTime,
+          roomId: null,
+          teacherId: checkAssistant,
+        })
+      );
+    }
 
     const savedSession = await this.createAdhocSessionUseCase.execute(
       classId,
@@ -773,7 +775,7 @@ export class ClassController {
       body.endTime,
       body.roomId,
       body.teacherId,
-      body.assistantId,
+      body.assistantId ?? null,
     );
 
     return this.sessionRepo.findOneOrFail({

@@ -139,8 +139,8 @@ export class CreateAdhocSessionDto {
   @IsNotEmpty()
   teacherId!: string;
 
-  @ApiProperty({ required: true, description: 'ID Trợ giảng' })
+  @ApiProperty({ required: false, description: 'ID Trợ giảng' })
   @IsString()
-  @IsNotEmpty()
-  assistantId!: string;
+  @IsOptional()
+  assistantId?: string | null;
 }

@@ -681,10 +681,12 @@ export class StudentController {
         return session.date >= joinedDate;
       }
       if (enrollment.status === 'Dropped') {
+        if ((session as any).attendance) return true;
+
         const droppedDate = enrollment.updatedAt
           ? new Date(enrollment.updatedAt).toISOString().split('T')[0]
           : enrollment.joinedDate;
-        return session.date >= joinedDate && session.date <= droppedDate;
+        return session.date >= joinedDate && session.date < droppedDate;
       }
       return false;
     });
