@@ -271,7 +271,7 @@ export class StudentController {
 
     // Only allow updating certain fields for student role to prevent privilege escalation
     const allowedDto: UpdateStudentDto = {
-      mobile: dto.mobile,
+      birthdate: dto.birthdate,
       email: dto.email,
       primaryAddress: dto.primaryAddress,
       avatar: dto.avatar,
