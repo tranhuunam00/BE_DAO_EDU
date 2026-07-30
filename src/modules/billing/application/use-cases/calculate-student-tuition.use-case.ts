@@ -106,8 +106,8 @@ export class CalculateStudentTuitionUseCase {
         const isPresent = session.isPresent;
         const reason = session.reason;
         
-        // 2. Check if billed: enrolled AND (present OR absent without leave)
-        const isBilled = session.isEnrolled && (isPresent || (!isPresent && (!reason || reason.trim() === '')));
+        // 2. Check if billed: enrolled AND present
+        const isBilled = session.isEnrolled && isPresent;
         const amount = isBilled ? rate : 0;
 
         return {

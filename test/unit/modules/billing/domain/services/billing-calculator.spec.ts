@@ -178,4 +178,157 @@ describe('BillingCalculator', () => {
     );
     expect(result.totalAmount).toBe(35000);
   });
+
+  it('calculates absent sessions at 0 rate and groups them in a separate line with 0 totalAmount, and totalSessions only counts present ones', () => {
+    const tuitionPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 150000,
+        teacherWagePerSession: 90000,
+        taWagePerSession: 45000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10'), isPresent: true }, // Present -> 150k
+      { ...source('att-2', 'student-1', '2026-06-12'), isPresent: false }, // Absent -> 0
+      { ...source('att-3', 'student-1', '2026-06-14'), isPresent: true }, // Present -> 150k
+      { ...source('att-4', 'student-1', '2026-06-16'), isPresent: false }, // Absent -> 0
+    ];
+
+    const result = BillingCalculator.calculate(
+      sources,
+      tuitionPricing,
+      'pricePerSession',
+    );
+
+    expect(result).toHaveLength(1);
+    const order = result[0];
+    // Total tuition = 150k * 2 = 300k
+    expect(order.totalAmount).toBe(300000);
+    // Only 2 present sessions are counted in totalSessions
+    expect(order.totalSessions).toBe(2);
+
+    expect(order.lines).toHaveLength(2);
+    const presentLine = order.lines.find((l) => l.rate === 150000);
+    const absentLine = order.lines.find((l) => l.rate === 0);
+
+    expect(presentLine).toBeDefined();
+    expect(presentLine!.sessionsCount).toBe(2);
+    expect(presentLine!.totalAmount).toBe(300000);
+    expect(presentLine!.sourceIds).toEqual(expect.arrayContaining(['att-1', 'att-3']));
+
+    expect(absentLine).toBeDefined();
+    expect(absentLine!.sessionsCount).toBe(2);
+    expect(absentLine!.totalAmount).toBe(0);
+    expect(absentLine!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-4']));
+  });
+
+  it('handles mid-month price changes with absences: correctly bills present sessions at their respective active rates, bills absent sessions at 0 rate, and groups them', () => {
+    const midMonthPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 100000,
+        teacherWagePerSession: 60000,
+        taWagePerSession: 30000,
+        effectiveFrom: '2026-06-01',
+        effectiveTo: '2026-06-15',
+      },
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 150000,
+        teacherWagePerSession: 90000,
+        taWagePerSession: 45000,
+        effectiveFrom: '2026-06-16',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10'), isPresent: true }, // Present before change -> 100k
+      { ...source('att-2', 'student-1', '2026-06-12'), isPresent: false }, // Absent before change -> 0đ (normally 100k)
+      { ...source('att-3', 'student-1', '2026-06-17'), isPresent: true }, // Present after change -> 150k
+      { ...source('att-4', 'student-1', '2026-06-20'), isPresent: false }, // Absent after change -> 0đ (normally 150k)
+    ];
+
+    const [order] = BillingCalculator.calculate(
+      sources,
+      midMonthPricing,
+      'pricePerSession',
+    );
+
+    // Total tuition = 100k + 150k = 250k
+    expect(order.totalAmount).toBe(250000);
+    // Only 2 present sessions counted
+    expect(order.totalSessions).toBe(2);
+
+    // Lines: 100k line (count 1), 150k line (count 1), 0đ line (count 2)
+    expect(order.lines).toHaveLength(3);
+    const line100k = order.lines.find((l) => l.rate === 100000);
+    const line150k = order.lines.find((l) => l.rate === 150000);
+    const line0 = order.lines.find((l) => l.rate === 0);
+
+    expect(line100k).toBeDefined();
+    expect(line100k!.sessionsCount).toBe(1);
+    expect(line100k!.totalAmount).toBe(100000);
+    expect(line100k!.sourceIds).toEqual(['att-1']);
+
+    expect(line150k).toBeDefined();
+    expect(line150k!.sessionsCount).toBe(1);
+    expect(line150k!.totalAmount).toBe(150000);
+    expect(line150k!.sourceIds).toEqual(['att-3']);
+
+    expect(line0).toBeDefined();
+    expect(line0!.sessionsCount).toBe(2);
+    expect(line0!.totalAmount).toBe(0);
+    expect(line0!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-4']));
+  });
+
+  it('handles missing pricing rules: bills missing level present sessions at 0 rate (but counts in totalSessions) and absent ones at 0 rate (does not count)', () => {
+    const tuitionPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 100000,
+        teacherWagePerSession: 60000,
+        taWagePerSession: 30000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10', 'level-1'), isPresent: true }, // Present, has price -> 100k
+      { ...source('att-2', 'student-1', '2026-06-12', 'missing-level'), isPresent: true }, // Present, no price -> 0đ
+      { ...source('att-3', 'student-1', '2026-06-14', 'level-1'), isPresent: false }, // Absent, has price -> 0đ
+      { ...source('att-4', 'student-1', '2026-06-16', 'missing-level'), isPresent: false }, // Absent, no price -> 0đ
+    ];
+
+    const [order] = BillingCalculator.calculate(
+      sources,
+      tuitionPricing,
+      'pricePerSession',
+    );
+
+    // Total tuition = 100k + 0 + 0 + 0 = 100k
+    expect(order.totalAmount).toBe(100000);
+    // 2 present sessions counted (att-1 and att-2)
+    expect(order.totalSessions).toBe(2);
+
+    // Grouping: 1 line at 100k (count 1), 1 line at 0đ (count 3: att-2, att-3, att-4)
+    expect(order.lines).toHaveLength(2);
+    const line100k = order.lines.find((l) => l.rate === 100000);
+    const line0 = order.lines.find((l) => l.rate === 0);
+
+    expect(line100k).toBeDefined();
+    expect(line100k!.sessionsCount).toBe(1);
+    expect(line100k!.totalAmount).toBe(100000);
+    expect(line100k!.sourceIds).toEqual(['att-1']);
+
+    expect(line0).toBeDefined();
+    expect(line0!.sessionsCount).toBe(3);
+    expect(line0!.totalAmount).toBe(0);
+    expect(line0!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-3', 'att-4']));
+  });
 });

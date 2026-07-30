@@ -24,6 +24,8 @@ export interface BillingSource {
   courseLevelId: string;
   date: string;
   roleInSession?: 'teacher' | 'assistant';
+  isPresent?: boolean;
+  reason?: string | null;
 }
 
 export interface BillingLine {
@@ -69,7 +71,10 @@ export class BillingCalculator {
       if (amountField === 'teacherWagePerSession' && source.roleInSession === 'assistant') {
         rateField = 'taWagePerSession' as any;
       }
-      const rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
+      let rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
+      if (amountField === 'pricePerSession' && source.isPresent === false) {
+        rate = 0;
+      }
 
       const order = orders.get(source.ownerId) ?? {
         ownerId: source.ownerId,
@@ -108,7 +113,9 @@ export class BillingCalculator {
         });
       }
 
-      order.totalSessions += 1;
+      if (amountField === 'teacherWagePerSession' || source.isPresent !== false) {
+        order.totalSessions += 1;
+      }
       order.totalAmount = Money.vnd(order.totalAmount).plus(
         Money.vnd(rate),
       ).value;

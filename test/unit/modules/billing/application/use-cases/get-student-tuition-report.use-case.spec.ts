@@ -65,9 +65,9 @@ describe('GetStudentTuitionReportUseCase', () => {
                 levelName: 'A1',
                 isPresent: false,
                 reason: '', // Nghỉ không phép
-                isBilled: true,
+                isBilled: false,
                 rate: 150000,
-                amount: 150000,
+                amount: 0,
                 pricingEffectiveFrom: '2026-01-01',
                 pricingEffectiveTo: null,
               },
@@ -106,11 +106,11 @@ describe('GetStudentTuitionReportUseCase', () => {
     // Session 2: Absent excused (not billed)
     expect(result.sessions[1].amount).toBe(0);
     
-    // Session 3: Absent unexcused (billed)
-    expect(result.sessions[2].amount).toBe(150000);
+    // Session 3: Absent unexcused (not billed)
+    expect(result.sessions[2].amount).toBe(0);
 
-    expect(result.totalSessions).toBe(2);
-    expect(result.totalAmount).toBe(300000);
+    expect(result.totalSessions).toBe(1);
+    expect(result.totalAmount).toBe(150000);
     expect(result.pricingHistory).toHaveLength(1);
   });
 });

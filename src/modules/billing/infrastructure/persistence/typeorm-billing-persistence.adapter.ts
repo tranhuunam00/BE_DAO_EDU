@@ -906,10 +906,6 @@ async function findTuitionSources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    )
-    .andWhere(
-      '(attendance.isPresent = :present OR (attendance.isPresent = :absent AND (attendance.reason IS NULL OR TRIM(attendance.reason) = :empty)))',
-      { present: true, absent: false, empty: '' },
     );
   if (ownerIds?.length) {
     query.andWhere('attendance.studentId IN (:...ownerIds)', { ownerIds });
@@ -930,6 +926,8 @@ async function findTuitionSources(
     levelName: row.classSession.classEntity?.courseLevel?.levelName || '',
     courseLevelId: row.classSession.classEntity?.courseLevelId,
     date: row.classSession.date,
+    isPresent: row.isPresent,
+    reason: row.reason,
   }));
 }
 
