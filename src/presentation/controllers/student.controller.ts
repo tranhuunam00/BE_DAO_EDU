@@ -247,14 +247,44 @@ export class StudentController {
       query.andWhere('student.id != :excludeStudentId', { excludeStudentId });
     }
     const students = await query.getMany();
-    return {
-      exists: students.length > 0,
-      students: students.map(s => ({
+
+    const user = await this.userRepo.findOne({
+      where: { email: cleanMobile.toLowerCase() },
+    });
+
+    const studentList = students.map(s => {
+      let age: number | null = null;
+      if (s.birthdate) {
+        const birthDate = new Date(s.birthdate);
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+      return {
         id: s.id,
         studentId: s.studentId,
         firstName: s.firstName,
         lastName: s.lastName,
-      })),
+        age,
+      };
+    });
+
+    if (studentList.length === 0 && user) {
+      studentList.push({
+        id: user.id,
+        studentId: 'Tài khoản người dùng',
+        firstName: '',
+        lastName: user.name,
+        age: null,
+      });
+    }
+
+    return {
+      exists: studentList.length > 0,
+      students: studentList,
     };
   }
 

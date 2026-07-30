@@ -62,9 +62,19 @@ export class AddStudentUseCase {
       );
     }
 
-    // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
-    const count = students.length;
-    const studentId = `STU-${1001 + count}`;
+    // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...) bằng cách lấy số ID lớn nhất để tránh trùng lặp
+    let maxIdNum = 1000;
+    for (const s of students) {
+      if (s.studentId && s.studentId.startsWith('STU-')) {
+        const num = parseInt(s.studentId.replace('STU-', ''), 10);
+        if (!isNaN(num) && num > maxIdNum) {
+          maxIdNum = num;
+        }
+      }
+    }
+    const studentId = maxIdNum > 1000
+      ? `STU-${maxIdNum + 1}`
+      : `STU-${1001 + students.length}`;
 
     // 3. Upload avatar to MinIO if provided as base64
     let avatarUrl = dto.avatar;

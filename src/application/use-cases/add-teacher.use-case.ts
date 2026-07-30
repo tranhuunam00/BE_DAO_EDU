@@ -53,8 +53,18 @@ export class AddTeacherUseCase {
     );
 
     const teachers = await this.teacherRepository.findAll();
-    const count = teachers.length;
-    const teacherId = `TCH-${1001 + count}`;
+    let maxIdNum = 1000;
+    for (const t of teachers) {
+      if (t.teacherId && t.teacherId.startsWith('TCH-')) {
+        const num = parseInt(t.teacherId.replace('TCH-', ''), 10);
+        if (!isNaN(num) && num > maxIdNum) {
+          maxIdNum = num;
+        }
+      }
+    }
+    const teacherId = maxIdNum > 1000
+      ? `TCH-${maxIdNum + 1}`
+      : `TCH-${1001 + teachers.length}`;
 
     let avatarUrl: string | undefined = undefined;
     if (dto.avatar && dto.avatar.startsWith('data:image')) {
