@@ -34,6 +34,7 @@ import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-b
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
 import { GetStudentTuitionReportUseCase } from '../../modules/billing/application/use-cases/get-student-tuition-report.use-case';
 import { CalculateStudentTuitionUseCase } from '../../modules/billing/application/use-cases/calculate-student-tuition.use-case';
+import { BillingCalculator } from '../../modules/billing/domain/services/billing-calculator';
 import {
   CreateStudentDto,
   UpdateStudentDto,
@@ -363,6 +364,33 @@ export class StudentController {
       order: { month: 'DESC' },
     });
 
+    const billIds = bills.map((b) => b.id);
+    const attendances = billIds.length
+      ? await this.attendanceRepo.find({
+          where: { billId: In(billIds) },
+          relations: {
+            classSession: { classEntity: { courseLevel: true } },
+          },
+          order: { classSession: { date: 'ASC', startTime: 'ASC' } },
+        })
+      : [];
+
+    const levelIds = Array.from(
+      new Set(
+        attendances
+          .map((a) => a.classSession?.classEntity?.courseLevelId)
+          .filter(Boolean),
+      ),
+    );
+    let pricings: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricings = await this.monthlyBillRepo.manager
+        .getRepository(CourseLevelPricingOrmEntity)
+        .find({
+          where: { courseLevelId: In(levelIds) },
+        });
+    }
+
     const results = await Promise.all(
       bills.map(async (bill) => {
         const items = await this.monthlyBillItemRepo.find({
@@ -371,7 +399,43 @@ export class StudentController {
         if (bill.paymentRequest?.qrUrl) {
           bill.paymentRequest.qrUrl = bill.paymentRequest.qrUrl.replace('/970418-', '/BIDV-');
         }
-        return { ...bill, items };
+
+        const billAttendances = attendances.filter((att) => att.billId === bill.id);
+        const sessions = billAttendances.map((att) => {
+          const levelId = att.classSession?.classEntity?.courseLevelId;
+          const sessionDate = att.classSession?.date;
+          const matchedPricing = BillingCalculator.getActivePricing(
+            pricings.map((p) => ({
+              courseLevelId: p.courseLevelId,
+              pricePerSession: Number(p.pricePerSession),
+              teacherWagePerSession: Number(p.teacherWagePerSession),
+              taWagePerSession: Number(p.taWagePerSession),
+              effectiveFrom: p.effectiveFrom,
+              effectiveTo: p.effectiveTo,
+              createdAt: p.createdAt,
+              id: p.id,
+            })),
+            sessionDate,
+            'pricePerSession',
+            levelId,
+          );
+          const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+          const amount = att.isPresent ? rate : 0;
+          return {
+            id: att.id,
+            date: sessionDate,
+            startTime: att.classSession?.startTime,
+            endTime: att.classSession?.endTime,
+            classId: att.classSession?.classId,
+            className: att.classSession?.classEntity?.className || '',
+            isPresent: att.isPresent,
+            reason: att.reason,
+            rate,
+            amount,
+          };
+        });
+
+        return { ...bill, items, sessions };
       }),
     );
 
