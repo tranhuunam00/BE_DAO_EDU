@@ -151,12 +151,14 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     });
 
     const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      id: pricing.id,
       courseLevelId: pricing.courseLevelId,
       pricePerSession: Number(pricing.pricePerSession),
       teacherWagePerSession: Number(pricing.teacherWagePerSession),
       taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
+      createdAt: pricing.createdAt,
     }));
 
     return {
@@ -286,12 +288,14 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     });
 
     const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      id: pricing.id,
       courseLevelId: pricing.courseLevelId,
       pricePerSession: Number(pricing.pricePerSession),
       teacherWagePerSession: Number(pricing.teacherWagePerSession),
       taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
+      createdAt: pricing.createdAt,
     }));
 
     const billingItemsMapped = billingItems.map((item) => ({
@@ -535,6 +539,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         taWagePerSession: Number(p.taWagePerSession),
         effectiveFrom: p.effectiveFrom,
         effectiveTo: p.effectiveTo,
+        createdAt: p.createdAt,
       })),
       wageItems: wageItems.map((item) => ({
         classId: item.classId,

@@ -5,7 +5,9 @@ export class AcademicError extends Error {
       | 'STUDENT_NOT_FOUND'
       | 'CLASS_FULL'
       | 'ROOM_SCHEDULE_CONFLICT'
-      | 'TEACHER_SCHEDULE_CONFLICT',
+      | 'TEACHER_SCHEDULE_CONFLICT'
+      | 'PRICING_NOT_FOUND'
+      | 'PRICING_CONFLICT',
     message: string,
   ) {
     super(message);

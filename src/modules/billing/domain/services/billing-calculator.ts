@@ -1,12 +1,15 @@
+import dayjs from 'dayjs';
 import { Money } from '../value-objects/money';
 
 export interface PricingRule {
+  id?: string;
   courseLevelId: string;
   pricePerSession: number;
   teacherWagePerSession: number;
   taWagePerSession: number;
   effectiveFrom: string;
   effectiveTo: string | null;
+  createdAt?: Date;
 }
 
 export interface BillingSource {
@@ -59,18 +62,33 @@ export class BillingCalculator {
     amountField: 'pricePerSession' | 'teacherWagePerSession',
   ): BillingOrderDraft[] {
     const orders = new Map<string, BillingOrderDraft>();
+
+    const sortedPricings = [...pricings].sort((a, b) => {
+      if (a.createdAt && b.createdAt) {
+        const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+      }
+      if (a.id && b.id) {
+        const idDiff = b.id.localeCompare(a.id);
+        if (idDiff !== 0) return idDiff;
+      }
+      return dayjs(b.effectiveFrom).diff(dayjs(a.effectiveFrom));
+    });
+
     for (const source of sources) {
-      const pricing = pricings.find(
-        (rule) =>
-          rule.courseLevelId === source.courseLevelId &&
-          rule.effectiveFrom <= source.date &&
-          (rule.effectiveTo === null || rule.effectiveTo >= source.date),
-      );
-      
       let rateField = amountField;
       if (amountField === 'teacherWagePerSession' && source.roleInSession === 'assistant') {
         rateField = 'taWagePerSession' as any;
       }
+
+      const pricing = sortedPricings.find(
+        (rule) =>
+          rule.courseLevelId === source.courseLevelId &&
+          Number(rule[rateField]) > 0 &&
+          rule.effectiveFrom <= source.date &&
+          (rule.effectiveTo === null || rule.effectiveTo >= source.date),
+      );
+      
       let rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
       if (amountField === 'pricePerSession' && source.isPresent === false) {
         rate = 0;

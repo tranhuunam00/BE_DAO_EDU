@@ -34,13 +34,20 @@ export class CourseLevelDto {
 }
 
 export class CourseLevelPricingDto {
-  @ApiProperty({ example: 150000, description: 'Đơn giá theo buổi cho học sinh' })
+  @ApiProperty({ example: 150000, description: 'Đơn giá theo buổi cho học sinh', required: false })
   @IsNumber()
-  pricePerSession!: number;
+  @IsOptional()
+  pricePerSession?: number;
 
-  @ApiProperty({ example: 80000, description: 'Đơn giá theo buổi cho giáo viên' })
+  @ApiProperty({ example: 80000, description: 'Đơn giá theo buổi cho giáo viên', required: false })
   @IsNumber()
-  teacherWagePerSession!: number;
+  @IsOptional()
+  teacherWagePerSession?: number;
+
+  @ApiProperty({ example: 50000, description: 'Đơn giá theo buổi cho trợ giảng', required: false })
+  @IsNumber()
+  @IsOptional()
+  taWagePerSession?: number;
 
   @ApiProperty({ example: '2026-01-01', description: 'Ngày bắt đầu áp dụng' })
   @IsDateString()
@@ -50,6 +57,33 @@ export class CourseLevelPricingDto {
   @IsDateString()
   @IsOptional()
   effectiveTo?: string;
+}
+
+export class UpdateCourseLevelPricingDto {
+  @ApiProperty({ required: false, example: 150000 })
+  @IsNumber()
+  @IsOptional()
+  pricePerSession?: number;
+
+  @ApiProperty({ required: false, example: 80000 })
+  @IsNumber()
+  @IsOptional()
+  teacherWagePerSession?: number;
+
+  @ApiProperty({ required: false, example: 50000 })
+  @IsNumber()
+  @IsOptional()
+  taWagePerSession?: number;
+
+  @ApiProperty({ required: false, example: '2026-01-01' })
+  @IsDateString()
+  @IsOptional()
+  effectiveFrom?: string;
+
+  @ApiProperty({ required: false, example: '2026-12-31' })
+  @IsDateString()
+  @IsOptional()
+  effectiveTo?: string | null;
 }
 
 export class CreateCourseDto {
@@ -138,6 +172,10 @@ export class AddCourseLevelDto extends CourseLevelDto {
   @ApiProperty({ example: 80000, description: 'Đơn giá theo buổi cho giáo viên' })
   @IsNumber()
   teacherWagePerSession!: number;
+
+  @ApiProperty({ example: 50000, description: 'Đơn giá theo buổi cho trợ giảng' })
+  @IsNumber()
+  taWagePerSession!: number;
 
   @ApiProperty({ example: '2026-01-01', description: 'Ngày bắt đầu áp dụng' })
   @IsDateString()

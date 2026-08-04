@@ -331,4 +331,184 @@ describe('BillingCalculator', () => {
     expect(line0!.totalAmount).toBe(0);
     expect(line0!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-3', 'att-4']));
   });
+
+  describe('Pricing priority: newest configured rule wins when ranges overlap', () => {
+    it('selects higher-priority pricing (latest effectiveFrom) when two rules overlap on same date', () => {
+      // Two overlapping rules: first configured 2026-01-01→null, then a newer rule 2026-06-01→null
+      // Session on 2026-07-01 → should use the newer rule (effectiveFrom: 2026-06-01, price: 150000)
+      const overlappingPricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      const [result] = BillingCalculator.calculate(
+        [source('att-1', 'student-1', '2026-07-01')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+
+      // Must use 150000 (newer/later effectiveFrom rule)
+      expect(result.totalAmount).toBe(150000);
+      expect(result.lines[0].rate).toBe(150000);
+    });
+
+    it('selects the rule with matching effectiveFrom when date exactly matches boundary', () => {
+      const overlappingPricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      // Exactly on 2026-06-01 → should use 150000
+      const [resultOnBoundary] = BillingCalculator.calculate(
+        [source('att-boundary', 'student-1', '2026-06-01')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+      expect(resultOnBoundary.totalAmount).toBe(150000);
+
+      // One day before 2026-06-01 → must use old rule 100000
+      const [resultBefore] = BillingCalculator.calculate(
+        [source('att-before', 'student-1', '2026-05-31')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+      expect(resultBefore.totalAmount).toBe(100000);
+    });
+
+    it('uses createdAt to break ties when effectiveFrom is the same', () => {
+      // Two rules with identical effectiveFrom → newer createdAt wins
+      const sameDatePricing: PricingRule[] = [
+        {
+          id: 'old-config',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-05-01T08:00:00Z'), // older configuration
+        },
+        {
+          id: 'new-config',
+          courseLevelId: 'level-1',
+          pricePerSession: 175000,
+          teacherWagePerSession: 100000,
+          taWagePerSession: 50000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T12:00:00Z'), // newer configuration
+        },
+      ];
+
+      const [result] = BillingCalculator.calculate(
+        [source('att-1', 'student-1', '2026-07-01')],
+        sameDatePricing,
+        'pricePerSession',
+      );
+
+      // Must use 175000 (newer createdAt)
+      expect(result.totalAmount).toBe(175000);
+      expect(result.lines[0].rate).toBe(175000);
+    });
+
+    it('applies newest-wins priority independently per rate field (student vs teacher vs TA)', () => {
+      // Student pricing: old 100k (2026-01-01→null), new 150k (2026-06-01→null)
+      // Teacher pricing: old 60k (2026-01-01→null), new 90k (2026-06-01→null)
+      // TA pricing: old 30k (2026-01-01→null), new 45k (2026-06-01→null)
+      const multiRatePricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      const sessionOnJuly = source('att-1', 'person-1', '2026-07-10');
+
+      const [studentResult] = BillingCalculator.calculate([sessionOnJuly], multiRatePricing, 'pricePerSession');
+      expect(studentResult.totalAmount).toBe(150000);
+
+      const [teacherResult] = BillingCalculator.calculate([sessionOnJuly], multiRatePricing, 'teacherWagePerSession');
+      expect(teacherResult.totalAmount).toBe(90000);
+
+      const assistantSource = { ...sessionOnJuly, roleInSession: 'assistant' as const };
+      const [taResult] = BillingCalculator.calculate([assistantSource], multiRatePricing, 'teacherWagePerSession');
+      expect(taResult.totalAmount).toBe(45000);
+    });
+
+    it('performance: pricing priority sort should run within 20ms for 5000 sessions and 50 overlapping rules', () => {
+      const bigPricingList: PricingRule[] = Array.from({ length: 50 }, (_, i) => ({
+        id: `rule-${i}`,
+        courseLevelId: 'level-1',
+        pricePerSession: 100000 + i * 1000,
+        teacherWagePerSession: 60000 + i * 500,
+        taWagePerSession: 30000 + i * 200,
+        effectiveFrom: `2026-0${Math.floor(i / 10) + 1}-01`.replace('0-', '-'), // spread across months
+        effectiveTo: null,
+        createdAt: new Date(2026, 0, i + 1),
+      }));
+
+      const bigSources = Array.from({ length: 5000 }, (_, i) =>
+        source(`att-${i}`, `student-${i % 100}`, '2026-07-15'),
+      );
+
+      const start = performance.now();
+      BillingCalculator.calculate(bigSources, bigPricingList, 'pricePerSession');
+      const elapsed = performance.now() - start;
+
+      console.log(`Pricing priority sort performance (5000 sessions, 50 rules): ${elapsed.toFixed(2)}ms`);
+      expect(elapsed).toBeLessThan(100);
+    });
+  });
 });

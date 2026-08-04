@@ -36,6 +36,9 @@ import {
   SaveHolidayUseCase,
 } from './application/use-cases/manage-holidays.use-cases';
 import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/typeorm-holiday-persistence.adapter';
+import { CoursePricingPersistencePort } from './application/ports/course-pricing-persistence.port';
+import { TypeOrmCoursePricingPersistenceAdapter } from './infrastructure/persistence/typeorm-course-pricing-persistence.adapter';
+import { GetCourseLevelPricingUseCase } from './application/use-cases/get-course-level-pricing.use-case';
 
 @Module({
   imports: [
@@ -123,6 +126,16 @@ import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/t
       useFactory: (persistence: HolidayPersistencePort) =>
         new DeleteHolidayUseCase(persistence),
       inject: [HolidayPersistencePort],
+    },
+    {
+      provide: CoursePricingPersistencePort,
+      useClass: TypeOrmCoursePricingPersistenceAdapter,
+    },
+    {
+      provide: GetCourseLevelPricingUseCase,
+      useFactory: (persistence: CoursePricingPersistencePort) =>
+        new GetCourseLevelPricingUseCase(persistence),
+      inject: [CoursePricingPersistencePort],
     },
   ],
 })

@@ -1,11 +1,17 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ConflictException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, Not } from 'typeorm';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { CourseLevelOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level.orm-entity';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto, AddCourseLevelDto, UpdateCourseLevelDto } from '../../application/dtos/course.dto';
+import { GetCourseLevelPricingUseCase } from '../../modules/academics/application/use-cases/get-course-level-pricing.use-case';
+import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
+import { CoursePricingPersistencePort } from '../../modules/academics/application/ports/course-pricing-persistence.port';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -17,6 +23,8 @@ export class CourseController {
     private readonly levelRepo: Repository<CourseLevelOrmEntity>,
     @InjectRepository(CourseLevelPricingOrmEntity)
     private readonly pricingRepo: Repository<CourseLevelPricingOrmEntity>,
+    private readonly getCourseLevelPricingUseCase: GetCourseLevelPricingUseCase,
+    private readonly coursePricingPort: CoursePricingPersistencePort,
   ) {}
 
   @Get()
@@ -182,6 +190,7 @@ export class CourseController {
       courseLevelId: savedLevel.id,
       pricePerSession: dto.pricePerSession,
       teacherWagePerSession: dto.teacherWagePerSession,
+      taWagePerSession: dto.taWagePerSession,
       effectiveFrom: dto.effectiveFrom,
       effectiveTo: null,
     });
@@ -222,8 +231,24 @@ export class CourseController {
   async addPricing(@Param('levelId') levelId: string, @Body() dto: CourseLevelPricingDto) {
     const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
 
-    // Validate new dates overlap with any existing records
-    const pricingList = await this.pricingRepo.find({ where: { courseLevelId: level.id } });
+    // Identify which pricing type is being configured (tuition, teacher wage, assistant wage)
+    let rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession' | null = null;
+    if (dto.pricePerSession !== undefined && Number(dto.pricePerSession) > 0) {
+      rateField = 'pricePerSession';
+    } else if (dto.teacherWagePerSession !== undefined && Number(dto.teacherWagePerSession) > 0) {
+      rateField = 'teacherWagePerSession';
+    } else if (dto.taWagePerSession !== undefined && Number(dto.taWagePerSession) > 0) {
+      rateField = 'taWagePerSession';
+    }
+
+    if (!rateField) {
+      throw new ConflictException('Vui lòng cung cấp tối thiểu một giá trị học phí hoặc lương hợp lệ (> 0).');
+    }
+
+    // Filter historical records of the same type to validate overlaps
+    const pricingList = (await this.pricingRepo.find({ where: { courseLevelId: level.id } }))
+      .filter(p => Number(p[rateField]) > 0);
+
     const newFrom = dto.effectiveFrom;
     const newTo = dto.effectiveTo || null;
 
@@ -231,49 +256,29 @@ export class CourseController {
       throw new ConflictException('Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
-    // 1. Auto-cap the current open-ended pricing (where effectiveTo is null)
-    const activePricing = await this.pricingRepo.findOne({
-      where: { courseLevelId: level.id, effectiveTo: IsNull() },
-    });
-
-    if (activePricing) {
-      if (newFrom < activePricing.effectiveFrom) {
-        throw new ConflictException(
-          `Ngày bắt đầu áp dụng mới (${newFrom}) phải từ ngày bắt đầu của giá hiện hành (${activePricing.effectiveFrom}) trở đi.`
-        );
-      }
-
-      // Cap the previous open pricing at 1 day before the new one starts
-      const prevDate = new Date(newFrom);
-      prevDate.setDate(prevDate.getDate() - 1);
-      activePricing.effectiveTo = prevDate.toISOString().split('T')[0];
-      await this.pricingRepo.save(activePricing);
+    // 1. Guard: new pricing must start AFTER the last reconciled (chốt sổ) session date for this type
+    let lastReconciledDate: string | null = null;
+    if (rateField === 'pricePerSession') {
+      lastReconciledDate = await this.coursePricingPort.getMaxStudentBillDate(level.id);
+    } else if (rateField === 'teacherWagePerSession') {
+      lastReconciledDate = await this.coursePricingPort.getMaxTeacherWageDate(level.id);
+    } else if (rateField === 'taWagePerSession') {
+      lastReconciledDate = await this.coursePricingPort.getMaxAssistantWageDate(level.id);
     }
 
-    // 2. Perform general overlap validation against all OTHER records (now including the capped activePricing)
-    for (const p of pricingList) {
-      if (p.id === activePricing?.id) {
-        // Double check against the updated/capped active pricing just in case
-        const capTo = activePricing.effectiveTo;
-        if (capTo && (newFrom <= capTo) && (newTo === null || activePricing.effectiveFrom <= newTo)) {
-          throw new ConflictException(`Khoảng thời gian này bị trùng lặp với giá hiện hành đã được điều chỉnh.`);
-        }
-        continue;
-      }
-      
-      const pFrom = p.effectiveFrom;
-      const pTo = p.effectiveTo;
-
-      const overlap = (pTo === null || newFrom <= pTo) && (newTo === null || pFrom <= newTo);
-      if (overlap) {
-        throw new ConflictException(`Khoảng thời gian áp dụng trùng lặp với bảng giá đã cấu hình (${pFrom} - ${pTo || 'nay'}).`);
-      }
+    if (lastReconciledDate && newFrom <= lastReconciledDate) {
+      throw new ConflictException(
+        `Ngày bắt đầu áp dụng (${newFrom}) phải sau ngày chốt sổ gần nhất (${lastReconciledDate}). Các buổi trước hoặc đúng ngày này đã được tính tiền/lương.`
+      );
     }
+
+
 
     const pricing = this.pricingRepo.create({
       courseLevelId: level.id,
-      pricePerSession: dto.pricePerSession,
-      teacherWagePerSession: dto.teacherWagePerSession,
+      pricePerSession: dto.pricePerSession || 0,
+      teacherWagePerSession: dto.teacherWagePerSession || 0,
+      taWagePerSession: dto.taWagePerSession || 0,
       effectiveFrom: newFrom,
       effectiveTo: newTo,
     });
@@ -281,12 +286,36 @@ export class CourseController {
     return this.pricingRepo.save(pricing);
   }
 
-  @Get('levels/:levelId/pricing')
-  @ApiOperation({ summary: 'Lấy lịch sử giá của Level' })
-  async getPricing(@Param('levelId') levelId: string) {
-    return this.pricingRepo.find({
-      where: { courseLevelId: levelId },
-      order: { effectiveFrom: 'DESC' },
+  @Get('levels/:levelId/active-classes')
+  @ApiOperation({ summary: 'Lấy danh sách các lớp đang hoạt động của Level' })
+  async getActiveClasses(@Param('levelId') levelId: string) {
+    return this.pricingRepo.manager.getRepository(ClassOrmEntity).find({
+      where: { courseLevelId: levelId, status: 'Active' },
+      select: {
+        id: true,
+        className: true,
+        classCode: true,
+      },
     });
+  }
+
+  @Get('levels/:levelId/pricing')
+  @ApiOperation({ summary: 'Lấy lịch sử giá của Level kèm trạng thái khóa đối soát' })
+  async getPricing(@Param('levelId') levelId: string) {
+    return this.getCourseLevelPricingUseCase.execute(levelId);
+  }
+
+  private async runAcademic<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof AcademicError) {
+        if (error.code === 'PRICING_NOT_FOUND') {
+          throw new NotFoundException(error.message);
+        }
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 }
