@@ -18,6 +18,7 @@ import {
   PaymentPeriodType,
 } from '../../domain/entities/payment-period';
 import {
+  BillingCalculator,
   BillingOrderDraft,
   BillingSource,
   PricingRule,
@@ -359,6 +360,35 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           },
           order: { student: { lastName: 'ASC', firstName: 'ASC' } },
         });
+
+      const billIds = bills.map((bill) => bill.id);
+      const attendances = billIds.length
+        ? await this.dataSource.getRepository(StudentAttendanceOrmEntity).find({
+            where: { billId: In(billIds) },
+            relations: {
+              classSession: { classEntity: { courseLevel: true } },
+            },
+            order: { classSession: { date: 'ASC', startTime: 'ASC' } },
+          })
+        : [];
+      const attendancesByBill = groupItems(attendances, 'billId');
+
+      const levelIds = Array.from(
+        new Set(
+          attendances
+            .map((a) => a.classSession?.classEntity?.courseLevelId)
+            .filter(Boolean),
+        ),
+      );
+      let pricings: CourseLevelPricingOrmEntity[] = [];
+      if (levelIds.length > 0) {
+        pricings = await this.dataSource
+          .getRepository(CourseLevelPricingOrmEntity)
+          .find({
+            where: { courseLevelId: In(levelIds) },
+          });
+      }
+
       const items = bills.length
         ? await this.dataSource
             .getRepository(StudentMonthlyBillItemOrmEntity)
@@ -375,30 +405,66 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       const logsByOrder = groupItems(auditLogs, 'orderId');
       return {
         period: periodView,
-        orders: bills.map((bill) => ({
-          id: bill.id,
-          studentId: bill.studentId,
-          code: bill.student?.studentId || '',
-          name: `${bill.student?.lastName || ''} ${bill.student?.firstName || ''}`.trim(),
-          nickName: bill.student?.nickName || '',
-          mobile: bill.student?.mobile || '',
-          totalAmount: Number(bill.totalAmount),
-          paidAmount: Number(bill.paidAmount),
-          status: bill.status,
-          paymentDate: bill.paymentDate,
-          note: bill.note,
-          paymentMethod: bill.paymentMethod,
-          processedBy: bill.processedBy
-            ? { id: bill.processedBy.id, name: bill.processedBy.name }
-            : null,
-          receiptCode: bill.receiptCode,
-          auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
-          paymentRequest: bill.paymentRequest ? {
-            ...bill.paymentRequest,
-            qrUrl: bill.paymentRequest.qrUrl?.replace('/970418-', '/BIDV-')
-          } : null,
-          items: (byBill.get(bill.id) ?? []).map(mapItem),
-        })),
+        orders: bills.map((bill) => {
+          const billSessions = attendancesByBill.get(bill.id) ?? [];
+          return {
+            id: bill.id,
+            studentId: bill.studentId,
+            code: bill.student?.studentId || '',
+            name: `${bill.student?.lastName || ''} ${bill.student?.firstName || ''}`.trim(),
+            nickName: bill.student?.nickName || '',
+            mobile: bill.student?.mobile || '',
+            totalAmount: Number(bill.totalAmount),
+            paidAmount: Number(bill.paidAmount),
+            status: bill.status,
+            paymentDate: bill.paymentDate,
+            note: bill.note,
+            paymentMethod: bill.paymentMethod,
+            processedBy: bill.processedBy
+              ? { id: bill.processedBy.id, name: bill.processedBy.name }
+              : null,
+            receiptCode: bill.receiptCode,
+            auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
+            paymentRequest: bill.paymentRequest ? {
+              ...bill.paymentRequest,
+              qrUrl: bill.paymentRequest.qrUrl?.replace('/970418-', '/BIDV-')
+            } : null,
+            items: (byBill.get(bill.id) ?? []).map(mapItem),
+            sessions: billSessions.map((att) => {
+              const levelId = att.classSession?.classEntity?.courseLevelId;
+              const sessionDate = att.classSession?.date;
+              const matchedPricing = BillingCalculator.getActivePricing(
+                pricings.map((p) => ({
+                  courseLevelId: p.courseLevelId,
+                  pricePerSession: Number(p.pricePerSession),
+                  teacherWagePerSession: Number(p.teacherWagePerSession),
+                  taWagePerSession: Number(p.taWagePerSession),
+                  effectiveFrom: p.effectiveFrom,
+                  effectiveTo: p.effectiveTo,
+                  createdAt: p.createdAt,
+                  id: p.id,
+                })),
+                sessionDate,
+                'pricePerSession',
+                levelId,
+              );
+              const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+              const amount = att.isPresent ? rate : 0;
+              return {
+                id: att.id,
+                date: sessionDate,
+                startTime: att.classSession?.startTime,
+                endTime: att.classSession?.endTime,
+                classId: att.classSession?.classId,
+                className: att.classSession?.classEntity?.className || '',
+                isPresent: att.isPresent,
+                reason: att.reason,
+                rate,
+                amount,
+              };
+            }),
+          };
+        }),
       };
     }
 
@@ -409,6 +475,36 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         relations: { teacher: true, processedBy: true },
         order: { teacher: { lastName: 'ASC', firstName: 'ASC' } },
       });
+
+    const wageIds = wages.map((wage) => wage.id);
+    const sessions = wageIds.length
+      ? await this.dataSource.getRepository(ClassSessionOrmEntity).find({
+          where: [
+            { wageId: In(wageIds) },
+            { assistantWageId: In(wageIds) },
+          ],
+          relations: {
+            classEntity: { courseLevel: true },
+            teacher: true,
+            assistant: true,
+          },
+          order: { date: 'ASC', startTime: 'ASC' },
+        })
+      : [];
+    const levelIds = Array.from(
+      new Set(
+        sessions.map((s) => s.classEntity?.courseLevelId).filter(Boolean),
+      ),
+    );
+    let pricings: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricings = await this.dataSource
+        .getRepository(CourseLevelPricingOrmEntity)
+        .find({
+          where: { courseLevelId: In(levelIds) },
+        });
+    }
+
     const items = wages.length
       ? await this.dataSource
           .getRepository(TeacherMonthlyWageItemOrmEntity)
@@ -425,25 +521,63 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     const logsByOrder = groupItems(auditLogs, 'orderId');
     return {
       period: periodView,
-      orders: wages.map((wage) => ({
-        id: wage.id,
-        teacherId: wage.teacherId,
-        code: wage.teacher?.teacherId || '',
-        name: `${wage.teacher?.lastName || ''} ${wage.teacher?.firstName || ''}`.trim(),
-        mobile: wage.teacher?.mobile || '',
-        type: wage.teacher?.type || '',
-        totalAmount: Number(wage.totalAmount),
-        paidAmount: Number(wage.paidAmount),
-        status: wage.status,
-        paymentDate: wage.paymentDate,
-        note: wage.note,
-        paymentMethod: wage.paymentMethod,
-        processedBy: wage.processedBy
-          ? { id: wage.processedBy.id, name: wage.processedBy.name }
-          : null,
-        auditLogs: (logsByOrder.get(wage.id) ?? []).map(mapAuditLog),
-        items: (byWage.get(wage.id) ?? []).map(mapItem),
-      })),
+      orders: wages.map((wage) => {
+        const wageSessions = sessions.filter(
+          (s) => s.wageId === wage.id || s.assistantWageId === wage.id,
+        );
+        return {
+          id: wage.id,
+          teacherId: wage.teacherId,
+          code: wage.teacher?.teacherId || '',
+          name: `${wage.teacher?.lastName || ''} ${wage.teacher?.firstName || ''}`.trim(),
+          mobile: wage.teacher?.mobile || '',
+          type: wage.teacher?.type || '',
+          totalAmount: Number(wage.totalAmount),
+          paidAmount: Number(wage.paidAmount),
+          status: wage.status,
+          paymentDate: wage.paymentDate,
+          note: wage.note,
+          paymentMethod: wage.paymentMethod,
+          processedBy: wage.processedBy
+            ? { id: wage.processedBy.id, name: wage.processedBy.name }
+            : null,
+          auditLogs: (logsByOrder.get(wage.id) ?? []).map(mapAuditLog),
+          items: (byWage.get(wage.id) ?? []).map(mapItem),
+          sessions: wageSessions.map((s) => {
+            const role = s.wageId === wage.id ? 'teacher' : 'assistant';
+            const rateField = role === 'teacher' ? 'teacherWagePerSession' : 'taWagePerSession';
+            const levelId = s.classEntity?.courseLevelId;
+            const sessionDate = s.date;
+            const matchedPricing = BillingCalculator.getActivePricing(
+              pricings.map((p) => ({
+                courseLevelId: p.courseLevelId,
+                pricePerSession: Number(p.pricePerSession),
+                teacherWagePerSession: Number(p.teacherWagePerSession),
+                taWagePerSession: Number(p.taWagePerSession),
+                effectiveFrom: p.effectiveFrom,
+                effectiveTo: p.effectiveTo,
+                createdAt: p.createdAt,
+                id: p.id,
+              })),
+              sessionDate,
+              rateField,
+              levelId,
+            );
+            const rate = matchedPricing ? Number(matchedPricing[rateField]) : 0;
+            return {
+              id: s.id,
+              date: sessionDate,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              classId: s.classId,
+              className: s.classEntity?.className || '',
+              role,
+              rate,
+              amount: rate,
+            };
+          }),
+        };
+      }),
     };
   }
 

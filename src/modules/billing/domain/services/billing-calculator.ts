@@ -56,14 +56,8 @@ export interface BillingOrderDraft {
 }
 
 export class BillingCalculator {
-  static calculate(
-    sources: BillingSource[],
-    pricings: PricingRule[],
-    amountField: 'pricePerSession' | 'teacherWagePerSession',
-  ): BillingOrderDraft[] {
-    const orders = new Map<string, BillingOrderDraft>();
-
-    const sortedPricings = [...pricings].sort((a, b) => {
+  static sortPricings(pricings: PricingRule[]): PricingRule[] {
+    return [...pricings].sort((a, b) => {
       if (a.createdAt && b.createdAt) {
         const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         if (timeDiff !== 0) return timeDiff;
@@ -74,6 +68,32 @@ export class BillingCalculator {
       }
       return dayjs(b.effectiveFrom).diff(dayjs(a.effectiveFrom));
     });
+  }
+
+  static getActivePricing(
+    pricings: PricingRule[],
+    date: string,
+    rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession',
+    levelId: string,
+  ): PricingRule | undefined {
+    const sorted = this.sortPricings(pricings);
+    return sorted.find(
+      (rule) =>
+        rule.courseLevelId === levelId &&
+        Number(rule[rateField]) > 0 &&
+        rule.effectiveFrom <= date &&
+        (rule.effectiveTo === null || rule.effectiveTo >= date),
+    );
+  }
+
+  static calculate(
+    sources: BillingSource[],
+    pricings: PricingRule[],
+    amountField: 'pricePerSession' | 'teacherWagePerSession',
+  ): BillingOrderDraft[] {
+    const orders = new Map<string, BillingOrderDraft>();
+
+    const sortedPricings = this.sortPricings(pricings);
 
     for (const source of sources) {
       let rateField = amountField;

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tài liệu Đặc tả Nghiệp vụ Đơn giá & Đối soát Lịch sử - DAO EDU</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Mermaid.js for Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="border-b border-slate-800 pb-6 mb-8">
+      <div class="flex items-center space-x-3 mb-2">
+        <span class="px-3 py-1 bg-indigo-500/20 text-indigo-400 text-xs font-semibold rounded-full uppercase tracking-wider">Specifications v2.1</span>
+        <span class="text-slate-500">|</span>
+        <span class="text-slate-400 text-sm">Last updated: August 2026</span>
+      </div>
+      <h1 class="text-4xl font-extrabold text-white tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+        Đặc tả Nghiệp vụ Quản lý Đơn giá & Bảo toàn Lịch sử Đối soát
+      </h1>
+      <p class="text-slate-400 mt-2 text-lg">
+        Tài liệu đặc tả giải thuật giải quyết trùng lặp khoảng thời gian (Overlap Resolution), cơ chế Append-Only và bảo vệ chốt sổ tài chính cho Level.
+      </p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      
+      <!-- Sticky Navigation Sidebar -->
+      <aside class="lg:col-span-1">
+        <div class="sticky top-8 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 space-y-2">
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-wider px-2 mb-2">Mục lục</p>
+          <a href="#append-only" class="block px-3 py-2 text-sm text-indigo-400 hover:bg-slate-800 rounded-md font-medium">1. Mô hình Append-Only</a>
+          <a href="#overlap-resolution" class="block px-3 py-2 text-sm text-indigo-400 hover:bg-slate-800 rounded-md font-medium">2. Giải quyết Trùng lặp (Newest-Wins)</a>
+          <a href="#ruler-timeline" class="block px-3 py-2 text-sm text-indigo-400 hover:bg-slate-800 rounded-md font-medium">3. Trục thời gian Thước kẻ</a>
+          <a href="#billing-locks" class="block px-3 py-2 text-sm text-indigo-400 hover:bg-slate-800 rounded-md font-medium">4. Bảo toàn Chốt sổ Tài chính</a>
+          <a href="#flow-diagrams" class="block px-3 py-2 text-sm text-indigo-400 hover:bg-slate-800 rounded-md font-medium">5. Sơ đồ Luồng Nghiệp vụ</a>
+        </div>
+      </aside>
+
+      <!-- Main Specifications Content -->
+      <main class="lg:col-span-3 space-y-12">
+
+        <!-- 1. Append Only -->
+        <section id="append-only" class="scroll-mt-8 bg-slate-800/30 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition duration-300">
+          <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 mr-3 text-sm">1</span>
+            Mô hình Append-Only (Chỉ thêm mới)
+          </h2>
+          <p class="text-slate-300 leading-relaxed mb-4">
+            Để đảm bảo tính toàn vẹn dữ liệu tài chính (Audit Trail) tuyệt đối cho hệ thống, bảng giá lịch sử áp dụng mô hình <strong class="text-indigo-300">Append-Only</strong>. Người dùng không có quyền chỉnh sửa hoặc xóa bất kỳ mốc cấu hình giá nào sau khi đã thiết lập.
+          </p>
+          <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-800/80 space-y-2">
+            <h4 class="text-sm font-semibold text-slate-200">Ràng buộc hệ thống:</h4>
+            <ul class="list-disc pl-5 text-sm text-slate-400 space-y-1">
+              <li>Không cung cấp API cập nhật (<code class="text-rose-400">PUT</code>) và xóa (<code class="text-rose-400">DELETE</code>) đối với lịch sử cấu hình giá.</li>
+              <li>Trên giao diện Frontend, toàn bộ danh sách lịch sử cấu hình là view-only. Các nút Sửa/Xóa bị vô hiệu hóa hoàn toàn.</li>
+              <li>Khi có thay đổi giá mới, người dùng nhấn nút <span class="text-emerald-400">Thêm mới</span> để đè cấu hình mới cho các ngày mong muốn.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- 2. Overlap Resolution -->
+        <section id="overlap-resolution" class="scroll-mt-8 bg-slate-800/30 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition duration-300">
+          <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 mr-3 text-sm">2</span>
+            Giải thuật Trùng lặp Khoảng thời gian (Newest-Wins)
+          </h2>
+          <p class="text-slate-300 leading-relaxed mb-4">
+            Hệ thống cho phép các cấu hình giá trùng lặp thời gian áp dụng một cách tự nhiên. Khi tính toán học phí/lương cho một buổi học cụ thể, hệ thống sẽ tự động phân xử và chọn ra đơn giá đúng dựa trên nguyên tắc: <strong class="text-amber-400">Ưu tiên bảng giá cấu hình mới nhất</strong>.
+          </p>
+
+          <div class="space-y-4">
+            <div class="bg-slate-900/80 rounded-xl p-5 font-mono text-xs text-slate-300 border border-slate-800">
+              <p class="text-emerald-400 mb-2">// Sắp xếp bảng giá theo mức độ ưu tiên tại BillingCalculator</p>
+              <p>const sortedPricings = [...pricings].sort((a, b) => {</p>
+              <p class="pl-4">if (a.createdAt && b.createdAt) {</p>
+              <p class="pl-8">const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();</p>
+              <p class="pl-8">if (timeDiff !== 0) return timeDiff; <span class="text-slate-500">// 1. Cài đặt sau cùng wins</span></p>
+              <p class="pl-4">}</p>
+              <p class="pl-4">if (a.id && b.id) {</p>
+              <p class="pl-8">return b.id.localeCompare(a.id); <span class="text-slate-500">// 2. ID sau wins</span></p>
+              <p class="pl-4">}</p>
+              <p class="pl-4">return dayjs(b.effectiveFrom).diff(dayjs(a.effectiveFrom)); <span class="text-slate-500">// 3. Ngày bắt đầu muộn hơn wins</span></p>
+              <p>});</p>
+            </div>
+
+            <div class="border border-slate-800 rounded-xl p-4 bg-slate-900/30">
+              <h4 class="text-sm font-semibold text-slate-200 mb-2">Ví dụ Minh họa:</h4>
+              <div class="space-y-2 text-sm text-slate-400">
+                <p>Giả sử trong DB có hai cấu hình giá cho cùng một Level:</p>
+                <ul class="list-decimal pl-5 space-y-1">
+                  <li><span class="text-slate-200">Rule A (cũ):</span> <code class="text-slate-300">85,000đ</code> từ ngày <code class="text-slate-300">01/01/2026 - Vô thời hạn</code>.</li>
+                  <li><span class="text-slate-200">Rule B (mới cài):</span> <code class="text-slate-300">34,000đ</code> từ ngày <code class="text-slate-300">02/08/2026 - Vô thời hạn</code>.</li>
+                </ul>
+                <p class="mt-2 text-slate-300">Kết quả phân xử đơn giá cho các buổi học:</p>
+                <ul class="list-disc pl-5 space-y-1 text-slate-400">
+                  <li>Buổi học ngày <code class="text-slate-200">01/08/2026</code>: Chỉ Rule A cover &rarr; Áp dụng <strong class="text-slate-200">85,000đ</strong>.</li>
+                  <li>Buổi học ngày <code class="text-slate-200">03/08/2026</code>: Cả A và B đều cover. Rule B được cấu hình sau cùng (createdAt lớn hơn) &rarr; Áp dụng <strong class="text-emerald-400">34,000đ</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Ruler Timeline -->
+        <section id="ruler-timeline" class="scroll-mt-8 bg-slate-800/30 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition duration-300">
+          <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 mr-3 text-sm">3</span>
+            Trục thời gian dạng Thước kẻ (Ruler Timeline)
+          </h2>
+          <p class="text-slate-300 leading-relaxed mb-4">
+            Ở giao diện hiển thị, người dùng cần xem một trục thời gian duy nhất liền mạch. Do đó, Frontend sử dụng thuật toán <code class="text-indigo-300">computeDisjointSegments</code> để làm phẳng (flatten) tất cả các cấu hình giá chồng lấn thành một chuỗi các khoảng thời gian không giao nhau (Disjoint Segments), được hiển thị dưới dạng thước kẻ thanh ngang có nhiều màu sắc phân biệt.
+          </p>
+
+          <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-800/80">
+            <h4 class="text-sm font-semibold text-slate-200 mb-2">Cách thức hoạt động của thuật toán làm phẳng:</h4>
+            <ol class="list-decimal pl-5 text-sm text-slate-400 space-y-2">
+              <li>Thu thập toàn bộ các mốc ngày bắt đầu (<code class="text-slate-300">effectiveFrom</code>) và ngày sau kết thúc (<code class="text-slate-300">effectiveTo + 1 ngày</code>) để làm các điểm biên phân chia thời gian.</li>
+              <li>Sắp xếp tăng dần các điểm biên thời gian này để chia trục x thành các đoạn liên tục.</li>
+              <li>Với mỗi đoạn, quét trong danh sách cấu hình giá (đã sort theo thứ tự ưu tiên mới nhất) để tìm cấu hình giá đang hiệu lực.</li>
+              <li>Gom nhóm các đoạn kề nhau nếu chúng có cùng đơn giá để tạo ra trục thời gian hiển thị gọn gàng nhất.</li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- 4. Billing Locks -->
+        <section id="billing-locks" class="scroll-mt-8 bg-slate-800/30 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition duration-300">
+          <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 mr-3 text-sm">4</span>
+            Bảo toàn Chốt sổ Tài chính (Billing & Wage Locks)
+          </h2>
+          <p class="text-slate-300 leading-relaxed mb-4">
+            Khi thay đổi đơn giá, hệ thống phải đảm bảo các buổi học đã tính tiền hoặc giáo viên/trợ giảng đã chốt bảng lương trong quá khứ <strong class="text-rose-400">không bao giờ bị ảnh hưởng</strong>.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+              <h4 class="text-sm font-semibold text-emerald-400 mb-2">1. Khóa cứng khi thêm mới giá:</h4>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                Hệ thống xác định ngày chốt sổ gần nhất đối với từng loại giá (MaxStudentBillDate cho học phí, MaxTeacherWageDate cho lương GV, MaxAssistantWageDate cho lương TA). Ngày bắt đầu của bảng giá mới (<code class="text-slate-200">newFrom</code>) bắt buộc phải lớn hơn ngày chốt sổ này.
+              </p>
+            </div>
+
+            <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+              <h4 class="text-sm font-semibold text-emerald-400 mb-2">2. Sử dụng đơn giá đã chốt trong Hoá đơn:</h4>
+              <p class="text-xs text-slate-400 leading-relaxed">
+                Khi tính tiền, hệ thống sẽ đối chiếu với dữ liệu hóa đơn/bảng lương đã chốt. Nếu tháng đó đã có hóa đơn đã chốt, hệ thống sẽ sử dụng trực tiếp đơn giá đã ghi nhận trên hóa đơn đó (<code class="text-slate-200">billedInfo.rate</code>), hoàn toàn bỏ qua cấu hình bảng giá.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Flow Diagrams -->
+        <section id="flow-diagrams" class="scroll-mt-8 bg-slate-800/30 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition duration-300">
+          <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 mr-3 text-sm">5</span>
+            Sơ đồ Luồng Nghiệp vụ
+          </h2>
+          
+          <div class="space-y-8">
+            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+              <p class="text-sm font-semibold text-slate-200 mb-4 text-center">Luồng Thêm mới cấu hình giá và chặn chốt sổ</p>
+              <div class="mermaid flex justify-center">
+                graph TD
+                  A[User thêm cấu hình giá mới] --> B{Xác định loại giá}
+                  B -->|Đơn giá học viên| C[Lấy MaxStudentBillDate]
+                  B -->|Lương giáo viên| D[Lấy MaxTeacherWageDate]
+                  B -->|Lương trợ giảng| E[Lấy MaxAssistantWageDate]
+                  C --> F{newFrom > lastReconciledDate?}
+                  D --> F
+                  E --> F
+                  F -->|Sai| G[Ném lỗi ConflictException: Chốt sổ chặn]
+                  F -->|Đúng| H[Lưu bảng giá mới thành công]
+              </div>
+            </div>
+
+            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+              <p class="text-sm font-semibold text-slate-200 mb-4 text-center">Luồng Phân xử đơn giá khi tính tiền học phí/lương</p>
+              <div class="mermaid flex justify-center">
+                graph TD
+                  I[Duyệt qua từng buổi học] --> J{Đã có hóa đơn/lương tháng đó chưa?}
+                  J -->|Đã chốt| K[Lấy trực tiếp đơn giá đã chốt trên hóa đơn]
+                  J -->|Chưa chốt| L[Tìm các cấu hình giá cover ngày buổi học]
+                  L --> M[Sắp xếp các cấu hình tìm được theo createdAt DESC, id DESC]
+                  M --> N[Chọn cấu hình đầu tiên: Cài mới nhất]
+                  N --> O[Áp dụng đơn giá cho buổi học]
+                  K --> P[Tính tổng tiền hóa đơn]
+                  O --> P
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 mt-16 pt-6 text-center text-slate-500 text-sm">
+      <p>&copy; 2026 DAO EDU Academic & Financial Specifications. All rights reserved.</p>
+    </footer>
+  </div>
+
+</body>
+</html>

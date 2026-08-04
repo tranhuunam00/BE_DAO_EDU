@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import dayjs from 'dayjs';
 import { BillingPersistencePort } from '../ports/billing-persistence.port';
+import { BillingCalculator } from '../../domain/services/billing-calculator';
 
 export interface CalculateTeacherWageInput {
   teacherId: string;
@@ -55,18 +56,7 @@ export class CalculateTeacherWageUseCase {
       );
 
     // Sort pricingList newest first to prioritize the latest configured rules when ranges overlap
-    pricingList.sort((a, b) => {
-      if (a.effectiveFrom !== b.effectiveFrom) {
-        return dayjs(b.effectiveFrom).diff(dayjs(a.effectiveFrom));
-      }
-      if (a.createdAt && b.createdAt) {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-      if (a.id && b.id) {
-        return b.id.localeCompare(a.id);
-      }
-      return 0;
-    });
+    const sortedPricings = BillingCalculator.sortPricings(pricingList);
 
     // Map wage items rate: key = `${classId}_${month}` -> rate
     const wageMap = new Map<string, number>();
@@ -104,14 +94,12 @@ export class CalculateTeacherWageUseCase {
 
         const rateField = role === 'teacher' ? 'teacherWagePerSession' : 'taWagePerSession';
 
-        const pricing = pricingList.find((p) => {
-          return (
-            p.courseLevelId === levelId &&
-            Number(p[rateField]) > 0 &&
-            p.effectiveFrom <= dateStr &&
-            (p.effectiveTo === null || p.effectiveTo >= dateStr)
-          );
-        });
+        const pricing = BillingCalculator.getActivePricing(
+          pricingList,
+          dateStr,
+          rateField,
+          levelId,
+        );
 
         let rate = 0;
         if (overriddenRate !== undefined) {
