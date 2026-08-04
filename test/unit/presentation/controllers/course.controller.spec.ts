@@ -4,6 +4,7 @@ import { CourseController } from '../../../../src/presentation/controllers/cours
 import { CourseLevelPricingOrmEntity } from '../../../../src/infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../../../src/infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { ClassSessionOrmEntity } from '../../../../src/infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { ClassOrmEntity } from '../../../../src/infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { TypeOrmCoursePricingPersistenceAdapter } from '../../../../src/modules/academics/infrastructure/persistence/typeorm-course-pricing-persistence.adapter';
 import { GetCourseLevelPricingUseCase } from '../../../../src/modules/academics/application/use-cases/get-course-level-pricing.use-case';
 import { UpdateCourseLevelPricingUseCase } from '../../../../src/modules/academics/application/use-cases/update-course-level-pricing.use-case';
@@ -19,11 +20,15 @@ describe('CourseController - Pricing History, Edit, Delete & Multi-class Billing
   let pricingDataStore: CourseLevelPricingOrmEntity[] = [];
   let attendanceDataStore: any[] = [];
   let sessionDataStore: any[] = [];
+  let mockClassCount = 0;
+  let mockSessionCount = 0;
 
   beforeEach(() => {
     pricingDataStore = [];
     attendanceDataStore = [];
     sessionDataStore = [];
+    mockClassCount = 0;
+    mockSessionCount = 0;
 
     mockCourseRepo = {
       findOneOrFail: jest.fn().mockResolvedValue({ id: 'course-1', name: 'Tiếng Anh THCS' }),
@@ -33,6 +38,7 @@ describe('CourseController - Pricing History, Edit, Delete & Multi-class Billing
     mockLevelRepo = {
       findOneOrFail: jest.fn().mockResolvedValue({ id: 'level-1', levelName: 'Level A1', courseId: 'course-1' }),
       find: jest.fn(),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
 
     // Setup a mock query builder for attendance check
@@ -70,8 +76,7 @@ describe('CourseController - Pricing History, Edit, Delete & Multi-class Billing
         return { maxDate: dates.reduce((max, d) => d > max ? d : max, dates[0]) };
       }),
       getCount: jest.fn().mockImplementation(async () => {
-        // Simple mock search in sessionDataStore
-        return sessionDataStore.filter(s => s.wageId !== null || s.assistantWageId !== null).length;
+        return mockSessionCount;
       }),
     };
 
@@ -85,6 +90,11 @@ describe('CourseController - Pricing History, Edit, Delete & Multi-class Billing
         if (entity === ClassSessionOrmEntity) {
           return {
             createQueryBuilder: jest.fn().mockReturnValue(mockSessionQueryBuilder),
+          };
+        }
+        if (entity === ClassOrmEntity) {
+          return {
+            count: jest.fn().mockImplementation(async () => mockClassCount),
           };
         }
         return {};
@@ -247,6 +257,32 @@ describe('CourseController - Pricing History, Edit, Delete & Multi-class Billing
       // SLA Target: < 50ms cho việc chạy logic đối soát trên RAM (Unit Test)
       expect(executionTime).toBeLessThan(50);
       console.log(`Course pricing lock query performance: ${executionTime.toFixed(2)}ms`);
+    });
+  });
+
+  describe('Chức năng xóa Level', () => {
+    it('xóa Level thành công khi chưa có lớp học hoặc buổi học nào sử dụng', async () => {
+      mockClassCount = 0;
+      mockSessionCount = 0;
+
+      const result = await controller.deleteLevel('level-1');
+
+      expect(result).toEqual({ message: 'Xóa Level thành công' });
+      expect(mockLevelRepo.delete).toHaveBeenCalledWith('level-1');
+    });
+
+    it('không cho xóa Level khi có lớp học sử dụng và báo lỗi ConflictException', async () => {
+      mockClassCount = 1;
+      mockSessionCount = 0;
+
+      await expect(controller.deleteLevel('level-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('không cho xóa Level khi có buổi học liên quan và báo lỗi ConflictException', async () => {
+      mockClassCount = 0;
+      mockSessionCount = 3;
+
+      await expect(controller.deleteLevel('level-1')).rejects.toThrow(ConflictException);
     });
   });
 });

@@ -61,14 +61,25 @@ export class CourseController {
     const course = await this.courseRepo.findOneOrFail({ where: { id } });
     const levels = await this.levelRepo.find({ where: { courseId: id }, order: { createdAt: 'ASC' } });
 
-    // Get pricing for each level
+    // Get pricing and counts for each level
     const levelsWithPricing = await Promise.all(
       levels.map(async (level) => {
         const pricing = await this.pricingRepo.find({
           where: { courseLevelId: level.id },
           order: { effectiveFrom: 'DESC' },
         });
-        return { ...level, pricing };
+
+        const classCount = await this.pricingRepo.manager.getRepository(ClassOrmEntity).count({
+          where: { courseLevelId: level.id },
+        });
+
+        const sessionCount = await this.pricingRepo.manager.getRepository(ClassSessionOrmEntity)
+          .createQueryBuilder('session')
+          .innerJoin('session.classEntity', 'class')
+          .where('class.courseLevelId = :levelId', { levelId: level.id })
+          .getCount();
+
+        return { ...level, pricing, classCount, sessionCount };
       }),
     );
 
@@ -284,6 +295,38 @@ export class CourseController {
     });
 
     return this.pricingRepo.save(pricing);
+  }
+
+  @Delete('levels/:levelId')
+  @ApiOperation({ summary: 'Xóa Level nếu chưa có lớp học hay buổi học nào sử dụng' })
+  async deleteLevel(@Param('levelId') levelId: string) {
+    const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
+
+    // 1. Check if any classes reference this level
+    const classCount = await this.pricingRepo.manager.getRepository(ClassOrmEntity).count({
+      where: { courseLevelId: levelId },
+    });
+
+    if (classCount > 0) {
+      throw new ConflictException('Không thể xóa Level vì đã có lớp học sử dụng.');
+    }
+
+    // 2. Check if any class sessions are associated with this level
+    const sessionCount = await this.pricingRepo.manager.getRepository(ClassSessionOrmEntity)
+      .createQueryBuilder('session')
+      .innerJoin('session.classEntity', 'class')
+      .where('class.courseLevelId = :levelId', { levelId })
+      .getCount();
+
+    if (sessionCount > 0) {
+      throw new ConflictException('Không thể xóa Level vì có buổi học/điểm danh liên quan.');
+    }
+
+    // 3. Delete pricing rules then delete level
+    await this.pricingRepo.delete({ courseLevelId: levelId });
+    await this.levelRepo.delete(levelId);
+
+    return { message: 'Xóa Level thành công' };
   }
 
   @Get('levels/:levelId/active-classes')
