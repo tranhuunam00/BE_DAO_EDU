@@ -432,45 +432,37 @@ sequenceDiagram
 
         <!-- 5. BƯỚC 3: LOGIC ĐỐI KHỚP & ĐIỂM DANH -->
         <div class="card">
-            <h2>4. Logic Đối Khớp Buổi Học & Ghi Nhận Điểm Danh <span>Xử lý khớp ca</span></h2>
-            <p>Khi Backend nhận sự kiện quẹt của mã học sinh <code>3456</code> vào lúc <code>17:15:30</code> ngày <code>10/08/2026</code>:</p>
+            <h2>4. Logic Xử Lý 2 Bước: Từ Lượt Quẹt Thô Đến Điểm Danh <span>Luồng dữ liệu</span></h2>
+            <p>Để đảm bảo độ tin cậy tuyệt đối, hệ thống xử lý dữ liệu quẹt thẻ theo quy trình 2 bước khép kín dưới đây:</p>
             
-            <ol>
-                <li><strong>Bước 4.1: Tìm thông tin học sinh</strong>
-                    <ul>
-                        <li>Truy vấn DB: Lấy ID học sinh dựa vào mã <code>student_code = '3456'</code>.</li>
-                        <li>Lấy danh sách các lớp học sinh này đang đăng ký học.</li>
-                    </ul>
-                </li>
-                <li><strong>Bước 4.2: Lấy ca học (Class Session) trong ngày</strong>
-                    <ul>
-                        <li>Tìm các buổi học (ClassSession) có ngày học <code>date = '2026-08-10'</code> của những lớp học sinh tham gia.</li>
-                        <li>Ví dụ tìm được một ca học: Lớp Toán nâng cao từ <strong>17:30 đến 19:30</strong>.</li>
-                    </ul>
-                </li>
-                <li><strong>Bước 4.3: Đối khớp múi giờ vào lớp (Check-in Window)</strong>
-                    <ul>
-                        <li>Quy định múi giờ cho phép điểm danh tự động: <strong>[Giờ bắt đầu - 30 phút]</strong> đến <strong>[Giờ bắt đầu + 30 phút]</strong>.</li>
-                        <li>Ca học bắt đầu lúc 17:30 &rarr; Khung giờ điểm danh hợp lệ: <code>17:00:00</code> đến <code>18:00:00</code>.</li>
-                        <li>Thời gian quẹt thực tế: <code>17:15:30</code> nằm trong khung giờ &rarr; <strong>Khớp thành công!</strong></li>
-                    </ul>
-                </li>
-                <li><strong>Bước 4.4: Ghi nhận điểm danh & Loại hình điểm danh (Type = Máy)</strong>
-                    <ul>
-                        <li>Kiểm tra xem buổi học có đang bị khóa điểm danh không (<code>attendanceLocked === false</code>).</li>
-                        <li>Tạo hoặc Cập nhật bản ghi trong bảng điểm danh học sinh (<code>student_attendance</code>):
-                            <ul>
-                                <li><code>class_session_id</code>: ID buổi học vừa khớp.</li>
-                                <li><code>student_id</code>: ID học sinh.</li>
-                                <li><code>isPresent</code>: <code>true</code> (Có mặt).</li>
-                                <li><code>attendance_type</code>: <code>'machine'</code> (Lưu nguồn điểm danh từ máy chấm công) <span class="badge badge-db">Cột mới thêm</span></li>
-                                <li><code>verify_method</code>: <code>'face'</code> (Cách quẹt đã chuẩn hóa ở trên) <span class="badge badge-db">Cột mới thêm</span></li>
-                                <li><code>note</code>: <code>"Điểm danh tự động qua máy chấm công lúc 17:15:30"</code>.</li>
-                            </ul>
-                        </li>
-                    </ul>
-                </li>
-            </ol>
+            <div class="highlight-box">
+                <h4>Bước 1: Nhận và Lưu Trữ Nhật Ký Thô (Raw Ingestion)</h4>
+                <p>Cả <strong>Webhook thời gian thực</strong> và <strong>Cron Job đồng bộ bù (Polling)</strong> khi nhận dữ liệu quẹt từ máy chấm công đều sẽ ghi vào bảng nhật ký thô <code>timekeeping_log</code>:</p>
+                <ul>
+                    <li>Backend thực hiện câu lệnh chèn dữ liệu kèm cơ chế phòng vệ: <code>INSERT INTO timekeeping_log (...) ON CONFLICT (student_id, event_time) DO NOTHING</code>.</li>
+                    <li><strong>Mục đích:</strong> Nếu dữ liệu quẹt đã được lưu trước đó (ví dụ: đã nhận qua Webhook), lần quét bù của Cron Job sẽ bị bỏ qua, đảm bảo dữ liệu thô không bao giờ bị đúp hoặc ghi đè sai lệch.</li>
+                </ul>
+            </div>
+
+            <div class="highlight-box" style="border-left-color: var(--color-success);">
+                <h4>Bước 2: Phản Ánh Sang Bảng Điểm Danh (Attendance Reflection)</h4>
+                <p>Mỗi khi một bản ghi <code>timekeeping_log</code> mới được tạo thành công, Backend kích hoạt luồng đối khớp ca học ngày hôm đó của học viên để tạo/cập nhật bảng <code>student_attendance</code>:</p>
+                <ol>
+                    <li><strong>Tìm ca học:</strong> Lấy danh sách ca học (ClassSession) trong ngày của học viên.</li>
+                    <li><strong>Áp dụng công thức Khung Giờ & Liên Thông:</strong>
+                        <ul>
+                            <li>Nếu giờ quẹt nằm trong khung Vào của Ca 1 &rarr; Điểm danh <strong>Có mặt</strong> cho Ca 1, đồng thời tự động tích Có mặt cho cả Ca 2 (nếu sát nhau &le; 60 phút).</li>
+                            <li>Nếu giờ quẹt nằm trong khung Ra của Ca 2 &rarr; Xác nhận hoàn thành ca học.</li>
+                            <li>Nếu giờ quẹt nằm trong khoảng nghỉ giao ca &rarr; Đổi trạng thái Ca 2 thành <strong>Vắng mặt</strong> (Hủy liên thông do học sinh ốm về).</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+            
+            <div class="highlight-box" style="border-left-color: var(--color-warning);">
+                <h4>Đồng Bộ Lại Giờ Thiết Bị (Time Synchronization):</h4>
+                <p>Để các khung giờ check-in/out hoạt động chuẩn xác từng giây, hệ thống có một Cron Job định kỳ hàng ngày (ví dụ 01:00 sáng) tự động đồng bộ giờ máy chấm công theo múi giờ chuẩn Việt Nam của máy chủ (UTC+7) thông qua API: <code>PUT /ISAPI/System/time</code>. Admin cũng có thể bấm nút "Đồng bộ giờ" trên Tab cấu hình thiết bị để đồng bộ ngay lập tức.</p>
+            </div>
         </div>
 
         <!-- 6. XỬ LÝ CÁC CA HỌC ĐẶC BIỆT TRONG NGÀY -->
@@ -500,7 +492,7 @@ sequenceDiagram
                 <li><strong>Trường hợp 4: Đi học muộn (Late Check-in):</strong>
                     <ul>
                         <li><strong>Đặc điểm:</strong> Giờ quẹt trễ hơn > 30 phút so với giờ bắt đầu học (Ví dụ ca học 17:30, quẹt lúc 18:15).</li>
-                        <li><strong>Xử lý:</strong> Giờ quẹt nằm ngoài khung check-in standard (17:00 - 18:00) nhưng ca học vẫn đang diễn ra (17:30 - 19:30). Hệ thống vẫn <strong>ghi nhận điểm danh có mặt</strong>, nhưng gắn cờ đi muộn: <code>isPresent = true</code>, trạng thái <code>late = true</code>, và tính toán số phút đi muộn (45 phút) lưu vào DB.</li>
+                        <li><strong>Xử lý:</strong> Giờ quẹt nằm ngoài khung check-in standard (17:00 - 18:00) nhưng ca học vẫn đang diễn ra (17:30 - 19:30). Hệ thống vẫn <strong>ghi nhận điểm danh có mặt</strong>, gắn cờ đi muộn: <code>isPresent = true</code>, trạng thái <code>isLate = true</code>, và tính toán số phút đi muộn (45 phút) lưu vào DB. <strong>Lưu ý:</strong> Thông tin đi muộn này chỉ dùng để thống kê báo cáo gửi phụ huynh, hoàn toàn không ảnh hưởng đến việc tính tiền học phí (học viên vẫn bị tính phí bình thường của buổi học đó do <code>isPresent = true</code>).</li>
                     </ul>
                 </li>
                 <li><strong>Trường hợp 5: Cảnh báo Quên Quẹt (Missing Scan Detection & Teacher Alerts):</strong>
@@ -537,53 +529,101 @@ sequenceDiagram
                                     <li>Nếu <code>gap > MAX_CONSECUTIVE_GAP</code> &rarr; Tính là các ca độc lập (phải quẹt vào/ra riêng biệt).</li>
                                 </ul>
                             </li>
-                            <li><strong>Logic xử lý 2 ca liên tiếp / sát nhau - Học viên chỉ cần quẹt 2 lần:</strong>
-                                <ul>
-                                    <li><strong>Bước 1 (Đến trung tâm - Quẹt lần 1 lúc 13:50):</strong> Lượt quẹt nằm trong Khung Vào của Ca 1 &rarr; Backend điểm danh <strong>Có mặt</strong> cho Ca 1, đồng thời tự động <strong>kích hoạt thừa kế (Auto check-in)</strong> Có mặt cho cả Ca 2.</li>
-                                    <li><strong>Bước 2 (Về nhà - Quẹt lần 2 lúc 19:05 sau khi hết Ca 2):</strong> Lượt quẹt nằm trong Khung Ra của Ca 2 &rarr; Backend ghi nhận hoàn tất cả buổi học.</li>
-                                    <li><strong>Trường hợp đặc biệt (Ốm về giữa chừng trong khoảng nghỉ):</strong> Học sinh đi ra ngoài và quẹt thẻ lúc 16:00 - 17:00 (khoảng nghỉ giữa Ca 1 và Ca 2). Backend kiểm tra lịch sử đã có mặt Ca 1 &rarr; Xác định đây là lượt **Quẹt Ra (Check-out / Đi về)** &rarr; Giữ nguyên Ca 1 có mặt, lập tức **hủy bỏ điểm danh của Ca 2** (chuyển Ca 2 thành Vắng mặt để không tính tiền).</li>
-                                </ul>
-                            </li>
-                        </ul>
-                    </li>
-                    <li><strong>Giải pháp 2: Độ ưu tiên ghi đè của Giáo viên (Teacher Override & Validation - BẮT BUỘC)</strong>
-                        <ul>
-                            <li>Điểm danh tự động qua máy chấm công chỉ đóng vai trò là <strong>Khởi tạo dữ liệu nháp (Draft Status)</strong>.</li>
-                            <li>Khi vào Ca 2, giáo viên đứng lớp của Ca 2 mở danh sách học sinh trên App. Phát hiện học sinh không có mặt trong lớp học thực tế &rarr; Giáo viên tích chọn <strong>Vắng mặt (Absent)</strong> hoặc <strong>Nghỉ giữa chừng (Left Early)</strong>.</li>
-                            <li><strong>Quy tắc nghiệp vụ:</strong> Hành động tích thủ công của Giáo viên trên App luôn có <strong>Độ ưu tiên cao nhất (Highest Override Priority)</strong>. Hệ thống sẽ ghi đè trạng thái <code>isPresent = false</code>, cập nhật trường <code>attendance_type = 'manual'</code> (ghi nhận giáo viên đã xác thực lại) và tự động cập nhật hệ thống học phí (không tính tiền ca học này).</li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="warning-box">
-                <h4>Quy tắc ưu tiên (Priority Rule):</h4>
-                <p>Nếu giờ quẹt của học viên rơi vào giao lộ giữa khung check-in muộn của Ca 1 (đang diễn ra) và khung check-in sớm của Ca 2 (sắp diễn ra): Hệ thống ưu tiên điểm danh cho Ca 2 sắp diễn ra, còn Ca 1 trước đó sẽ tính là vắng (hoặc đợi giáo viên sửa tay) để đảm bảo độ chính xác cao nhất.</p>
-            </div>
-        </div>
-
-        <!-- 7. THIẾT KẾ CƠ SỞ DỮ LIỆU -->
+          <!-- 7. THIẾT KẾ CƠ SỞ DỮ LIỆU -->
         <div class="card">
             <h2>6. Mở Rộng Cơ Sở Dữ Liệu <span>Cấu trúc bảng</span></h2>
-            <p>Để lưu trữ thông tin nguồn điểm danh (thủ công hay qua máy) và cách quẹt, chúng ta sẽ mở rộng bảng <code>student_attendance</code>:</p>
+            <p>Để hỗ trợ quản lý cấu hình thiết bị động và thông tin đồng bộ điểm danh, chúng ta sẽ thiết kế các bảng cơ sở dữ liệu sau:</p>
             
-            <pre><code>// 1. Thêm cột nguồn điểm danh (attendance_type)
-// Cho phép phân biệt: 'manual' (giáo viên tích) và 'machine' (máy chấm công quẹt tự động)
+            <h3>6.1 Bảng Cấu Hình Thiết Bị Chấm Công (timekeeping_device)</h3>
+            <p>Bảng này lưu danh sách các máy chấm công tại trung tâm để Backend kết nối và điều khiển tự động:</p>
+            <pre><code>@Entity('timekeeping_device')
+export class TimekeepingDeviceOrmEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  name!: string; // Tên thiết bị (Ví dụ: Máy chấm công cửa chính)
+
+  @Column({ type: 'varchar', length: 50, name: 'ip_address' })
+  ipAddress!: string; // Địa chỉ IP (Ví dụ: 192.168.22.123)
+
+  @Column({ type: 'int', default: 80 })
+  port!: number; // Cổng kết nối (Mặc định: 80)
+
+  @Column({ type: 'varchar', length: 50, default: 'admin' })
+  username!: string; // Tài khoản đăng nhập
+
+  @Column({ type: 'varchar', length: 100 })
+  password!: string; // Mật khẩu thiết bị (được mã hóa)
+
+  @Column({ type: 'varchar', length: 20, default: 'offline' })
+  status!: string; // Trạng thái: 'online' | 'offline'
+
+  @Column({ type: 'timestamp', nullable: true, name: 'last_sync_time' })
+  lastSyncTime!: Date | null; // Lần cuối đồng bộ dữ liệu sự kiện
+}</code></pre>
+
+            <h3>6.2 Cập Nhật Bảng Học Sinh (student)</h3>
+            <p>Thêm trường để kiểm tra xem tài khoản học viên đã được khởi tạo trên thiết bị chấm công hay chưa:</p>
+            <pre><code>@Column({ 
+  type: 'boolean', 
+  name: 'is_synced_to_device', 
+  default: false 
+})
+isSyncedToDevice!: boolean; // Đã tạo account (Mã HS + Tên) trên máy chấm công chưa</code></pre>
+
+            <h3>6.3 Cập Nhật Bảng Điểm Danh (student_attendance)</h3>
+            <p>Mở rộng bảng điểm danh để lưu trữ chi tiết nguồn dữ liệu quẹt thẻ và thông tin đi muộn:</p>
+            <pre><code>// 1. Nguồn điểm danh: 'manual' (giáo viên tích) | 'machine' (máy chấm công)
 @Column({ 
   type: 'varchar', 
   name: 'attendance_type', 
   default: 'manual' 
 })
-attendanceType!: string; // 'manual' | 'machine' | 'system'
+attendanceType!: string; // 'manual' | 'machine'
 
-// 2. Thêm cột phương thức quẹt thẻ thực tế (verify_method)
-// Lưu trữ: 'face' (mặt), 'fingerprint' (vân tay), 'card' (thẻ), 'pin' (mã PIN)
+// 2. Cách thức quẹt thẻ: 'face' | 'fingerprint' | 'card' | 'pin'
 @Column({ 
   type: 'varchar', 
   name: 'verify_method', 
   nullable: true 
 })
-verifyMethod!: string | null; // 'face' | 'fingerprint' | 'card' | 'pin' | null</code></pre>
+verifyMethod!: string | null;
+
+// 3. Cờ đi muộn và Số phút đi muộn
+@Column({ type: 'boolean', name: 'is_late', default: false })
+isLate!: boolean;
+
+@Column({ type: 'int', name: 'late_minutes', default: 0 })
+lateMinutes!: number;</code></pre>
+        </div>
+
+        <!-- 8. BẢNG NHẬT KÝ QUẸT THẺ THÔ -->
+        <div class="card">
+            <h2>7. Nhật Ký Lượt Quẹt Thô (timekeeping_log) <span>Phòng vệ trùng lặp</span></h2>
+            <p>Bảng này lưu trữ toàn bộ các sự kiện quẹt thô nhận về từ Webhook hoặc Polling API trước khi đối khớp điểm danh. Sử dụng ràng buộc duy nhất để tự động lọc trùng:</p>
+            
+            <pre><code>@Entity('timekeeping_log')
+@Unique(['studentId', 'eventTime']) // Chống trùng lặp dữ liệu thô
+export class TimekeepingLogOrmEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'uuid', name: 'student_id' })
+  studentId!: string; // Khóa ngoại liên kết student.id
+
+  @Column({ type: 'varchar', length: 50, name: 'employee_no' })
+  employeeNo!: string; // Mã số quẹt thẻ (student_code)
+
+  @Column({ type: 'timestamp', name: 'event_time' })
+  eventTime!: Date; // Thời gian quẹt thực tế từ thiết bị (+07:00)
+
+  @Column({ type: 'varchar', length: 50, name: 'verify_method' })
+  verifyMethod!: string; // 'face' | 'fingerprint' | 'card' | 'pin'
+
+  @Column({ type: 'jsonb', nullable: true, name: 'raw_payload' })
+  rawPayload!: any; // Lưu JSON gốc từ Hikvision để đối soát khi cần
+}</code></pre>
         </div>
     </div>
 </body>

@@ -23,6 +23,18 @@ export class StudentAttendanceOrmEntity {
   @Column({ type: 'boolean', name: 'is_present', default: false })
   isPresent!: boolean;
 
+  @Column({ type: 'varchar', name: 'attendance_type', default: 'manual' })
+  attendanceType!: string; // 'manual' | 'machine'
+
+  @Column({ type: 'varchar', name: 'verify_method', nullable: true })
+  verifyMethod!: string | null; // 'face' | 'fingerprint' | 'card' | 'pin'
+
+  @Column({ type: 'boolean', name: 'is_late', default: false })
+  isLate!: boolean;
+
+  @Column({ type: 'int', name: 'late_minutes', default: 0 })
+  lateMinutes!: number;
+
   @Column({ type: 'varchar', nullable: true })
   reason!: string | null;
 

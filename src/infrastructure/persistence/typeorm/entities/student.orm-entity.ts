@@ -81,6 +81,9 @@ export class StudentOrmEntity {
   @Column({ type: 'text', nullable: true })
   avatar!: string | null;
 
+  @Column({ type: 'boolean', name: 'is_synced_to_device', default: false })
+  isSyncedToDevice!: boolean;
+
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId!: string | null;
 

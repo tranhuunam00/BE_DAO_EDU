@@ -1,0 +1,138 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between, DataSource } from 'typeorm';
+import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../domain/services/timekeeping-matcher';
+
+@Injectable()
+export class ProcessRawLogUseCase {
+  constructor(
+    @InjectRepository(StudentOrmEntity)
+    private readonly studentRepository: Repository<StudentOrmEntity>,
+    
+    @InjectRepository(StudentAttendanceOrmEntity)
+    private readonly studentAttendanceRepository: Repository<StudentAttendanceOrmEntity>,
+    
+    @InjectRepository(TimekeepingLogOrmEntity)
+    private readonly timekeepingLogRepository: Repository<TimekeepingLogOrmEntity>,
+
+    private readonly dataSource: DataSource,
+  ) {}
+
+  async execute(
+    studentCode: string,
+    eventTime: Date,
+    verifyMethod: string,
+    rawPayload?: any,
+  ): Promise<any[]> {
+    // 1. Tìm thông tin học sinh qua mã số quẹt thẻ
+    const student = await this.studentRepository.findOne({ where: { studentId: studentCode } });
+    if (!student) {
+      throw new NotFoundException(`Học sinh có mã ${studentCode} không tồn tại trên hệ thống.`);
+    }
+
+    // 2. Ghi nhận nhật ký thô và chống trùng lặp qua DB Unique constraint
+    try {
+      await this.timekeepingLogRepository.createQueryBuilder()
+        .insert()
+        .values({
+          studentId: student.id,
+          employeeNo: studentCode,
+          eventTime,
+          verifyMethod,
+          rawPayload,
+        })
+        .orIgnore() // ON CONFLICT DO NOTHING
+        .execute();
+    } catch (err) {
+      // Bỏ qua nếu có lỗi trùng lặp ràng buộc duy nhất
+    }
+
+    // 3. Tính toán khung ngày học của lượt quẹt (múi giờ +07:00)
+    const offset = 7 * 60 * 60 * 1000;
+    const localTime = new Date(eventTime.getTime() + offset);
+    const dateString = localTime.toISOString().substring(0, 10);
+
+    const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
+    const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
+
+    // 4. Lấy tất cả nhật ký quẹt thẻ trong ngày của học sinh này
+    const dbLogs = await this.timekeepingLogRepository.find({
+      where: {
+        studentId: student.id,
+        eventTime: Between(startOfDay, endOfDay)
+      }
+    });
+
+    const domainLogs: TimekeepingLog[] = dbLogs.map(log => ({
+      studentId: log.studentId,
+      employeeNo: log.employeeNo,
+      eventTime: log.eventTime,
+      verifyMethod: log.verifyMethod,
+    }));
+
+    // 5. Lấy danh sách ca học được xếp lịch trong ngày của học sinh này
+    const sessions = await this.dataSource.getRepository(ClassSessionOrmEntity)
+      .createQueryBuilder('session')
+      .innerJoin('class_students', 'cs', 'cs.class_id = session.class_id')
+      .innerJoin('classes', 'c', 'c.id = session.class_id')
+      .where('cs.student_id = :studentId', { studentId: student.id })
+      .andWhere('cs.status = :status', { status: 'Active' })
+      .andWhere('session.date = :date', { date: dateString })
+      .select([
+        'session.id AS id',
+        'c.class_name AS className',
+        'session.startTime AS startTime',
+        'session.endTime AS endTime',
+        'session.date AS date',
+      ])
+      .getRawMany();
+
+    const domainSessions: DomainClassSession[] = sessions.map(row => ({
+      id: row.id,
+      className: row.classname || row.className || '',
+      startTime: row.starttime ? row.starttime.substring(0, 5) : '',
+      endTime: row.endtime ? row.endtime.substring(0, 5) : '',
+      date: row.date,
+    }));
+
+    // 6. Chạy thuật toán đối khớp của tầng Domain
+    const matchResults = TimekeepingMatcher.match(student.id, domainSessions, domainLogs);
+
+    // 7. Lưu / Cập nhật kết quả điểm danh vào bảng student_attendance
+    const savedResults = [];
+    for (const res of matchResults) {
+      let attendance = await this.studentAttendanceRepository.findOne({
+        where: { studentId: student.id, classSessionId: res.classSessionId }
+      });
+
+      // Nếu đã có bản ghi điểm danh do giáo viên tích thủ công (manual) -> Không ghi đè
+      if (attendance && attendance.attendanceType === 'manual') {
+        savedResults.push(attendance);
+        continue;
+      }
+
+      if (!attendance) {
+        attendance = this.studentAttendanceRepository.create({
+          studentId: student.id,
+          classSessionId: res.classSessionId,
+        });
+      }
+
+      attendance.isPresent = res.isPresent;
+      attendance.attendanceType = res.attendanceType;
+      attendance.verifyMethod = res.verifyMethod;
+      attendance.isLate = res.isLate;
+      attendance.lateMinutes = res.lateMinutes;
+      attendance.note = res.note;
+
+      const saved = await this.studentAttendanceRepository.save(attendance);
+      savedResults.push(saved);
+    }
+
+    return savedResults;
+  }
+}
