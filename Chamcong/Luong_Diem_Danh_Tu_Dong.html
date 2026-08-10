@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luồng Điểm Danh Học Viên Tự Động Qua Máy Chấm Công</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            theme: 'dark',
+            startOnLoad: true,
+            securityLevel: 'loose',
+            themeVariables: {
+                background: '#131b2e',
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#f1f5f9',
+                lineColor: '#60a5fa',
+                secondaryColor: '#1e293b'
+            }
+        });
+    </script>
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: #131b2e;
+            --bg-card-hover: #182238;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-color-active: rgba(59, 130, 246, 0.4);
+            
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-accent: #3b82f6;
+            --text-accent-glow: rgba(59, 130, 246, 0.15);
+            
+            --color-success: #10b981;
+            --color-warning: #f59e0b;
+            --color-info: #06b6d4;
+            --color-danger: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        /* Header block */
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 36px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        header p {
+            font-size: 16px;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Card components */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .card:hover {
+            border-color: var(--border-color-active);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px -3px rgba(0, 0, 0, 0.2), 0 4px 12px -2px rgba(59, 130, 246, 0.08);
+        }
+
+        .card h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            color: #60a5fa;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2 span {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        li strong {
+            color: #93c5fd;
+        }
+
+        /* Mermaid diagram wrapper */
+        .diagram-container {
+            background: #101626;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        /* XML/JSON Code styling */
+        code {
+            font-family: 'Fira Code', monospace;
+            background: #182238;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #f472b6;
+            font-size: 14px;
+        }
+
+        pre {
+            background: #080c14;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        pre code {
+            color: #a7f3d0;
+            background: none;
+            padding: 0;
+            font-size: 13px;
+        }
+
+        /* Table styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        th {
+            background-color: #1a253d;
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Custom boxes */
+        .highlight-box {
+            background: rgba(16, 185, 129, 0.06);
+            border-left: 4px solid var(--color-success);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+        }
+
+        .highlight-box h4 {
+            color: var(--color-success);
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .warning-box {
+            background: rgba(245, 158, 11, 0.06);
+            border-left: 4px solid var(--color-warning);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+        }
+
+        .warning-box h4 {
+            color: var(--color-warning);
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .danger-box {
+            background: rgba(239, 68, 68, 0.06);
+            border-left: 4px solid var(--color-danger);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+        }
+
+        .danger-box h4 {
+            color: var(--color-danger);
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+        .badge-db { background: rgba(6, 182, 212, 0.15); color: var(--color-info); }
+        .badge-device { background: rgba(245, 158, 11, 0.15); color: var(--color-warning); }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hệ Thống Điểm Danh Học Viên Tự Động</h1>
+            <p>Luồng tích hợp máy chấm công Hikvision khuôn mặt/vân tay/thẻ từ với hệ thống quản lý đào tạo để tự động hóa hoạt động điểm danh lớp học.</p>
+        </header>
+
+        <!-- 1. MERMAID DIAGRAM -->
+        <div class="card">
+            <h2>Sơ Đồ Luồng Hoạt Động (Architecture Flow)</h2>
+            <div class="diagram-container">
+                <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor HS as Học Sinh
+    actor Admin as Quản Trị Viên (Admin)
+    participant Dev as Máy Chấm Công (IP: 192.168.22.123)
+    participant BE as Backend System (NestJS)
+    participant DB as Cơ Sở Dữ Liệu (PostgreSQL)
+
+    Note over Admin, DB: Bước 1: Khởi tạo học sinh mới
+    Admin->>BE: 1. Tạo học sinh mới (Ví dụ: Mã HS "HS1001")
+    BE->>DB: Lưu học sinh mới
+    Admin->>Dev: 2. Đăng ký thông tin học sinh (employeeNo = "1001", Face/Vân tay/Thẻ)
+
+    Note over HS, DB: Bước 2: Sự kiện quẹt thẻ / quét khuôn mặt (Realtime)
+    HS->>Dev: 3. Thực hiện quét (Mặt / Vân tay / Thẻ)
+    
+    alt Mô hình Webhook (HTTP Listening - Máy chủ nhận POST từ Thiết bị)
+        Dev->>BE: 4. Gửi HTTP POST Event (Dữ liệu sự kiện + Mã sự kiện minor)
+    else Mô hình Alert Stream (HTTP Persistent Stream - Web giữ kết nối)
+        BE->>Dev: 4. Gọi GET /ISAPI/Event/notification/alertStream (Giữ kết nối lâu dài)
+        Dev-->>BE: Truyền chunk dữ liệu sự kiện thời gian thực
+    end
+
+    Note over BE, DB: Bước 3: Logic xử lý đối khớp & Điểm danh
+    BE->>BE: 5. Chuẩn hóa Cách quẹt (Nhận dạng Face, Vân tay hay Thẻ dựa trên mã minor)
+    BE->>DB: 6. Tìm học sinh có student_code = "1001"
+    DB-->>BE: Học sinh hợp lệ (ID, Danh sách lớp đăng ký)
+    BE->>DB: 7. Truy vấn các ClassSession (Buổi học) có lịch hôm nay của Học sinh
+    DB-->>BE: Danh sách buổi học (Ví dụ: Lớp Toán, 17:30 - 19:30)
+    
+    rect rgb(19, 27, 46)
+        Note over BE: 8. Đối khớp giờ quẹt thực tế với Giờ học
+        Note over BE: Thời gian quẹt nằm trong khoảng: [Giờ bắt đầu - 30p, Giờ bắt đầu + 30p]?
+    end
+
+    alt Trùng khớp buổi học & Chưa khóa điểm danh
+        BE->>DB: 9. Điểm danh tự động (isPresent=true, attendance_type="machine", verify_method)
+        BE->>HS: 10. Gửi thông báo Zalo/SMS cho Phụ huynh (Bé đã vào lớp lúc...)
+    else Không trùng buổi học nào
+        BE->>DB: Lưu log ra vào cổng chung của trung tâm (Không điểm danh lớp)
+    end
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. BUỚC 1: ADMIN CÀI GÌ? -->
+        <div class="card">
+            <h2>1. Khởi Tạo & Đăng Ký Học Viên Mới <span>Bắt đầu</span></h2>
+            <p>Để hệ thống tự động nhận diện được học sinh thuộc lớp nào, thông tin cần được đồng bộ thông qua mã định danh chung:</p>
+            <ol>
+                <li><strong>Trên phần mềm quản lý (Backend Portal):</strong>
+                    <ul>
+                        <li>Admin thêm học sinh mới vào hệ thống quản lý.</li>
+                        <li>Học sinh được cấp một <strong>Mã học sinh (Student Code)</strong> duy nhất, ví dụ: <code>3456</code>.</li>
+                    </ul>
+                </li>
+                <li><strong>Trên Thiết bị chấm công (Hikvision Device):</strong>
+                    <ul>
+                        <li>Admin đăng ký thông tin sinh trắc học (quét khuôn mặt, vân tay hoặc cấp thẻ từ) cho học sinh đó trực tiếp trên máy quẹt.</li>
+                        <li><strong>Điểm mấu chốt:</strong> Trường <strong>EmployeeNo (Mã nhân viên)</strong> trên máy chấm công bắt buộc phải điền khớp 100% với số của <strong>Mã học sinh</strong> trên phần mềm (Ví dụ: <code>3456</code>).</li>
+                    </ul>
+                </li>
+            </ol>
+            <div class="highlight-box">
+                <h4>Tip đồng bộ tự động:</h4>
+                <p>Chúng ta có thể lập trình để khi Admin thêm học sinh trên Web, Backend sẽ tự động gọi API <code>PUT /ISAPI/AccessControl/UserInfo/SetUp?format=json</code> đẩy trực tiếp Mã học sinh và Tên sang máy chấm công, Admin chỉ cần cho học viên đứng trước máy để chụp khuôn mặt / quét vân tay lên bộ nhớ thiết bị là xong.</p>
+            </div>
+        </div>
+
+        <!-- 3. BƯỚC 2: MÔ HÌNH ĐỒNG BỘ KẾT HỢP HYBRID -->
+        <div class="card">
+            <h2>2. Mô Hình Đồng Bộ Kết Hợp (Hybrid Sync) - Phòng Ngừa Mất Mạng/Mất Kết Nối <span>Chống mất dữ liệu</span></h2>
+            <p>Để đảm bảo <strong>không bao giờ bị sót/mất lượt quẹt</strong> của học sinh khi hệ thống mất mạng hoặc máy chủ Backend bảo trì tạm thời, hệ thống áp dụng cơ chế kết hợp song song cả <strong>Push (Realtime Webhook)</strong> và <strong>Pull (Scheduled Polling)</strong>:</p>
+            
+            <ul>
+                <li><strong>Nhánh 1: Đẩy dữ liệu thời gian thực (Push - Webhook/AlertStream)</strong>
+                    <ul>
+                        <li><strong>Cách chạy:</strong> Sử dụng HTTP Listening Host đã được cấu hình trỏ về Backend. Mỗi khi học sinh quẹt, thiết bị đẩy ngay lập tức sự kiện về.</li>
+                        <li><strong>Mục đích:</strong> Phản hồi điểm danh tức thì (gửi thông báo về app cho phụ huynh chỉ sau vài mili-giây).</li>
+                    </ul>
+                </li>
+                <li><strong>Nhánh 2: Quét đối soát bù tự động (Pull - Cron Job Scheduler)</strong>
+                    <ul>
+                        <li><strong>Cách chạy:</strong> Backend chạy một background job định kỳ (ví dụ: mỗi 1 tiếng, hoặc vào cuối ngày lúc 23:00) gọi API của thiết bị: 
+                            <code>POST /ISAPI/AccessControl/AcsEvent?format=json</code> để kéo toàn bộ lịch sử quẹt trong ngày về.
+                        </li>
+                        <li><strong>Mục đích:</strong> Máy chấm công Hikvision có bộ nhớ trong (Flash/SD card) tự động lưu trữ tới hàng chục nghìn sự kiện ngoại tuyến khi mất mạng. Khi kết nối Internet hoạt động trở lại, Cron Job này sẽ quét kéo các lượt quẹt bị thiếu và điểm danh bù vào cơ sở dữ liệu.</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <div class="highlight-box">
+                <h4>Cơ chế Chống Trùng Lặp Dữ Liệu (Deduplication / Idempotency):</h4>
+                <p>Do sử dụng cả hai luồng Push và Pull song song, một lượt quẹt có thể được gửi đi 2 lần. Backend ngăn chặn đúp điểm danh bằng cách kiểm tra sự tồn tại trong DB trước khi ghi nhận:</p>
+                <ul>
+                    <li>Khi xử lý một lượt quẹt, Backend kiểm tra: <code>SELECT EXISTS(SELECT 1 FROM student_attendance WHERE student_id = :studentId AND class_session_id = :classSessionId)</code>.</li>
+                    <li>Nếu <strong>đã tồn tại</strong> bản ghi điểm danh cho học sinh ở buổi học đó: Backend <strong>bỏ qua</strong> (hoặc cập nhật thêm log thiết bị), không tạo bản ghi mới để đảm bảo tính nhất quán (Idempotency).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 4. CHUẨN HÓA CÁCH QUẸT -->
+        <div class="card">
+            <h2>3. Chuẩn Hóa Cách Quẹt Thực Tế (Verify Mode Normalization) <span>Phân loại</span></h2>
+            <div class="warning-box">
+                <h4>Vấn đề dữ liệu thô:</h4>
+                <p>Khi học sinh xác thực, thiết bị trả về trường <code>currentVerifyMode</code> với giá trị <code>"faceOrFpOrCardOrPw"</code>. Đây chỉ là <strong>chế độ xác thực đang mở</strong> của đầu đọc, không phản ánh học sinh thực tế đã đứng quét mặt, đặt vân tay hay quẹt thẻ từ.</p>
+            </div>
+            
+            <p><strong>Giải pháp:</strong> Dựa theo tài liệu Đặc tả sự kiện kiểm soát ra vào của Hikvision, mã sự kiện phụ (<strong><code>minor</code></strong>) trong gói tin trả về sẽ xác định chính xác phương thức xác thực học viên đã sử dụng:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Mã sự kiện phụ (Dec)</th>
+                        <th>Mã sự kiện phụ (Hex)</th>
+                        <th>Ý nghĩa trong giao thức</th>
+                        <th>Cách quẹt chuẩn hóa (Backend)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>75</strong></td>
+                        <td><code>0x4b</code></td>
+                        <td>Face Authentication Completed</td>
+                        <td><span class="badge badge-db" style="background:rgba(16,185,129,0.15);color:var(--color-success)">Khuôn mặt (Face)</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>38</strong></td>
+                        <td><code>0x26</code></td>
+                        <td>Fingerprint Matched</td>
+                        <td><span class="badge badge-db" style="background:rgba(59,130,246,0.15);color:var(--text-accent)">Vân tay (Fingerprint)</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td><code>0x01</code></td>
+                        <td>Valid Card Authentication Completed</td>
+                        <td><span class="badge badge-db" style="background:rgba(6,182,212,0.15);color:var(--color-info)">Thẻ từ (Card)</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>57</strong> / <strong>101</strong></td>
+                        <td><code>0x39</code> / <code>0x65</code></td>
+                        <td>Access Granted by Face and PIN / Password Completed</td>
+                        <td><span class="badge badge-db" style="background:rgba(245,158,11,0.15);color:var(--color-warning)">Mã PIN (PIN Code)</span></td>
+                    </tr>
+                    <tr>
+                        <td>Khác (ví dụ: 40, 60...)</td>
+                        <td>-</td>
+                        <td>Xác thực kết hợp (Card+Face, Card+Fingerprint...)</td>
+                        <td>Đa yếu tố (Multi-factor)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Đoạn mã giả chuẩn hóa cách quẹt ở Backend:</p>
+            <pre><code>function normalizeVerifyMethod(minor, cardNo) {
+    if (minor === 75) return 'face';        // Xác thực bằng mặt
+    if (minor === 38) return 'fingerprint'; // Xác thực bằng vân tay
+    if (minor === 1) return 'card';         // Xác thực bằng thẻ từ
+    if (minor === 57 || minor === 101) return 'pin'; // Xác thực bằng mã PIN
+    
+    // Dự phòng trường hợp thẻ từ trả về mã chế độ chung
+    if (cardNo && cardNo.trim() !== "") return 'card';
+    
+    return 'machine'; // Mặc định là điểm danh bằng máy
+}</code></pre>
+        </div>
+
+        <!-- 5. BƯỚC 3: LOGIC ĐỐI KHỚP & ĐIỂM DANH -->
+        <div class="card">
+            <h2>4. Logic Đối Khớp Buổi Học & Ghi Nhận Điểm Danh <span>Xử lý khớp ca</span></h2>
+            <p>Khi Backend nhận sự kiện quẹt của mã học sinh <code>3456</code> vào lúc <code>17:15:30</code> ngày <code>10/08/2026</code>:</p>
+            
+            <ol>
+                <li><strong>Bước 4.1: Tìm thông tin học sinh</strong>
+                    <ul>
+                        <li>Truy vấn DB: Lấy ID học sinh dựa vào mã <code>student_code = '3456'</code>.</li>
+                        <li>Lấy danh sách các lớp học sinh này đang đăng ký học.</li>
+                    </ul>
+                </li>
+                <li><strong>Bước 4.2: Lấy ca học (Class Session) trong ngày</strong>
+                    <ul>
+                        <li>Tìm các buổi học (ClassSession) có ngày học <code>date = '2026-08-10'</code> của những lớp học sinh tham gia.</li>
+                        <li>Ví dụ tìm được một ca học: Lớp Toán nâng cao từ <strong>17:30 đến 19:30</strong>.</li>
+                    </ul>
+                </li>
+                <li><strong>Bước 4.3: Đối khớp múi giờ vào lớp (Check-in Window)</strong>
+                    <ul>
+                        <li>Quy định múi giờ cho phép điểm danh tự động: <strong>[Giờ bắt đầu - 30 phút]</strong> đến <strong>[Giờ bắt đầu + 30 phút]</strong>.</li>
+                        <li>Ca học bắt đầu lúc 17:30 &rarr; Khung giờ điểm danh hợp lệ: <code>17:00:00</code> đến <code>18:00:00</code>.</li>
+                        <li>Thời gian quẹt thực tế: <code>17:15:30</code> nằm trong khung giờ &rarr; <strong>Khớp thành công!</strong></li>
+                    </ul>
+                </li>
+                <li><strong>Bước 4.4: Ghi nhận điểm danh & Loại hình điểm danh (Type = Máy)</strong>
+                    <ul>
+                        <li>Kiểm tra xem buổi học có đang bị khóa điểm danh không (<code>attendanceLocked === false</code>).</li>
+                        <li>Tạo hoặc Cập nhật bản ghi trong bảng điểm danh học sinh (<code>student_attendance</code>):
+                            <ul>
+                                <li><code>class_session_id</code>: ID buổi học vừa khớp.</li>
+                                <li><code>student_id</code>: ID học sinh.</li>
+                                <li><code>isPresent</code>: <code>true</code> (Có mặt).</li>
+                                <li><code>attendance_type</code>: <code>'machine'</code> (Lưu nguồn điểm danh từ máy chấm công) <span class="badge badge-db">Cột mới thêm</span></li>
+                                <li><code>verify_method</code>: <code>'face'</code> (Cách quẹt đã chuẩn hóa ở trên) <span class="badge badge-db">Cột mới thêm</span></li>
+                                <li><code>note</code>: <code>"Điểm danh tự động qua máy chấm công lúc 17:15:30"</code>.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <!-- 6. XỬ LÝ CÁC CA HỌC ĐẶC BIỆT TRONG NGÀY -->
+        <div class="card">
+            <h2>5. Xử Lý Các Ca Học Phức Tạp Trong Ngày <span>Logic nâng cao</span></h2>
+            <p>Trường hợp học sinh có nhiều ca học trong một ngày (ca sáng/chiều/tối, ca liên tiếp hoặc ca cách nhau 30 phút), Backend sẽ phân loại xử lý theo thuật toán đối khớp sau:</p>
+            
+            <ol>
+                <li><strong>Trường hợp 1: Ca cách xa nhau (Ca sáng - chiều - tối):</strong>
+                    <ul>
+                        <li><strong>Đặc điểm:</strong> Giờ bắt đầu các ca cách nhau > 1 tiếng.</li>
+                        <li><strong>Xử lý:</strong> Mỗi ca học có một khung giờ check-in riêng biệt (30 phút trước giờ học). Học viên đi ca nào bắt buộc phải quẹt máy lúc đến ca đó. Hệ thống đối khớp giờ quẹt thực tế rơi vào ca nào thì điểm danh ca đó.</li>
+                    </ul>
+                </li>
+                <li><strong>Trường hợp 2: Ca học liên tiếp (Ví dụ: Ca 1 từ 14:00 - 16:00, Ca 2 từ 16:00 - 18:00):</strong>
+                    <ul>
+                        <li><strong>Đặc điểm:</strong> Học viên học 2 môn/2 buổi liên tục và chỉ quẹt máy 1 lần duy nhất lúc 13:50 (không ra ngoài quẹt lại lúc 16:00).</li>
+                        <li><strong>Xử lý:</strong> Khi học viên quẹt lúc 13:50, hệ thống đối khớp và điểm danh cho Ca 1. Đồng thời, hệ thống kiểm tra nếu có ca học tiếp theo (Ca 2) bắt đầu trùng với giờ kết thúc của Ca 1, hệ thống sẽ <strong>tự động điểm danh có mặt (Auto check-in) cho cả Ca 2</strong>, kèm ghi chú <code>"Điểm danh tự động theo ca học liên tiếp liền trước"</code>.</li>
+                    </ul>
+                </li>
+                <li><strong>Trường hợp 3: Ca học cách nhau ngắn (Ví dụ: Ca 1 kết thúc 16:00, Ca 2 bắt đầu lúc 16:30):</strong>
+                    <ul>
+                        <li><strong>Đặc điểm:</strong> Học viên có 30 phút nghỉ ngơi giữa hai ca.</li>
+                        <li><strong>Xử lý:</strong> Hệ thống áp dụng <strong>luật tự động chuyển tiếp (Auto-rollover)</strong> nếu khoảng cách giữa 2 ca &le; 45 phút. Tức là nếu Ca 1 đã quẹt có mặt, hệ thống tự động tích có mặt cho Ca 2 mà không bắt học viên quẹt lại (trừ khi trung tâm cấu hình bắt buộc quẹt lại).</li>
+                    </ul>
+                </li>
+                <li><strong>Trường hợp 4: Đi học muộn (Late Check-in):</strong>
+                    <ul>
+                        <li><strong>Đặc điểm:</strong> Giờ quẹt trễ hơn > 30 phút so với giờ bắt đầu học (Ví dụ ca học 17:30, quẹt lúc 18:15).</li>
+                        <li><strong>Xử lý:</strong> Giờ quẹt nằm ngoài khung check-in standard (17:00 - 18:00) nhưng ca học vẫn đang diễn ra (17:30 - 19:30). Hệ thống vẫn <strong>ghi nhận điểm danh có mặt</strong>, nhưng gắn cờ đi muộn: <code>isPresent = true</code>, trạng thái <code>late = true</code>, và tính toán số phút đi muộn (45 phút) lưu vào DB.</li>
+                    </ul>
+                </li>
+                <li><strong>Trường hợp 5: Cảnh báo Quên Quẹt (Missing Scan Detection & Teacher Alerts):</strong>
+                    <ul>
+                        <li><strong>Đặc điểm:</strong> Học viên chỉ quẹt 1 đầu (ví dụ: quẹt vào lúc 13:50 nhưng tan học đi thẳng về không quẹt ra, hoặc đi học quên quẹt vào nhưng lúc về lại quẹt ra).</li>
+                        <li><strong>Xử lý phát hiện tự động (Sau khi kết thúc khung giờ học + 30 phút):</strong>
+                            <ul>
+                                <li><strong>Thiếu quẹt ra (Missing Check-out):</strong> Nếu học viên có lượt quẹt vào lúc 13:50 nhưng đến 17:00 (hết khung ra) vẫn không có lượt quẹt ra &rarr; Hệ thống tự động đẩy cảnh báo trên App của Giáo viên đứng lớp: <em>"Học viên Nguyễn Văn A đã quẹt vào lúc 13:50 nhưng thiếu lượt quẹt ra. Giáo viên vui lòng xác nhận."</em></li>
+                                <li><strong>Thiếu quẹt vào (Missing Check-in):</strong> Nếu học viên không quẹt vào nhưng lại có lượt quẹt ra lúc 16:05 &rarr; Hệ thống ghi nhận điểm danh kèm cảnh báo: <em>"Học viên Nguyễn Văn A quẹt ra lúc 16:05 nhưng thiếu lượt quẹt vào đầu ca. Giáo viên vui lòng xác nhận."</em></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            </ol>
+
+            <div class="danger-box">
+                <h4>⚠️ Bài Toán Phức Tạp: Học viên học Ca 1 nhưng ốm về ở Ca 2 (Không tính tiền Ca 2)</h4>
+                <p>Nếu hệ thống tự động tích điểm danh có mặt cho Ca 2 theo cơ chế "Ca học liên tiếp", học sinh sẽ bị tính học phí cho cả Ca 2 dù đã đi về giữa chừng. Để giải quyết triệt để, hệ thống áp dụng 2 giải pháp phối hợp:</p>
+                <ul>
+                    <li><strong>Giải pháp 1: Thuật Toán Liên Thông Ca Học (Chỉ Quẹt 2 Lần Cho Ca Liên Tiếp) trên 1 máy duy nhất</strong>
+                        <ul>
+                            <li><strong>Công thức khung thời gian ca đơn (Ví dụ Ca 14:00 - 16:00):</strong>
+                                <ul>
+                                    <li>Khung thời gian hợp lệ toàn ca là từ <strong>13:00 đến 17:00</strong> (bắt đầu 1 tiếng trước giờ học và kết thúc 1 tiếng sau giờ học).</li>
+                                    <li><strong>Khung Vào Lớp (Check-in):</strong> <code>13:00 - 14:00</code>.</li>
+                                    <li><strong>Khung Ra Về (Check-out):</strong> <code>16:00 - 17:00</code>.</li>
+                                </ul>
+                            </li>
+                            <li><strong>Công thức xác định "Ca sát nhau / Ca liên thông":</strong>
+                                <ul>
+                                    <li>Backend tính khoảng trống giữa 2 ca: <code>gap = Ca2.startTime - Ca1.endTime</code>.</li>
+                                    <li>Định nghĩa tham số cấu hình hệ thống: <code>MAX_CONSECUTIVE_GAP = 60 phút</code>.</li>
+                                    <li>Nếu <code>0 <= gap <= MAX_CONSECUTIVE_GAP</code> &rarr; Xếp vào <strong>Chuỗi ca liên thông</strong> (học sinh chỉ cần quẹt 2 lần: đầu Ca 1 và cuối Ca 2).</li>
+                                    <li>Nếu <code>gap > MAX_CONSECUTIVE_GAP</code> &rarr; Tính là các ca độc lập (phải quẹt vào/ra riêng biệt).</li>
+                                </ul>
+                            </li>
+                            <li><strong>Logic xử lý 2 ca liên tiếp / sát nhau - Học viên chỉ cần quẹt 2 lần:</strong>
+                                <ul>
+                                    <li><strong>Bước 1 (Đến trung tâm - Quẹt lần 1 lúc 13:50):</strong> Lượt quẹt nằm trong Khung Vào của Ca 1 &rarr; Backend điểm danh <strong>Có mặt</strong> cho Ca 1, đồng thời tự động <strong>kích hoạt thừa kế (Auto check-in)</strong> Có mặt cho cả Ca 2.</li>
+                                    <li><strong>Bước 2 (Về nhà - Quẹt lần 2 lúc 19:05 sau khi hết Ca 2):</strong> Lượt quẹt nằm trong Khung Ra của Ca 2 &rarr; Backend ghi nhận hoàn tất cả buổi học.</li>
+                                    <li><strong>Trường hợp đặc biệt (Ốm về giữa chừng trong khoảng nghỉ):</strong> Học sinh đi ra ngoài và quẹt thẻ lúc 16:00 - 17:00 (khoảng nghỉ giữa Ca 1 và Ca 2). Backend kiểm tra lịch sử đã có mặt Ca 1 &rarr; Xác định đây là lượt **Quẹt Ra (Check-out / Đi về)** &rarr; Giữ nguyên Ca 1 có mặt, lập tức **hủy bỏ điểm danh của Ca 2** (chuyển Ca 2 thành Vắng mặt để không tính tiền).</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li><strong>Giải pháp 2: Độ ưu tiên ghi đè của Giáo viên (Teacher Override & Validation - BẮT BUỘC)</strong>
+                        <ul>
+                            <li>Điểm danh tự động qua máy chấm công chỉ đóng vai trò là <strong>Khởi tạo dữ liệu nháp (Draft Status)</strong>.</li>
+                            <li>Khi vào Ca 2, giáo viên đứng lớp của Ca 2 mở danh sách học sinh trên App. Phát hiện học sinh không có mặt trong lớp học thực tế &rarr; Giáo viên tích chọn <strong>Vắng mặt (Absent)</strong> hoặc <strong>Nghỉ giữa chừng (Left Early)</strong>.</li>
+                            <li><strong>Quy tắc nghiệp vụ:</strong> Hành động tích thủ công của Giáo viên trên App luôn có <strong>Độ ưu tiên cao nhất (Highest Override Priority)</strong>. Hệ thống sẽ ghi đè trạng thái <code>isPresent = false</code>, cập nhật trường <code>attendance_type = 'manual'</code> (ghi nhận giáo viên đã xác thực lại) và tự động cập nhật hệ thống học phí (không tính tiền ca học này).</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <h4>Quy tắc ưu tiên (Priority Rule):</h4>
+                <p>Nếu giờ quẹt của học viên rơi vào giao lộ giữa khung check-in muộn của Ca 1 (đang diễn ra) và khung check-in sớm của Ca 2 (sắp diễn ra): Hệ thống ưu tiên điểm danh cho Ca 2 sắp diễn ra, còn Ca 1 trước đó sẽ tính là vắng (hoặc đợi giáo viên sửa tay) để đảm bảo độ chính xác cao nhất.</p>
+            </div>
+        </div>
+
+        <!-- 7. THIẾT KẾ CƠ SỞ DỮ LIỆU -->
+        <div class="card">
+            <h2>6. Mở Rộng Cơ Sở Dữ Liệu <span>Cấu trúc bảng</span></h2>
+            <p>Để lưu trữ thông tin nguồn điểm danh (thủ công hay qua máy) và cách quẹt, chúng ta sẽ mở rộng bảng <code>student_attendance</code>:</p>
+            
+            <pre><code>// 1. Thêm cột nguồn điểm danh (attendance_type)
+// Cho phép phân biệt: 'manual' (giáo viên tích) và 'machine' (máy chấm công quẹt tự động)
+@Column({ 
+  type: 'varchar', 
+  name: 'attendance_type', 
+  default: 'manual' 
+})
+attendanceType!: string; // 'manual' | 'machine' | 'system'
+
+// 2. Thêm cột phương thức quẹt thẻ thực tế (verify_method)
+// Lưu trữ: 'face' (mặt), 'fingerprint' (vân tay), 'card' (thẻ), 'pin' (mã PIN)
+@Column({ 
+  type: 'varchar', 
+  name: 'verify_method', 
+  nullable: true 
+})
+verifyMethod!: string | null; // 'face' | 'fingerprint' | 'card' | 'pin' | null</code></pre>
+        </div>
+    </div>
+</body>
+</html>
