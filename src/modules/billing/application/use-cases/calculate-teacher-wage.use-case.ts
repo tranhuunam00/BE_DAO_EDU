@@ -42,6 +42,16 @@ export interface ClassWageSummary {
 export class CalculateTeacherWageUseCase {
   constructor(private readonly persistence: BillingPersistencePort) {}
 
+  // =========================================================================
+  // NGUYÊN TẮC AN TOÀN TÀI CHÍNH & TÍNH LƯƠNG GIÁO VIÊN/TRỢ GIẢNG (WAGE SAFETY RULE):
+  // 1. Chỉ tính lương đối với các ca học mà Giáo viên đã bấm CHỐT (trạng thái 'Completed'
+  //    hoặc khóa điểm danh 'attendance_locked = true').
+  // 2. Kết hợp bắt buộc phải tồn tại dữ liệu điểm danh trong bảng 'student_attendance'
+  //    (tức là phải có ít nhất 1 học sinh được tích điểm danh, bất kể là tự động qua máy
+  //    hay giáo viên tích thủ công).
+  // 3. Nếu buổi học chưa bắt đầu (Scheduled) hoặc không có dữ liệu điểm danh nào trong DB,
+  //    hệ thống sẽ BỎ QUA HOÀN TOÀN, không tính lương ca này cho giáo viên và trợ giảng.
+  // =========================================================================
   async execute(input: CalculateTeacherWageInput): Promise<{
     summaries: ClassWageSummary[];
     pricingHistory: any[];

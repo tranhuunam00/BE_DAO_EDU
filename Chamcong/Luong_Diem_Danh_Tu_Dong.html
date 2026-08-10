@@ -508,6 +508,12 @@ sequenceDiagram
                 </li>
             </ol>
 
+            <div class="highlight-box" style="border-left-color: var(--color-info); background: rgba(6, 182, 212, 0.05); margin: 20px 0;">
+                <h4 style="color: var(--color-info); font-weight: 600; margin-bottom: 5px;">🛡️ Nguyên Tắc An Toàn Tài Chính (Billing Safety Guard):</h4>
+                <p style="margin-bottom: 8px;">Mặc dù máy chấm công tự động cập nhật trạng thái điểm danh có mặt (<code>isPresent = true</code>) ngay khi học sinh quẹt thẻ, hành động này <strong>hoàn toàn KHÔNG ảnh hưởng đến tiền học phí</strong> đối với các ca học chưa thực tế diễn ra hoặc bị hủy.</p>
+                <p><strong>Cơ chế bảo vệ:</strong> Hệ thống tính phí (Billing Module) được thiết kế chỉ truy vấn điểm danh của các ca học có trạng thái là <strong><code>Completed</code></strong> (Đã hoàn thành) hoặc đã được khóa điểm danh bởi giáo viên (<code>attendance_locked = true</code>). Các ca học ở trạng thái <code>Scheduled</code> (Chưa diễn ra) hoặc <code>In Progress</code> (Đang học) sẽ bị bộ tính tiền bỏ qua hoàn toàn. Điều này đảm bảo an toàn tuyệt đối, tránh tính học phí sai khi học viên quẹt nhầm hoặc ca học bị hủy lớp.</p>
+            </div>
+
             <div class="danger-box">
                 <h4>⚠️ Bài Toán Phức Tạp: Học viên học Ca 1 nhưng ốm về ở Ca 2 (Không tính tiền Ca 2)</h4>
                 <p>Nếu hệ thống tự động tích điểm danh có mặt cho Ca 2 theo cơ chế "Ca học liên tiếp", học sinh sẽ bị tính học phí cho cả Ca 2 dù đã đi về giữa chừng. Để giải quyết triệt để, hệ thống áp dụng 2 giải pháp phối hợp:</p>

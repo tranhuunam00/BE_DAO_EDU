@@ -46,6 +46,8 @@ import {
   RemoveStudentFromClassUseCase,
 } from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
 import { CreateAdhocSessionUseCase } from '../../modules/academics/application/use-cases/create-adhoc-session.use-case';
+import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../modules/timekeeping/domain/services/timekeeping-matcher';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -866,6 +868,13 @@ export class ClassController {
 
     session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
+
+    try {
+      await this.reconcileSessionAttendanceOnStart(session);
+    } catch (err: any) {
+      console.error(`Lỗi đối soát tự động khi bắt đầu điểm danh: ${err.message || err}`);
+    }
+
     return session;
   }
 
@@ -1568,6 +1577,89 @@ export class ClassController {
       throw new ForbiddenException(
         'Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.',
       );
+    }
+  }
+
+  private async reconcileSessionAttendanceOnStart(session: ClassSessionOrmEntity) {
+    const enrollments = await this.classStudentRepo.find({
+      where: { classId: session.classId, status: 'Active' },
+      relations: { student: true }
+    });
+    if (enrollments.length === 0) return;
+
+    const students = enrollments.map(e => e.student).filter(Boolean);
+    const studentIds = students.map(s => s.id);
+    if (studentIds.length === 0) return;
+
+    const dateStr = session.date;
+    const dateString = typeof dateStr === 'string' ? dateStr : new Date(dateStr).toISOString().substring(0, 10);
+
+    const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
+    const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
+
+    const dbLogs = await this.dataSource.getRepository(TimekeepingLogOrmEntity).find({
+      where: {
+        studentId: In(studentIds),
+        eventTime: Between(startOfDay, endOfDay)
+      }
+    });
+
+    if (dbLogs.length === 0) return;
+
+    const logsByStudent = new Map<string, TimekeepingLogOrmEntity[]>();
+    for (const log of dbLogs) {
+      if (!logsByStudent.has(log.studentId)) {
+        logsByStudent.set(log.studentId, []);
+      }
+      logsByStudent.get(log.studentId)!.push(log);
+    }
+
+    const domainSession: DomainClassSession = {
+      id: session.id,
+      className: session.classEntity?.className || '',
+      startTime: session.startTime ? session.startTime.substring(0, 5) : '',
+      endTime: session.endTime ? session.endTime.substring(0, 5) : '',
+      date: dateString,
+    };
+
+    for (const student of students) {
+      const studentLogs = logsByStudent.get(student.id) || [];
+      if (studentLogs.length === 0) continue;
+
+      const domainLogs: TimekeepingLog[] = studentLogs.map(log => ({
+        studentId: log.studentId,
+        employeeNo: log.employeeNo,
+        eventTime: log.eventTime,
+        verifyMethod: log.verifyMethod,
+      }));
+
+      const matchResults = TimekeepingMatcher.match(student.id, [domainSession], domainLogs);
+
+      for (const res of matchResults) {
+        let attendance = await this.attendanceRepo.findOne({
+          where: { studentId: student.id, classSessionId: res.classSessionId }
+        });
+
+        if (attendance && attendance.attendanceType === 'manual') {
+          continue;
+        }
+
+        if (!attendance) {
+          attendance = this.attendanceRepo.create({
+            studentId: student.id,
+            classSessionId: res.classSessionId,
+          });
+        }
+
+        attendance.isPresent = res.isPresent;
+        attendance.attendanceType = res.attendanceType;
+        attendance.verifyMethod = res.verifyMethod;
+        attendance.isLate = res.isLate;
+        attendance.lateMinutes = res.lateMinutes;
+        attendance.note = res.note;
+
+        await this.attendanceRepo.save(attendance);
+      }
     }
   }
 }

@@ -46,6 +46,17 @@ export interface ClassTuitionSummary {
 export class CalculateStudentTuitionUseCase {
   constructor(private readonly persistence: BillingPersistencePort) {}
 
+  // =========================================================================
+  // NGUYÊN TẮC AN TOÀN TÀI CHÍNH & ĐỐI SOÁT HỌC PHÍ (TUITION SAFETY RULE):
+  // 1. Chỉ tính phí đối với các buổi học mà Giáo viên đã bấm CHỐT (trạng thái 'Completed'
+  //    hoặc khóa điểm danh 'attendance_locked = true').
+  // 2. Kết hợp bắt buộc phải tồn tại dữ liệu điểm danh trong bảng 'student_attendance'
+  //    (dữ liệu này có thể được sinh tự động khi học viên quẹt máy chấm công hoặc do
+  //    giáo viên chủ động tích điểm danh thủ công trên lớp).
+  // 3. Nếu buổi học ở trạng thái Scheduled (chưa bắt đầu/hủy) hoặc không tìm thấy
+  //    thông tin điểm danh nào, hệ thống tính phí học sinh sẽ BỎ QUA HOÀN TOÀN,
+  //    không tự ý tính tiền học của buổi này để đảm bảo an toàn tài chính.
+  // =========================================================================
   async execute(input: CalculateStudentTuitionInput): Promise<{
     summaries: ClassTuitionSummary[];
     pricingHistory: any[];

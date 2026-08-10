@@ -618,6 +618,15 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         '(session.status = :completedStatus OR session.attendance_locked = :locked)',
         { completedStatus: SessionStatus.COMPLETED, locked: true },
       );
+      query.andWhere(qb => {
+        const subQuery = qb
+          .subQuery()
+          .select('1')
+          .from('student_attendance', 'att')
+          .where('att.class_session_id = session.id')
+          .getQuery();
+        return 'EXISTS ' + subQuery;
+      });
     }
 
     const sessions = await query
@@ -1092,7 +1101,16 @@ async function findSalarySources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    );
+    )
+    .andWhere(qb => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from('student_attendance', 'att')
+        .where('att.class_session_id = session.id')
+        .getQuery();
+      return 'EXISTS ' + subQuery;
+    });
   if (ownerIds?.length) {
     q1.andWhere('session.teacherId IN (:...ownerIds)', { ownerIds });
   }
@@ -1131,7 +1149,16 @@ async function findSalarySources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    );
+    )
+    .andWhere(qb => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from('student_attendance', 'att')
+        .where('att.class_session_id = session.id')
+        .getQuery();
+      return 'EXISTS ' + subQuery;
+    });
   if (ownerIds?.length) {
     q2.andWhere('session.assistantId IN (:...ownerIds)', { ownerIds });
   }

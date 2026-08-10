@@ -31,6 +31,16 @@ export class CreatePaymentPeriodUseCase {
     private readonly sendTuitionPaymentRequest?: SendTuitionPaymentRequestUseCase,
   ) {}
 
+  // =========================================================================
+  // NGUYÊN TẮC AN TOÀN TÀI CHÍNH & CHỐT PHIẾU THU / PHIẾU LƯƠNG (PERIOD CREATION RULE):
+  // 1. Khi chạy tạo chu kỳ tính toán học phí ('tuition') hoặc lương ('salary'):
+  //    - Phiếu thu học sinh (Phiếu thu): Chỉ quét từ các ca học đã chốt và đã
+  //      được học sinh điểm danh (thông qua context.findTuitionSources).
+  //    - Phiếu lương giáo viên/trợ giảng (Phiếu lương): Chỉ quét từ các ca học đã chốt
+  //      và bắt buộc phải có ít nhất 1 dòng điểm danh (thông qua context.findSalarySources).
+  // 2. Việc này đảm bảo tính nhất quán tuyệt đối, tránh tính hóa đơn hoặc phiếu lương
+  //    cho các buổi học trống hoặc các buổi học chưa được giáo viên thực tế bấm chốt.
+  // =========================================================================
   async execute(input: CreatePaymentPeriodInput) {
     const period = PaymentPeriod.create(input);
     const result = await this.persistence.transaction(async (context) => {
