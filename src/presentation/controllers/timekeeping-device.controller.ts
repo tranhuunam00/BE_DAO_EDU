@@ -29,6 +29,10 @@ export class TimekeepingDeviceController {
     @Query('limit') limit = 20,
     @Query('search') search?: string,
     @Query('date') date?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('verifyMethod') verifyMethod?: string,
+    @Query('matchStatus') matchStatus?: 'all' | 'matched' | 'unmatched',
   ): Promise<{ logs: TimekeepingLogOrmEntity[]; total: number }> {
     const qb = this.logRepository.createQueryBuilder('log')
       .leftJoinAndSelect('log.student', 'student')
@@ -42,10 +46,31 @@ export class TimekeepingDeviceController {
       );
     }
 
-    if (date) {
+    // Lọc theo khoảng ngày (startDate & endDate) hoặc ngày đơn (date)
+    if (startDate) {
+      const start = new Date(`${startDate}T00:00:00+07:00`);
+      qb.andWhere('log.eventTime >= :start', { start });
+    }
+    if (endDate) {
+      const end = new Date(`${endDate}T23:59:59+07:00`);
+      qb.andWhere('log.eventTime <= :end', { end });
+    }
+    if (!startDate && !endDate && date) {
       const start = new Date(`${date}T00:00:00+07:00`);
       const end = new Date(`${date}T23:59:59+07:00`);
       qb.andWhere('log.eventTime BETWEEN :start AND :end', { start, end });
+    }
+
+    // Lọc theo hình thức xác thực
+    if (verifyMethod) {
+      qb.andWhere('log.verifyMethod = :verifyMethod', { verifyMethod });
+    }
+
+    // Lọc theo trạng thái khớp học sinh
+    if (matchStatus === 'matched') {
+      qb.andWhere('log.studentId IS NOT NULL');
+    } else if (matchStatus === 'unmatched') {
+      qb.andWhere('log.studentId IS NULL');
     }
 
     const parsedPage = Number(page) || 1;
