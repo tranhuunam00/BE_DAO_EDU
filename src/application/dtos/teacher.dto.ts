@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEmail, IsNotEmpty, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsNotEmpty, IsDateString, IsEnum, IsBoolean } from 'class-validator';
 
 export class CreateTeacherDto {
   @ApiProperty({ example: 'Nguyễn Văn', description: 'Họ và tên đệm' })
@@ -81,6 +81,11 @@ export class CreateTeacherDto {
   @IsString()
   @IsOptional()
   loginPassword?: string;
+
+  @ApiProperty({ required: false, description: 'Tính lương theo doanh thu học viện lũy tiến' })
+  @IsBoolean()
+  @IsOptional()
+  hasCommissionSalary?: boolean;
 }
 
 export class UpdateTeacherDto extends PartialType(CreateTeacherDto) {}

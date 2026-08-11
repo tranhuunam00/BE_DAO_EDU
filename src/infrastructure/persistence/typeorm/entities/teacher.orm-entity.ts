@@ -48,6 +48,9 @@ export class TeacherOrmEntity {
   @Column({ type: 'varchar', default: 'Active' })
   status!: string;
 
+  @Column({ type: 'boolean', name: 'has_commission_salary', default: false })
+  hasCommissionSalary!: boolean;
+
   @Column({ type: 'text', nullable: true })
   avatar!: string | null;
 

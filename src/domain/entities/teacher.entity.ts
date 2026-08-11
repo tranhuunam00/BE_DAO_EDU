@@ -20,6 +20,7 @@ export class Teacher {
     public loginEmail: string | undefined = undefined,
     public createdAt: Date = new Date(),
     public updatedAt: Date = new Date(),
+    public hasCommissionSalary: boolean = false,
   ) {}
 
   getFullName(): string {

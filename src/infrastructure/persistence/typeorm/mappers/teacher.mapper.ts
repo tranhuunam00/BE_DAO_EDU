@@ -25,6 +25,7 @@ export class TeacherMapper {
       orm.user ? orm.user.email : undefined,
       orm.createdAt,
       orm.updatedAt,
+      orm.hasCommissionSalary,
     );
   }
 
@@ -48,6 +49,7 @@ export class TeacherMapper {
     orm.status = domain.status;
     orm.userId = domain.userId ?? null;
     orm.avatar = domain.avatar ?? null;
+    orm.hasCommissionSalary = domain.hasCommissionSalary;
     orm.createdAt = domain.createdAt;
     orm.updatedAt = domain.updatedAt;
     return orm;

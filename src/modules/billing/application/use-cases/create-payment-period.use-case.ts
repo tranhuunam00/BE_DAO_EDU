@@ -5,6 +5,7 @@ import {
 } from '../../domain/entities/payment-period';
 import { BillingCalculator } from '../../domain/services/billing-calculator';
 import { BillingError } from '../../domain/errors/billing.error';
+import { CommissionSalaryCalculator } from '../../domain/services/commission-salary-calculator';
 import { SendTuitionPaymentRequestUseCase } from '../../../payments/application/use-cases/send-tuition-payment-request.use-case';
 
 export interface BillingAdjustmentInput {
@@ -44,18 +45,73 @@ export class CreatePaymentPeriodUseCase {
   async execute(input: CreatePaymentPeriodInput) {
     const period = PaymentPeriod.create(input);
     const result = await this.persistence.transaction(async (context) => {
-      const [pricings, sources] = await Promise.all([
-        context.loadPricings(),
-        period.type === 'tuition'
-          ? context.findTuitionSources(input.endDate, input.studentIds)
-          : context.findSalarySources(input.endDate, input.teacherIds),
-      ]);
-      const calculatedOrders = BillingCalculator.calculate(
-        sources,
-        pricings,
-        period.type === 'tuition' ? 'pricePerSession' : 'teacherWagePerSession',
-      );
-      const orders = applyAdjustments(calculatedOrders, input.adjustments);
+      let orders: any[];
+      if (period.type === 'tuition') {
+        const [pricings, sources] = await Promise.all([
+          context.loadPricings(),
+          context.findTuitionSources(input.endDate, input.studentIds),
+        ]);
+        const calculatedOrders = BillingCalculator.calculate(
+          sources,
+          pricings,
+          'pricePerSession',
+        );
+        orders = applyAdjustments(calculatedOrders, input.adjustments);
+      } else {
+        const [pricings, sources, commissionTeachers, prevMonthRevenue] = await Promise.all([
+          context.loadPricings(),
+          context.findSalarySources(input.endDate, input.teacherIds),
+          context.findCommissionTeachers(input.teacherIds),
+          context.getPreviousMonthTuitionRevenue(input.month),
+        ]);
+        const calculatedOrders = BillingCalculator.calculate(
+          sources,
+          pricings,
+          'teacherWagePerSession',
+        );
+
+        const commissionTeacherIds = new Set(commissionTeachers.map(t => t.id));
+        const normalOrders = calculatedOrders.filter(o => !commissionTeacherIds.has(o.ownerId));
+
+        const commissionOrders = commissionTeachers.map((teacher) => {
+          const commission = CommissionSalaryCalculator.calculateCommission(prevMonthRevenue);
+          const totalAmount = 5000000 + commission;
+          return {
+            ownerId: teacher.id,
+            ownerCode: teacher.teacherId,
+            ownerName: `${teacher.lastName || ''} ${teacher.firstName || ''}`.trim(),
+            ownerMobile: teacher.mobile || '',
+            ownerStatus: teacher.status || '',
+            totalSessions: 0,
+            totalAmount,
+            lines: [
+              {
+                sourceIds: [`base-${teacher.id}`],
+                classId: teacher.id,
+                className: 'Lương cơ bản',
+                courseName: '',
+                levelName: '',
+                sessionsCount: 0,
+                rate: 5000000,
+                totalAmount: 5000000,
+              },
+              {
+                sourceIds: [`commission-${teacher.id}`],
+                classId: teacher.id,
+                className: `Thưởng doanh thu học viện (Doanh thu tháng trước: ${prevMonthRevenue.toLocaleString('vi-VN')} ₫)`,
+                courseName: '',
+                levelName: '',
+                sessionsCount: 0,
+                rate: commission,
+                totalAmount: commission,
+              }
+            ]
+          };
+        });
+
+        const finalCalculatedOrders = [...normalOrders, ...commissionOrders];
+        orders = applyAdjustments(finalCalculatedOrders, input.adjustments);
+      }
       const savedPeriod = await context.savePeriod(period.toPrimitives());
       const billIds = await context.saveOrders(period.type, savedPeriod, orders);
       await context.saveAudit({

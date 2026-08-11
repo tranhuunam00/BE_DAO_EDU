@@ -35,6 +35,8 @@ import { TeacherMonthlyWageOrmEntity } from '../../../../infrastructure/persiste
 import { TuitionPaymentRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 import { BillingAuditLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
 import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
+import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
@@ -68,6 +70,35 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       endDate,
       ownerIds,
     );
+  }
+
+  async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
+    const prevMonth = dayjs(month + '-01').subtract(1, 'month').format('YYYY-MM');
+    const prevPeriods = await this.dataSource.getRepository(PaymentPeriodOrmEntity).find({
+      where: {
+        type: 'tuition',
+        month: prevMonth,
+      },
+    });
+    if (prevPeriods.length === 0) return 0;
+    const periodIds = prevPeriods.map((p) => p.id);
+    const billsSum = await this.dataSource.getRepository(StudentMonthlyBillOrmEntity)
+      .createQueryBuilder('bill')
+      .select('SUM(bill.totalAmount)', 'sum')
+      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .getRawOne();
+    return Number(billsSum?.sum || 0);
+  }
+
+  async findCommissionTeachers(teacherIds?: string[]): Promise<any[]> {
+    const qb = this.dataSource.getRepository(TeacherOrmEntity)
+      .createQueryBuilder('teacher')
+      .where('teacher.has_commission_salary = true')
+      .andWhere('teacher.status = :status', { status: 'Active' });
+    if (teacherIds && teacherIds.length > 0) {
+      qb.andWhere('teacher.id IN (:...teacherIds)', { teacherIds });
+    }
+    return qb.getMany();
   }
 
   async getStudentTuitionReportData(
@@ -717,6 +748,35 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       endDate,
       ownerIds,
     );
+  }
+
+  async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
+    const prevMonth = dayjs(month + '-01').subtract(1, 'month').format('YYYY-MM');
+    const prevPeriods = await this.manager.getRepository(PaymentPeriodOrmEntity).find({
+      where: {
+        type: 'tuition',
+        month: prevMonth,
+      },
+    });
+    if (prevPeriods.length === 0) return 0;
+    const periodIds = prevPeriods.map((p) => p.id);
+    const billsSum = await this.manager.getRepository(StudentMonthlyBillOrmEntity)
+      .createQueryBuilder('bill')
+      .select('SUM(bill.totalAmount)', 'sum')
+      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .getRawOne();
+    return Number(billsSum?.sum || 0);
+  }
+
+  async findCommissionTeachers(teacherIds?: string[]): Promise<any[]> {
+    const qb = this.manager.getRepository(TeacherOrmEntity)
+      .createQueryBuilder('teacher')
+      .where('teacher.has_commission_salary = true')
+      .andWhere('teacher.status = :status', { status: 'Active' });
+    if (teacherIds && teacherIds.length > 0) {
+      qb.andWhere('teacher.id IN (:...teacherIds)', { teacherIds });
+    }
+    return qb.getMany();
   }
 
   async savePeriod(

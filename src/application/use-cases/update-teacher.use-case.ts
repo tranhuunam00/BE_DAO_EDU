@@ -39,6 +39,7 @@ export class UpdateTeacherUseCase {
     if (dto.districtWard !== undefined) teacher.districtWard = dto.districtWard;
     if (dto.primaryAddress !== undefined) teacher.primaryAddress = dto.primaryAddress;
     if (dto.status !== undefined) teacher.status = dto.status;
+    if (dto.hasCommissionSalary !== undefined) teacher.hasCommissionSalary = dto.hasCommissionSalary;
 
     if (dto.avatar && dto.avatar.startsWith('data:image')) {
       teacher.avatar = await this.fileStorage.uploadBase64Image(

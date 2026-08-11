@@ -89,7 +89,10 @@ export class AddTeacherUseCase {
       dto.status,
       createdUserId,
       avatarUrl,
-      dto.loginEmail
+      dto.loginEmail,
+      undefined,
+      undefined,
+      dto.hasCommissionSalary ?? false
     );
 
     return this.teacherRepository.save(teacher);

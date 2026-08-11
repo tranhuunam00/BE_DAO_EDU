@@ -49,6 +49,8 @@ function makePersistence() {
     saveAudit: jest.fn().mockResolvedValue(undefined),
     resetPaymentRequest: jest.fn().mockResolvedValue(undefined),
     deleteOrder: jest.fn().mockResolvedValue(undefined),
+    getPreviousMonthTuitionRevenue: jest.fn().mockResolvedValue(0),
+    findCommissionTeachers: jest.fn().mockResolvedValue([]),
   };
   const persistence: jest.Mocked<BillingPersistencePort> = {
     transaction: jest.fn().mockImplementation(async (work) => work(context)),
@@ -57,6 +59,8 @@ function makePersistence() {
     findSalarySources: context.findSalarySources,
     listPeriods: jest.fn(),
     findPeriodDetails: jest.fn(),
+    getPreviousMonthTuitionRevenue: jest.fn().mockResolvedValue(0),
+    findCommissionTeachers: jest.fn().mockResolvedValue([]),
   };
   return { persistence, context };
 }
@@ -105,6 +109,27 @@ describe('Billing use cases', () => {
     expect(result.grandTotal).toBe(60000);
   });
 
+  it('previews salary for commission-based teachers correctly', async () => {
+    const { persistence, context } = makePersistence();
+    persistence.findCommissionTeachers.mockResolvedValue([
+      {
+        id: 'teacher-commission-1',
+        teacherId: 'TCH-COMM-1',
+        firstName: 'Dung',
+        lastName: 'Vu',
+        mobile: '0987654321',
+        status: 'Active',
+      },
+    ]);
+    persistence.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
+    const result = await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+    );
+    expect(result.grandTotal).toBe(38250000);
+    expect(result.teachers[0].teacherId).toBe('teacher-commission-1');
+    expect(result.teachers[0].totalAmount).toBe(38250000);
+  });
+
   it('creates the period and all orders in one transaction callback', async () => {
     const { persistence, context } = makePersistence();
     context.findTuitionSources.mockResolvedValue([attendance]);
@@ -121,6 +146,44 @@ describe('Billing use cases', () => {
       'tuition',
       expect.objectContaining({ id: 'period-1' }),
       [expect.objectContaining({ totalAmount: 100000 })],
+    );
+    expect(result.data.id).toBe('period-1');
+  });
+
+  it('creates a salary period for commission-based teachers successfully', async () => {
+    const { persistence, context } = makePersistence();
+    context.findCommissionTeachers.mockResolvedValue([
+      {
+        id: 'teacher-commission-1',
+        teacherId: 'TCH-COMM-1',
+        firstName: 'Dung',
+        lastName: 'Vu',
+        mobile: '0987654321',
+        status: 'Active',
+      },
+    ]);
+    context.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
+    context.findSalarySources.mockResolvedValue([]);
+
+    const result = await new CreatePaymentPeriodUseCase(persistence).execute({
+      name: 'Lương tháng 6',
+      type: 'salary',
+      month: '2026-06',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      teacherIds: ['teacher-commission-1'],
+    });
+
+    expect(persistence.transaction).toHaveBeenCalledTimes(1);
+    expect(context.saveOrders).toHaveBeenCalledWith(
+      'salary',
+      expect.objectContaining({ id: 'period-1' }),
+      [
+        expect.objectContaining({
+          ownerId: 'teacher-commission-1',
+          totalAmount: 38250000,
+        }),
+      ],
     );
     expect(result.data.id).toBe('period-1');
   });
