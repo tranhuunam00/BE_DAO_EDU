@@ -26,6 +26,9 @@ export class TimekeepingLogOrmEntity {
   @Column({ type: 'varchar', length: 100, nullable: true, name: 'original_id' })
   originalId!: string | null;
 
+  @Column({ type: 'jsonb', nullable: true, name: 'matched_sessions' })
+  matchedSessions!: Array<{ id: string; className: string; startTime: string; endTime: string; date: string }> | null;
+
   @ManyToOne(() => StudentOrmEntity, { nullable: true })
   @JoinColumn({ name: 'student_id' })
   student!: StudentOrmEntity | null;

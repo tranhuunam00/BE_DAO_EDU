@@ -99,13 +99,17 @@ export class ProcessRawLogUseCase {
       ])
       .getRawMany();
 
-    const domainSessions: DomainClassSession[] = sessions.map(row => ({
-      id: row.id,
-      className: row.classname || row.className || '',
-      startTime: row.starttime ? row.starttime.substring(0, 5) : '',
-      endTime: row.endtime ? row.endtime.substring(0, 5) : '',
-      date: row.date,
-    }));
+    const domainSessions: DomainClassSession[] = sessions.map(row => {
+      const startTimeVal = row.starttime || row.startTime || '';
+      const endTimeVal = row.endtime || row.endTime || '';
+      return {
+        id: row.id,
+        className: row.classname || row.className || '',
+        startTime: startTimeVal ? startTimeVal.substring(0, 5) : '',
+        endTime: endTimeVal ? endTimeVal.substring(0, 5) : '',
+        date: row.date,
+      };
+    });
 
     // 6. Chạy thuật toán đối khớp của tầng Domain
     const matchResults = TimekeepingMatcher.match(student.id, domainSessions, domainLogs);
@@ -139,6 +143,36 @@ export class ProcessRawLogUseCase {
 
       const saved = await this.studentAttendanceRepository.save(attendance);
       savedResults.push(saved);
+    }
+
+    // 8. Cập nhật các ca học đối khớp (matched_sessions) cho toàn bộ logs trong ngày của học sinh này
+    for (const dbLog of dbLogs) {
+      const t = dbLog.eventTime.getTime();
+      const matched = [];
+
+      for (const s of domainSessions) {
+        const sessionStart = new Date(`${s.date}T${s.startTime}:00+07:00`).getTime();
+        const sessionEnd = new Date(`${s.date}T${s.endTime}:00+07:00`).getTime();
+
+        // Khoảng thời gian cho phép quẹt thẻ (+/- 1 tiếng)
+        const checkInStart = sessionStart - 60 * 60000;
+        const checkInEnd = sessionEnd;
+        const checkOutStart = sessionStart;
+        const checkOutEnd = sessionEnd + 60 * 60000;
+
+        if ((t >= checkInStart && t <= checkInEnd) || (t >= checkOutStart && t <= checkOutEnd)) {
+          matched.push({
+            id: s.id,
+            className: s.className,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            date: s.date,
+          });
+        }
+      }
+
+      dbLog.matchedSessions = matched.length > 0 ? matched : null;
+      await this.timekeepingLogRepository.save(dbLog);
     }
 
     return savedResults;
