@@ -106,7 +106,7 @@ describe('Billing use cases', () => {
     expect(context.findSalarySources).toHaveBeenCalledWith('2026-06-30', [
       'teacher-1',
     ]);
-    expect(result.grandTotal).toBe(60000);
+    expect(result.grandTotal).toBe(54000);
   });
 
   it('previews salary for commission-based teachers correctly', async () => {
@@ -141,9 +141,9 @@ describe('Billing use cases', () => {
     const result = await new PreviewSalaryUseCase(persistence).execute(
       '2026-06-30',
     );
-    expect(result.grandTotal).toBe(38250000);
+    expect(result.grandTotal).toBe(34425000);
     expect(result.teachers[0].teacherId).toBe('teacher-commission-1');
-    expect(result.teachers[0].totalAmount).toBe(38250000);
+    expect(result.teachers[0].totalAmount).toBe(34425000);
     expect(result.teachers[0].totalSessions).toBe(1);
   });
 
@@ -213,7 +213,7 @@ describe('Billing use cases', () => {
       [
         expect.objectContaining({
           ownerId: 'teacher-commission-1',
-          totalAmount: 38250000,
+          totalAmount: 34425000,
           totalSessions: 1,
         }),
       ],

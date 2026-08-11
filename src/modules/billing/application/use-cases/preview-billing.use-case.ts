@@ -57,11 +57,20 @@ export class PreviewSalaryUseCase {
     );
 
     const commissionTeacherIds = new Set(commissionTeachers.map(t => t.id));
-    const normalOrders = orders.filter(o => !commissionTeacherIds.has(o.ownerId));
+    const normalOrders = orders.filter(o => !commissionTeacherIds.has(o.ownerId)).map(o => ({
+      ...o,
+      totalAmount: Math.round(o.totalAmount * 0.9),
+      lines: o.lines.map(l => ({
+        ...l,
+        rate: Math.round(l.rate * 0.9),
+        totalAmount: Math.round(l.totalAmount * 0.9),
+      }))
+    }));
 
     const commissionOrders = commissionTeachers.map((teacher) => {
       const commission = CommissionSalaryCalculator.calculateCommission(prevMonthRevenue);
-      const totalAmount = 5000000 + commission;
+      const gross = 5000000 + commission;
+      const net = Math.round(gross * 0.9);
       const matchingOrder = orders.find(o => o.ownerId === teacher.id);
       const totalSessions = matchingOrder ? matchingOrder.totalSessions : 0;
       const sessionLines = matchingOrder
@@ -79,27 +88,27 @@ export class PreviewSalaryUseCase {
         ownerMobile: teacher.mobile || '',
         ownerStatus: teacher.status || '',
         totalSessions,
-        totalAmount,
+        totalAmount: net,
         lines: [
           {
             sourceIds: [`base-${teacher.id}`],
-            classId: teacher.id,
+            classId: null,
             className: 'Lương cơ bản',
             courseName: '',
             levelName: '',
             sessionsCount: 0,
-            rate: 5000000,
-            totalAmount: 5000000,
+            rate: 4500000,
+            totalAmount: 4500000,
           },
           {
             sourceIds: [`commission-${teacher.id}`],
-            classId: teacher.id,
+            classId: null,
             className: `Thưởng doanh thu học viện (Doanh thu tháng trước: ${prevMonthRevenue.toLocaleString('vi-VN')} ₫)`,
             courseName: '',
             levelName: '',
             sessionsCount: 0,
-            rate: commission,
-            totalAmount: commission,
+            rate: Math.round(commission * 0.9),
+            totalAmount: Math.round(commission * 0.9),
           },
           ...sessionLines,
         ]
