@@ -62,13 +62,23 @@ export class PreviewSalaryUseCase {
     const commissionOrders = commissionTeachers.map((teacher) => {
       const commission = CommissionSalaryCalculator.calculateCommission(prevMonthRevenue);
       const totalAmount = 5000000 + commission;
+      const matchingOrder = orders.find(o => o.ownerId === teacher.id);
+      const totalSessions = matchingOrder ? matchingOrder.totalSessions : 0;
+      const sessionLines = matchingOrder
+        ? matchingOrder.lines.map((l: any) => ({
+            ...l,
+            rate: 0,
+            totalAmount: 0,
+          }))
+        : [];
+
       return {
         ownerId: teacher.id,
         ownerCode: teacher.teacherId,
         ownerName: `${teacher.lastName || ''} ${teacher.firstName || ''}`.trim(),
         ownerMobile: teacher.mobile || '',
         ownerStatus: teacher.status || '',
-        totalSessions: 0,
+        totalSessions,
         totalAmount,
         lines: [
           {
@@ -90,7 +100,8 @@ export class PreviewSalaryUseCase {
             sessionsCount: 0,
             rate: commission,
             totalAmount: commission,
-          }
+          },
+          ...sessionLines,
         ]
       };
     });

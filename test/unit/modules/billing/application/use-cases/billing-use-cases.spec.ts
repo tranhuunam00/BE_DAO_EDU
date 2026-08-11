@@ -122,12 +122,29 @@ describe('Billing use cases', () => {
       },
     ]);
     persistence.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
+    persistence.findSalarySources.mockResolvedValue([
+      {
+        id: 'session-1',
+        ownerId: 'teacher-commission-1',
+        ownerCode: 'TCH-COMM-1',
+        ownerName: 'Vu Dung',
+        ownerMobile: '0987654321',
+        ownerStatus: 'Active',
+        classId: 'class-1',
+        className: 'Math Class',
+        courseName: 'Math',
+        levelName: 'Grade 1',
+        courseLevelId: 'level-1',
+        date: '2026-06-10',
+      },
+    ]);
     const result = await new PreviewSalaryUseCase(persistence).execute(
       '2026-06-30',
     );
     expect(result.grandTotal).toBe(38250000);
     expect(result.teachers[0].teacherId).toBe('teacher-commission-1');
     expect(result.teachers[0].totalAmount).toBe(38250000);
+    expect(result.teachers[0].totalSessions).toBe(1);
   });
 
   it('creates the period and all orders in one transaction callback', async () => {
@@ -163,7 +180,22 @@ describe('Billing use cases', () => {
       },
     ]);
     context.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
-    context.findSalarySources.mockResolvedValue([]);
+    context.findSalarySources.mockResolvedValue([
+      {
+        id: 'session-1',
+        ownerId: 'teacher-commission-1',
+        ownerCode: 'TCH-COMM-1',
+        ownerName: 'Vu Dung',
+        ownerMobile: '0987654321',
+        ownerStatus: 'Active',
+        classId: 'class-1',
+        className: 'Math Class',
+        courseName: 'Math',
+        levelName: 'Grade 1',
+        courseLevelId: 'level-1',
+        date: '2026-06-10',
+      },
+    ]);
 
     const result = await new CreatePaymentPeriodUseCase(persistence).execute({
       name: 'Lương tháng 6',
@@ -182,6 +214,7 @@ describe('Billing use cases', () => {
         expect.objectContaining({
           ownerId: 'teacher-commission-1',
           totalAmount: 38250000,
+          totalSessions: 1,
         }),
       ],
     );
