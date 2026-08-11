@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { TimekeepingDeviceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-device.orm-entity';
 import { HikvisionIsapiClient } from '../../infrastructure/external/hikvision-isapi.client';
 import { ProcessRawLogUseCase } from './process-raw-log.use-case';
+import { normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class ReconcileTimekeepingLogsUseCase {
@@ -49,10 +50,12 @@ export class ReconcileTimekeepingLogsUseCase {
         // Kiểm tra kết quả trả về từ Hikvision
         const infoList = result?.AcsEvent?.InfoList || [];
         for (const ev of infoList) {
-          const employeeNo = ev.employeeNoString || ev.employeeNo;
+          const rawEmployeeNo = ev.employeeNoString || ev.employeeNo;
           const timeStr = ev.time || ev.dateTime;
           
-          if (!employeeNo || !timeStr) continue;
+          if (!rawEmployeeNo || !timeStr) continue;
+
+          const employeeNo = normalizeEmployeeNo(rawEmployeeNo);
 
           const minor = ev.subEventType || ev.minor;
           const cardNo = ev.cardNo || '';

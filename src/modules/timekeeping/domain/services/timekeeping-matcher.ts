@@ -244,3 +244,8 @@ export class TimekeepingMatcher {
         }));
     }
 }
+
+export function normalizeEmployeeNo(code: string): string {
+    if (!code) return '';
+    return code.replace(/\D/g, '').replace(/^0+/, '');
+}

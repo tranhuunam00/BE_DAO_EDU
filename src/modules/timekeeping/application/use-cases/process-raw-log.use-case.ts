@@ -5,7 +5,7 @@ import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm
 import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
-import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../domain/services/timekeeping-matcher';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class ProcessRawLogUseCase {
@@ -28,8 +28,14 @@ export class ProcessRawLogUseCase {
     verifyMethod: string,
     rawPayload?: any,
   ): Promise<any[]> {
-    // 1. Tìm thông tin học sinh qua mã số quẹt thẻ
-    const student = await this.studentRepository.findOne({ where: { studentId: studentCode } });
+    // Chuẩn hóa mã học sinh đầu vào từ thiết bị
+    const normalizedCode = normalizeEmployeeNo(studentCode);
+
+    // 1. Tìm thông tin học sinh qua mã số quẹt thẻ đã chuẩn hóa (bỏ qua ký tự không phải số và chữ số 0 ở đầu)
+    const student = await this.studentRepository.createQueryBuilder('student')
+      .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :normalizedCode", { normalizedCode })
+      .getOne();
+
     if (!student) {
       throw new NotFoundException(`Học sinh có mã ${studentCode} không tồn tại trên hệ thống.`);
     }
@@ -40,7 +46,7 @@ export class ProcessRawLogUseCase {
         .insert()
         .values({
           studentId: student.id,
-          employeeNo: studentCode,
+          employeeNo: normalizedCode, // Lưu mã đã chuẩn hóa
           eventTime,
           verifyMethod,
           rawPayload,

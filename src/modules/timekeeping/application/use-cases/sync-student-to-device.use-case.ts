@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TimekeepingDeviceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-device.orm-entity';
 import { HikvisionIsapiClient } from '../../infrastructure/external/hikvision-isapi.client';
+import { normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class SyncStudentToDeviceUseCase {
@@ -42,14 +43,23 @@ export class SyncStudentToDeviceUseCase {
       try {
         const payload = {
           UserInfo: {
-            employeeNo: student.studentId, // employeeNoString
+            employeeNo: normalizeEmployeeNo(student.studentId), // Sử dụng hàm chuẩn hóa trung gian
             name: `${student.lastName} ${student.firstName}`.trim().substring(0, 31), // Giới hạn ký tự thiết bị
             userType: 'normal',
             Valid: {
               enable: true,
               beginTime: '2026-01-01T00:00:00',
               endTime: '2036-12-31T23:59:59',
+              timeType: 'local',
             },
+            belongGroup: '1', // Nhóm mặc định
+            doorRight: '1',    // Quyền ra vào cửa số 1
+            RightPlan: [
+              {
+                doorNo: 1,
+                planTemplateNo: '1', // Kế hoạch 24/7 mặc định
+              },
+            ],
           },
         };
 
