@@ -2,14 +2,14 @@ import { Entity, PrimaryGeneratedColumn, Column, Unique, Index, ManyToOne, JoinC
 import { StudentOrmEntity } from './student.orm-entity';
 
 @Entity('timekeeping_log')
-@Unique(['studentId', 'eventTime'])
+@Unique(['employeeNo', 'eventTime'])
 export class TimekeepingLogOrmEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Index('idx_timekeeping_log_student_id')
-  @Column({ type: 'uuid', name: 'student_id' })
-  studentId!: string;
+  @Column({ type: 'uuid', name: 'student_id', nullable: true })
+  studentId!: string | null;
 
   @Column({ type: 'varchar', length: 50, name: 'employee_no' })
   employeeNo!: string;
@@ -23,7 +23,10 @@ export class TimekeepingLogOrmEntity {
   @Column({ type: 'jsonb', nullable: true, name: 'raw_payload' })
   rawPayload!: any;
 
-  @ManyToOne(() => StudentOrmEntity)
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'original_id' })
+  originalId!: string | null;
+
+  @ManyToOne(() => StudentOrmEntity, { nullable: true })
   @JoinColumn({ name: 'student_id' })
-  student!: StudentOrmEntity;
+  student!: StudentOrmEntity | null;
 }

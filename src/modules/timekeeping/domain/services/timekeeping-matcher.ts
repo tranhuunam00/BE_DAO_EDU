@@ -7,7 +7,7 @@ export interface DomainClassSession {
 }
 
 export interface TimekeepingLog {
-    studentId: string;
+    studentId: string | null;
     employeeNo: string;
     eventTime: Date;
     verifyMethod: string;

@@ -54,6 +54,15 @@ export class TimekeepingWebhookController {
         if (employeeNo && timeStr) {
           const minor = alert.subEventType || ev.subEventType;
           const cardNo = ev.cardNo || '';
+          const eventId = alert.eventID !== undefined && alert.eventID !== null
+            ? String(alert.eventID)
+            : (alert.eventId !== undefined && alert.eventId !== null
+              ? String(alert.eventId)
+              : (ev.eventID !== undefined && ev.eventID !== null
+                ? String(ev.eventID)
+                : (ev.eventId !== undefined && ev.eventId !== null
+                  ? String(ev.eventId)
+                  : undefined)));
 
           let verifyMethod = 'face';
           if (minor === 75 || minor === 77) verifyMethod = 'face';
@@ -67,7 +76,8 @@ export class TimekeepingWebhookController {
               employeeNo,
               new Date(timeStr),
               verifyMethod,
-              ev
+              ev,
+              eventId
             );
           } catch (err) {
             // Log error but make sure to return 200 to Hikvision terminal

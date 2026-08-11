@@ -27,6 +27,7 @@ export class ProcessRawLogUseCase {
     eventTime: Date,
     verifyMethod: string,
     rawPayload?: any,
+    originalId?: string,
   ): Promise<any[]> {
     // Chuẩn hóa mã học sinh đầu vào từ thiết bị
     const normalizedCode = normalizeEmployeeNo(studentCode);
@@ -36,25 +37,26 @@ export class ProcessRawLogUseCase {
       .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :normalizedCode", { normalizedCode })
       .getOne();
 
-    if (!student) {
-      throw new NotFoundException(`Học sinh có mã ${studentCode} không tồn tại trên hệ thống.`);
-    }
-
     // 2. Ghi nhận nhật ký thô và chống trùng lặp qua DB Unique constraint
     try {
       await this.timekeepingLogRepository.createQueryBuilder()
         .insert()
         .values({
-          studentId: student.id,
+          studentId: student ? student.id : null,
           employeeNo: normalizedCode, // Lưu mã đã chuẩn hóa
           eventTime,
           verifyMethod,
           rawPayload,
+          originalId,
         })
         .orIgnore() // ON CONFLICT DO NOTHING
         .execute();
     } catch (err) {
       // Bỏ qua nếu có lỗi trùng lặp ràng buộc duy nhất
+    }
+
+    if (!student) {
+      return [];
     }
 
     // 3. Tính toán khung ngày học của lượt quẹt (múi giờ +07:00)

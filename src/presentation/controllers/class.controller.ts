@@ -1608,10 +1608,12 @@ export class ClassController {
 
     const logsByStudent = new Map<string, TimekeepingLogOrmEntity[]>();
     for (const log of dbLogs) {
-      if (!logsByStudent.has(log.studentId)) {
-        logsByStudent.set(log.studentId, []);
+      if (log.studentId) {
+        if (!logsByStudent.has(log.studentId)) {
+          logsByStudent.set(log.studentId, []);
+        }
+        logsByStudent.get(log.studentId)!.push(log);
       }
-      logsByStudent.get(log.studentId)!.push(log);
     }
 
     const domainSession: DomainClassSession = {

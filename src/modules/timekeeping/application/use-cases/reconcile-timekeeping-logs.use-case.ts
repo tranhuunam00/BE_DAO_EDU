@@ -68,12 +68,19 @@ export class ReconcileTimekeepingLogsUseCase {
           else if (minor === 57 || minor === 101) verifyMethod = 'pin';
           else if (cardNo && cardNo.trim() !== '') verifyMethod = 'card';
 
+          const eventId = ev.eventID !== undefined && ev.eventID !== null
+            ? String(ev.eventID)
+            : (ev.eventId !== undefined && ev.eventId !== null
+              ? String(ev.eventId)
+              : undefined);
+
           try {
             await this.processRawLogUseCase.execute(
               employeeNo,
               new Date(timeStr),
               verifyMethod,
-              ev
+              ev,
+              eventId
             );
             totalProcessed++;
           } catch (err: any) {

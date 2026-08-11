@@ -115,6 +115,47 @@ describe('ProcessRawLogUseCase', () => {
     expect(studentAttendanceRepository.save).toHaveBeenCalled();
   });
 
+  it('nên lưu nhật ký thô với studentId là null và không chạy đối khớp khi không tìm thấy học sinh', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockQueryBuilder, 'getOne').mockResolvedValueOnce(null);
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    const result = await useCase.execute('9999999', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(result).toEqual([]);
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: null,
+        employeeNo: '9999999',
+      })
+    );
+    expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('nên lưu nhật ký thô kèm theo originalId lấy từ tham số truyền vào', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    await useCase.execute('2026007', eventTime, verifyMethod, {}, 'evt-12345');
+
+    // Assert
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: 'student-uuid-123',
+        employeeNo: '2026007',
+        originalId: 'evt-12345',
+      })
+    );
+  });
+
+
   it('phải hoàn thành việc xử lý nhật ký thô trong giới hạn SLA < 10ms cho 100 lần chạy (Performance Benchmark)', async () => {
     // Arrange
     const eventTime = new Date('2026-08-11T08:05:00+07:00');
