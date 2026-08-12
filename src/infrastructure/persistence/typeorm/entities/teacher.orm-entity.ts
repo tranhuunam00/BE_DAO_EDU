@@ -51,6 +51,10 @@ export class TeacherOrmEntity {
   @Column({ type: 'boolean', name: 'has_commission_salary', default: false })
   hasCommissionSalary!: boolean;
 
+  @Column({ type: 'boolean', name: 'is_synced_to_device', default: false })
+  isSyncedToDevice!: boolean;
+
+
   @Column({ type: 'text', nullable: true })
   avatar!: string | null;
 

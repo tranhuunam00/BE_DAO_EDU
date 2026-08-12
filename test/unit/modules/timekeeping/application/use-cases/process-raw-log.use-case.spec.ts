@@ -7,12 +7,14 @@ import { StudentOrmEntity } from '../../../../../../src/infrastructure/persisten
 import { StudentAttendanceOrmEntity } from '../../../../../../src/infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../../../../../src/infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { ClassSessionOrmEntity } from '../../../../../../src/infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { TeacherOrmEntity } from '../../../../../../src/infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 
 describe('ProcessRawLogUseCase', () => {
   let useCase: ProcessRawLogUseCase;
   let studentRepository: any;
   let studentAttendanceRepository: any;
   let timekeepingLogRepository: any;
+  let teacherRepository: any;
   let dataSource: any;
 
   const mockStudent = {
@@ -22,9 +24,21 @@ describe('ProcessRawLogUseCase', () => {
     lastName: 'Bùi Ngọc',
   } as StudentOrmEntity;
 
+  const mockTeacher = {
+    id: 'teacher-uuid-456',
+    teacherId: 'GV-2026-001',
+    firstName: 'Thành',
+    lastName: 'Nguyễn Văn',
+  } as TeacherOrmEntity;
+
   const mockQueryBuilder = {
     where: jest.fn().mockReturnThis(),
     getOne: jest.fn().mockResolvedValue(mockStudent),
+  };
+
+  const mockTeacherQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn().mockResolvedValue(mockTeacher),
   };
 
   const mockInsertQueryBuilder = {
@@ -68,6 +82,11 @@ describe('ProcessRawLogUseCase', () => {
       save: jest.fn().mockImplementation(async (v) => v),
     };
 
+    teacherRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(mockTeacherQueryBuilder),
+      findOne: jest.fn().mockResolvedValue(mockTeacher),
+    };
+
     dataSource = {
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn().mockReturnValue(mockSessionQueryBuilder),
@@ -90,6 +109,10 @@ describe('ProcessRawLogUseCase', () => {
           useValue: timekeepingLogRepository,
         },
         {
+          provide: getRepositoryToken(TeacherOrmEntity),
+          useValue: teacherRepository,
+        },
+        {
           provide: DataSource,
           useValue: dataSource,
         },
@@ -110,8 +133,8 @@ describe('ProcessRawLogUseCase', () => {
     // Assert
     expect(studentRepository.createQueryBuilder).toHaveBeenCalledWith('student');
     expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-      "LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :normalizedCode",
-      { normalizedCode: '2026007' }
+      "LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code",
+      { code: '2026007' }
     );
     expect(studentAttendanceRepository.save).toHaveBeenCalled();
   });
@@ -187,6 +210,27 @@ describe('ProcessRawLogUseCase', () => {
         ]),
       })
     );
+  });
+
+  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 222 và không đối khớp ca học học sinh', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    const result = await useCase.execute('2222026001', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(result).toEqual([]);
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: null,
+        teacherId: 'teacher-uuid-456',
+        employeeNo: '2026001',
+      })
+    );
+    expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
   });
 
   it('phải hoàn thành việc xử lý nhật ký thô trong giới hạn SLA < 10ms cho 100 lần chạy (Performance Benchmark)', async () => {

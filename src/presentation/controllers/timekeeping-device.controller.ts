@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpStatus, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpStatus, HttpCode, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TimekeepingDeviceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-device.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { SyncStudentToDeviceUseCase } from '../../modules/timekeeping/application/use-cases/sync-student-to-device.use-case';
 import { ConfigureWebhookUseCase } from '../../modules/timekeeping/application/use-cases/configure-webhook.use-case';
 import { SyncDeviceTimeUseCase } from '../../modules/timekeeping/application/use-cases/sync-device-time.use-case';
@@ -17,6 +18,9 @@ export class TimekeepingDeviceController {
     
     @InjectRepository(TimekeepingLogOrmEntity)
     private readonly logRepository: Repository<TimekeepingLogOrmEntity>,
+
+    @InjectRepository(TeacherOrmEntity)
+    private readonly teacherRepository: Repository<TeacherOrmEntity>,
     
     private readonly syncStudentUseCase: SyncStudentToDeviceUseCase,
     private readonly configureWebhookUseCase: ConfigureWebhookUseCase,
@@ -35,17 +39,28 @@ export class TimekeepingDeviceController {
     @Query('endDate') endDate?: string,
     @Query('verifyMethod') verifyMethod?: string,
     @Query('matchStatus') matchStatus?: 'all' | 'matched' | 'unmatched',
+    @Query('role') role?: 'student' | 'teacher' | 'all' | 'unmatched',
   ): Promise<{ logs: TimekeepingLogOrmEntity[]; total: number }> {
     const qb = this.logRepository.createQueryBuilder('log')
       .leftJoinAndSelect('log.student', 'student')
+      .leftJoinAndSelect('log.teacher', 'teacher')
       .orderBy('log.eventTime', 'DESC');
 
     if (search) {
       const searchLower = `%${search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(log.employeeNo) LIKE :search OR LOWER(student.lastName) LIKE :search OR LOWER(student.firstName) LIKE :search OR LOWER(CONCAT(student.lastName, \' \', student.firstName)) LIKE :search)',
+        '(LOWER(log.employeeNo) LIKE :search OR LOWER(student.lastName) LIKE :search OR LOWER(student.firstName) LIKE :search OR LOWER(CONCAT(student.lastName, \' \', student.firstName)) LIKE :search OR LOWER(teacher.lastName) LIKE :search OR LOWER(teacher.firstName) LIKE :search OR LOWER(CONCAT(teacher.lastName, \' \', teacher.firstName)) LIKE :search)',
         { search: searchLower }
       );
+    }
+
+    // Lọc theo vai trò (học sinh / giáo viên)
+    if (role === 'student') {
+      qb.andWhere('log.studentId IS NOT NULL');
+    } else if (role === 'teacher') {
+      qb.andWhere('log.teacherId IS NOT NULL');
+    } else if (role === 'unmatched') {
+      qb.andWhere('log.studentId IS NULL AND log.teacherId IS NULL');
     }
 
     // Lọc theo khoảng ngày (startDate & endDate) hoặc ngày đơn (date)
@@ -130,9 +145,27 @@ export class TimekeepingDeviceController {
   }
 
   @Post('sync-student/:studentId')
-  async syncStudent(@Param('studentId') studentId: string): Promise<{ success: boolean }> {
-    await this.syncStudentUseCase.execute(studentId);
-    return { success: true };
+  async syncStudent(
+    @Param('studentId') studentId: string,
+    @Body() body?: { status?: boolean },
+  ): Promise<{ success: boolean; isSyncedToDevice: boolean }> {
+    const newStatus = await this.syncStudentUseCase.execute(studentId, body?.status);
+    return { success: true, isSyncedToDevice: newStatus };
+  }
+
+  @Post('sync-teacher/:teacherId')
+  async syncTeacher(
+    @Param('teacherId') teacherId: string,
+    @Body() body?: { status?: boolean },
+  ): Promise<{ success: boolean; isSyncedToDevice: boolean }> {
+    const teacher = await this.teacherRepository.findOne({ where: { id: teacherId } });
+    if (!teacher) {
+      throw new NotFoundException(`Giáo viên không tồn tại trên hệ thống.`);
+    }
+    const newStatus = body?.status !== undefined ? body.status : !teacher.isSyncedToDevice;
+    teacher.isSyncedToDevice = newStatus;
+    await this.teacherRepository.save(teacher);
+    return { success: true, isSyncedToDevice: newStatus };
   }
 
   @Post('setup-webhook/:deviceId')

@@ -5,6 +5,7 @@ import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm
 import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
@@ -19,6 +20,9 @@ export class ProcessRawLogUseCase {
     @InjectRepository(TimekeepingLogOrmEntity)
     private readonly timekeepingLogRepository: Repository<TimekeepingLogOrmEntity>,
 
+    @InjectRepository(TeacherOrmEntity)
+    private readonly teacherRepository: Repository<TeacherOrmEntity>,
+
     private readonly dataSource: DataSource,
   ) {}
 
@@ -30,13 +34,38 @@ export class ProcessRawLogUseCase {
     originalId?: string,
     imageKey?: string,
   ): Promise<any[]> {
-    // Chuẩn hóa mã học sinh đầu vào từ thiết bị
-    const normalizedCode = normalizeEmployeeNo(studentCode);
+    let student: StudentOrmEntity | null = null;
+    let teacher: TeacherOrmEntity | null = null;
+    let finalEmployeeNo = studentCode;
 
-    // 1. Tìm thông tin học sinh qua mã số quẹt thẻ đã chuẩn hóa (bỏ qua ký tự không phải số và chữ số 0 ở đầu)
-    const student = await this.studentRepository.createQueryBuilder('student')
-      .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :normalizedCode", { normalizedCode })
-      .getOne();
+    // 1. Phân loại theo tiền tố (1111 = Học sinh, 222 = Giáo viên)
+    if (studentCode.startsWith('1111')) {
+      const codeWithoutPrefix = studentCode.substring(4);
+      finalEmployeeNo = normalizeEmployeeNo(codeWithoutPrefix);
+      student = await this.studentRepository.createQueryBuilder('student')
+        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+        .getOne();
+    } else if (studentCode.startsWith('222')) {
+      const codeWithoutPrefix = studentCode.substring(3);
+      finalEmployeeNo = normalizeEmployeeNo(codeWithoutPrefix);
+      teacher = await this.teacherRepository.createQueryBuilder('teacher')
+        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+        .getOne();
+    } else {
+      // Fallback tương thích ngược không có tiền tố
+      const normalizedCode = normalizeEmployeeNo(studentCode);
+      finalEmployeeNo = normalizedCode;
+      
+      student = await this.studentRepository.createQueryBuilder('student')
+        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: normalizedCode })
+        .getOne();
+      
+      if (!student) {
+        teacher = await this.teacherRepository.createQueryBuilder('teacher')
+          .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: normalizedCode })
+          .getOne();
+      }
+    }
 
     // 2. Ghi nhận nhật ký thô và chống trùng lặp qua DB Unique constraint
     try {
@@ -44,7 +73,8 @@ export class ProcessRawLogUseCase {
         .insert()
         .values({
           studentId: student ? student.id : null,
-          employeeNo: normalizedCode, // Lưu mã đã chuẩn hóa
+          teacherId: teacher ? teacher.id : null,
+          employeeNo: finalEmployeeNo,
           eventTime,
           verifyMethod,
           rawPayload,
@@ -55,6 +85,11 @@ export class ProcessRawLogUseCase {
         .execute();
     } catch (err) {
       // Bỏ qua nếu có lỗi trùng lặp ràng buộc duy nhất
+    }
+
+    if (teacher) {
+      // Nếu là giáo viên, chỉ ghi log và không chạy đối khớp ca học của học sinh
+      return [];
     }
 
     if (!student) {

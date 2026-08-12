@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, Unique, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { StudentOrmEntity } from './student.orm-entity';
+import { TeacherOrmEntity } from './teacher.orm-entity';
 
 @Entity('timekeeping_log')
 @Unique(['employeeNo', 'eventTime'])
@@ -33,7 +34,14 @@ export class TimekeepingLogOrmEntity {
   imageKey!: string | null;
 
 
+  @Column({ type: 'uuid', name: 'teacher_id', nullable: true })
+  teacherId!: string | null;
+
   @ManyToOne(() => StudentOrmEntity, { nullable: true })
   @JoinColumn({ name: 'student_id' })
   student!: StudentOrmEntity | null;
+
+  @ManyToOne(() => TeacherOrmEntity, { nullable: true })
+  @JoinColumn({ name: 'teacher_id' })
+  teacher!: TeacherOrmEntity | null;
 }

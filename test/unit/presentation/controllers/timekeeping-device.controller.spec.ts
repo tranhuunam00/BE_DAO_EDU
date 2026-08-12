@@ -8,6 +8,7 @@ import { ConfigureWebhookUseCase } from '../../../../src/modules/timekeeping/app
 import { SyncDeviceTimeUseCase } from '../../../../src/modules/timekeeping/application/use-cases/sync-device-time.use-case';
 import { ReconcileTimekeepingLogsUseCase } from '../../../../src/modules/timekeeping/application/use-cases/reconcile-timekeeping-logs.use-case';
 import { MinioService } from '../../../../src/infrastructure/storage/minio.service';
+import { TeacherOrmEntity } from '../../../../src/infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 
 describe('TimekeepingDeviceController', () => {
   let controller: TimekeepingDeviceController;
@@ -64,6 +65,13 @@ describe('TimekeepingDeviceController', () => {
         {
           provide: ReconcileTimekeepingLogsUseCase,
           useValue: { execute: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(TeacherOrmEntity),
+          useValue: {
+            findOne: jest.fn(),
+            save: jest.fn(),
+          },
         },
         {
           provide: MinioService,
