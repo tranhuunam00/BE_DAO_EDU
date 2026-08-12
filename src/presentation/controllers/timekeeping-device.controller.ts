@@ -7,6 +7,7 @@ import { SyncStudentToDeviceUseCase } from '../../modules/timekeeping/applicatio
 import { ConfigureWebhookUseCase } from '../../modules/timekeeping/application/use-cases/configure-webhook.use-case';
 import { SyncDeviceTimeUseCase } from '../../modules/timekeeping/application/use-cases/sync-device-time.use-case';
 import { ReconcileTimekeepingLogsUseCase } from '../../modules/timekeeping/application/use-cases/reconcile-timekeeping-logs.use-case';
+import { MinioService } from '../../infrastructure/storage/minio.service';
 
 @Controller('timekeeping')
 export class TimekeepingDeviceController {
@@ -21,6 +22,7 @@ export class TimekeepingDeviceController {
     private readonly configureWebhookUseCase: ConfigureWebhookUseCase,
     private readonly syncTimeUseCase: SyncDeviceTimeUseCase,
     private readonly reconcileUseCase: ReconcileTimekeepingLogsUseCase,
+    private readonly minioService: MinioService,
   ) {}
 
   @Get('logs')
@@ -80,7 +82,25 @@ export class TimekeepingDeviceController {
     qb.skip(skip).take(parsedLimit);
 
     const [logs, total] = await qb.getManyAndCount();
-    return { logs, total };
+
+    const logsWithUrls = await Promise.all(
+      logs.map(async (log) => {
+        let imageUrl: string | null = null;
+        if (log.imageKey) {
+          try {
+            imageUrl = await this.minioService.getPresignedUrl(log.imageKey);
+          } catch (e) {
+            // ignore error
+          }
+        }
+        return {
+          ...log,
+          imageUrl,
+        };
+      })
+    );
+
+    return { logs: logsWithUrls as any, total };
   }
 
   @Get('devices')

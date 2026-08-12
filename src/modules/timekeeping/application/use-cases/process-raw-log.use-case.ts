@@ -28,6 +28,7 @@ export class ProcessRawLogUseCase {
     verifyMethod: string,
     rawPayload?: any,
     originalId?: string,
+    imageKey?: string,
   ): Promise<any[]> {
     // Chuẩn hóa mã học sinh đầu vào từ thiết bị
     const normalizedCode = normalizeEmployeeNo(studentCode);
@@ -48,6 +49,7 @@ export class ProcessRawLogUseCase {
           verifyMethod,
           rawPayload,
           originalId,
+          imageKey,
         })
         .orIgnore() // ON CONFLICT DO NOTHING
         .execute();

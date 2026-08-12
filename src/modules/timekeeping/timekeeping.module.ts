@@ -5,6 +5,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TimekeepingDeviceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-device.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { StorageModule } from '../../infrastructure/storage/storage.module';
 
 import { ProcessRawLogUseCase } from './application/use-cases/process-raw-log.use-case';
 import { SyncStudentToDeviceUseCase } from './application/use-cases/sync-student-to-device.use-case';
@@ -25,6 +26,7 @@ import { TimekeepingDeviceController } from '../../presentation/controllers/time
       TimekeepingDeviceOrmEntity,
       TimekeepingLogOrmEntity,
     ]),
+    StorageModule,
   ],
   controllers: [
     TimekeepingWebhookController,

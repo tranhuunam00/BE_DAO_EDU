@@ -1,15 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TimekeepingWebhookController } from '../../../../src/presentation/controllers/timekeeping-webhook.controller';
 import { ProcessRawLogUseCase } from '../../../../src/modules/timekeeping/application/use-cases/process-raw-log.use-case';
+import { MinioService } from '../../../../src/infrastructure/storage/minio.service';
 import { HttpStatus } from '@nestjs/common';
 import { performance } from 'perf_hooks';
 
 describe('TimekeepingWebhookController', () => {
   let controller: TimekeepingWebhookController;
   let processRawLogUseCase: jest.Mocked<ProcessRawLogUseCase>;
+  let minioService: any;
 
   const mockProcessRawLogUseCase = {
     execute: jest.fn().mockResolvedValue([]),
+  };
+
+  const mockMinioService = {
+    uploadFile: jest.fn().mockResolvedValue('mock-image-key'),
   };
 
   beforeEach(async () => {
@@ -20,11 +26,16 @@ describe('TimekeepingWebhookController', () => {
           provide: ProcessRawLogUseCase,
           useValue: mockProcessRawLogUseCase,
         },
+        {
+          provide: MinioService,
+          useValue: mockMinioService,
+        },
       ],
     }).compile();
 
     controller = module.get<TimekeepingWebhookController>(TimekeepingWebhookController);
     processRawLogUseCase = module.get(ProcessRawLogUseCase);
+    minioService = module.get(MinioService);
     jest.clearAllMocks();
   });
 
@@ -62,7 +73,8 @@ describe('TimekeepingWebhookController', () => {
         expect.any(Date),
         'face',
         body.EventNotificationAlert.AccessControllerEvent,
-        '1024'
+        '1024',
+        undefined,
       );
     });
 
@@ -97,7 +109,8 @@ describe('TimekeepingWebhookController', () => {
         expect.any(Date),
         'card',
         body.AccessControllerEvent,
-        '2048'
+        '2048',
+        undefined,
       );
     });
   });
@@ -153,7 +166,79 @@ describe('TimekeepingWebhookController', () => {
         expect.any(Date),
         'fingerprint',
         expect.any(Object),
-        '5000'
+        '5000',
+        undefined,
+      );
+    });
+
+    it('nên trích xuất cả JSON và ảnh binary, upload lên MinIO và truyền imageKey vào usecase', async () => {
+      // Arrange
+      const boundary = 'boundary-12345';
+      const jsonContent = JSON.stringify({
+        EventNotificationAlert: {
+          dateTime: '2026-08-11T17:15:30+07:00',
+          subEventType: 75,
+          eventId: 6000,
+          AccessControllerEvent: {
+            employeeNoString: 'STU-1077',
+            cardNo: '',
+          },
+        },
+      });
+      const dummyImageBuffer = Buffer.from('fake-jpeg-image-binary-data');
+
+      // Tạo multipart body thủ công chứa cả 2 phần: JSON và Ảnh binary
+      const multipartBody = Buffer.concat([
+        Buffer.from(`--${boundary}\r\n`),
+        Buffer.from(`Content-Disposition: form-data; name="event_log"; filename="event.json"\r\n`),
+        Buffer.from(`Content-Type: application/json\r\n\r\n`),
+        Buffer.from(jsonContent),
+        Buffer.from(`\r\n--${boundary}\r\n`),
+        Buffer.from(`Content-Disposition: form-data; name="faceImage"; filename="face.jpg"\r\n`),
+        Buffer.from(`Content-Type: image/jpeg\r\n\r\n`),
+        dummyImageBuffer,
+        Buffer.from(`\r\n--${boundary}--`),
+      ]);
+
+      // Mock Req stream
+      const reqMock: any = {
+        headers: {
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        on: jest.fn().mockImplementation((event, callback) => {
+          if (event === 'data') {
+            callback(multipartBody);
+          }
+          if (event === 'end') {
+            callback();
+          }
+          return reqMock;
+        }),
+      };
+
+      // Act
+      const result = await controller.handleWebhook({}, reqMock);
+
+      // Assert
+      expect(result).toEqual({
+        statusCode: 1,
+        statusString: 'OK',
+        subStatusCode: 'ok',
+      });
+      expect(minioService.uploadFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mimetype: 'image/jpeg',
+          buffer: dummyImageBuffer,
+        }),
+        'chamcong',
+      );
+      expect(processRawLogUseCase.execute).toHaveBeenCalledWith(
+        'STU-1077',
+        expect.any(Date),
+        'face',
+        expect.any(Object),
+        '6000',
+        'mock-image-key',
       );
     });
   });

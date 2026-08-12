@@ -7,10 +7,12 @@ import { SyncStudentToDeviceUseCase } from '../../../../src/modules/timekeeping/
 import { ConfigureWebhookUseCase } from '../../../../src/modules/timekeeping/application/use-cases/configure-webhook.use-case';
 import { SyncDeviceTimeUseCase } from '../../../../src/modules/timekeeping/application/use-cases/sync-device-time.use-case';
 import { ReconcileTimekeepingLogsUseCase } from '../../../../src/modules/timekeeping/application/use-cases/reconcile-timekeeping-logs.use-case';
+import { MinioService } from '../../../../src/infrastructure/storage/minio.service';
 
 describe('TimekeepingDeviceController', () => {
   let controller: TimekeepingDeviceController;
   let logRepository: any;
+  let minioService: any;
 
   const mockQueryBuilder = {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -19,6 +21,10 @@ describe('TimekeepingDeviceController', () => {
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+  };
+
+  const mockMinioService = {
+    getPresignedUrl: jest.fn().mockResolvedValue('https://minio/attendance/mock-url.jpg'),
   };
 
   beforeEach(async () => {
@@ -59,10 +65,15 @@ describe('TimekeepingDeviceController', () => {
           provide: ReconcileTimekeepingLogsUseCase,
           useValue: { execute: jest.fn() },
         },
+        {
+          provide: MinioService,
+          useValue: mockMinioService,
+        },
       ],
     }).compile();
 
     controller = module.get<TimekeepingDeviceController>(TimekeepingDeviceController);
+    minioService = module.get(MinioService);
     jest.clearAllMocks();
   });
 
