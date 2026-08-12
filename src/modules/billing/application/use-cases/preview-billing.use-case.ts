@@ -38,17 +38,17 @@ export class PreviewTuitionUseCase {
 export class PreviewSalaryUseCase {
   constructor(private readonly persistence: BillingPersistencePort) {}
 
-  async execute(endDate: string, teacherIds?: string[]) {
+  async execute(endDate: string, teacherIds?: string[], month?: string) {
     if (!endDate) {
       throw new BillingError('INVALID_REQUEST', 'Vui lòng cung cấp endDate');
     }
-    const month = endDate.slice(0, 7);
-    BillingPeriod.create(month, `${month}-01`, endDate);
+    const finalMonth = month || endDate.slice(0, 7);
+    BillingPeriod.create(finalMonth, `${finalMonth}-01`, endDate);
     const [pricings, sources, commissionTeachers, prevMonthRevenue] = await Promise.all([
       this.persistence.loadPricings(),
       this.persistence.findSalarySources(endDate, teacherIds),
       this.persistence.findCommissionTeachers(teacherIds),
-      this.persistence.getPreviousMonthTuitionRevenue(month),
+      this.persistence.getPreviousMonthTuitionRevenue(finalMonth),
     ]);
     const orders = BillingCalculator.calculate(
       sources,

@@ -60,7 +60,15 @@ describe('PaymentPeriodController', () => {
     previewSalaryUseCase.execute.mockResolvedValue({ preview: [] });
 
     const result = await controller.previewSalary('2026-07-31');
-    expect(previewSalaryUseCase.execute).toHaveBeenCalledWith('2026-07-31');
+    expect(previewSalaryUseCase.execute).toHaveBeenCalledWith('2026-07-31', undefined, undefined);
+    expect(result).toEqual({ preview: [] });
+  });
+
+  it('previews salary payments with target month', async () => {
+    previewSalaryUseCase.execute.mockResolvedValue({ preview: [] });
+
+    const result = await controller.previewSalary('2026-07-31', '2026-07');
+    expect(previewSalaryUseCase.execute).toHaveBeenCalledWith('2026-07-31', undefined, '2026-07');
     expect(result).toEqual({ preview: [] });
   });
 

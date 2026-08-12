@@ -109,6 +109,26 @@ describe('Billing use cases', () => {
     expect(result.grandTotal).toBe(54000);
   });
 
+  it('previews salary using target month if provided', async () => {
+    const { persistence, context } = makePersistence();
+    context.findSalarySources.mockResolvedValue([]);
+    await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+      undefined,
+      '2026-06',
+    );
+    expect(persistence.getPreviousMonthTuitionRevenue).toHaveBeenCalledWith('2026-06');
+  });
+
+  it('previews salary using month derived from endDate if target month is not provided', async () => {
+    const { persistence, context } = makePersistence();
+    context.findSalarySources.mockResolvedValue([]);
+    await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+    );
+    expect(persistence.getPreviousMonthTuitionRevenue).toHaveBeenCalledWith('2026-06');
+  });
+
   it('previews salary for commission-based teachers correctly', async () => {
     const { persistence, context } = makePersistence();
     persistence.findCommissionTeachers.mockResolvedValue([

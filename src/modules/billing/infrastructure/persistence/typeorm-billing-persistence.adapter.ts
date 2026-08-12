@@ -73,11 +73,10 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
   }
 
   async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
-    const prevMonth = dayjs(month + '-01').subtract(1, 'month').format('YYYY-MM');
     const prevPeriods = await this.dataSource.getRepository(PaymentPeriodOrmEntity).find({
       where: {
         type: 'tuition',
-        month: prevMonth,
+        month,
       },
     });
     if (prevPeriods.length === 0) return 0;
@@ -751,11 +750,10 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
   }
 
   async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
-    const prevMonth = dayjs(month + '-01').subtract(1, 'month').format('YYYY-MM');
     const prevPeriods = await this.manager.getRepository(PaymentPeriodOrmEntity).find({
       where: {
         type: 'tuition',
-        month: prevMonth,
+        month,
       },
     });
     if (prevPeriods.length === 0) return 0;
