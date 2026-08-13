@@ -40,6 +40,8 @@ export class TimekeepingDeviceController {
     @Query('verifyMethod') verifyMethod?: string,
     @Query('matchStatus') matchStatus?: 'all' | 'matched' | 'unmatched',
     @Query('role') role?: 'student' | 'teacher' | 'all' | 'unmatched',
+    @Query('sessionMatchStatus') sessionMatchStatus?: 'all' | 'matched' | 'unmatched',
+    @Query('classId') classId?: string,
   ): Promise<{ logs: TimekeepingLogOrmEntity[]; total: number }> {
     const qb = this.logRepository.createQueryBuilder('log')
       .leftJoinAndSelect('log.student', 'student')
@@ -88,6 +90,29 @@ export class TimekeepingDeviceController {
       qb.andWhere('log.studentId IS NOT NULL');
     } else if (matchStatus === 'unmatched') {
       qb.andWhere('log.studentId IS NULL');
+    }
+
+    // Lọc theo trạng thái khớp ca học
+    if (sessionMatchStatus === 'matched') {
+      qb.andWhere('log.matchedSessions IS NOT NULL');
+    } else if (sessionMatchStatus === 'unmatched') {
+      qb.andWhere('log.matchedSessions IS NULL');
+    }
+
+    // Lọc theo lớp học (classId) của ca học khớp
+    if (classId) {
+      qb.andWhere(`
+        EXISTS (
+          SELECT 1 FROM jsonb_to_recordset(
+            CASE 
+              WHEN jsonb_typeof(log.matched_sessions) = 'array' THEN log.matched_sessions 
+              ELSE '[]'::jsonb 
+            END
+          ) AS x(id uuid)
+          INNER JOIN class_sessions cs ON cs.id = x.id
+          WHERE cs.class_id = :classId
+        )
+      `, { classId });
     }
 
     const parsedPage = Number(page) || 1;
