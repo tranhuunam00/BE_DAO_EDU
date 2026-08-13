@@ -39,7 +39,7 @@ export class TimekeepingMatcher {
         // 2. Lọc nhật ký của đúng học sinh và sắp xếp theo thời gian tăng dần
         const studentLogs = logs
             .filter(log => log.studentId === studentId)
-            .sort((a, b) => a.eventTime.getTime() - b.eventTime.getTime());
+            .sort((a, b) => getEventTimestamp(a.eventTime) - getEventTimestamp(b.eventTime));
 
         // 3. Khử quẹt trùng trong vòng 5 phút (Anti-double-scan)
         const filteredLogs: TimekeepingLog[] = [];
@@ -48,7 +48,7 @@ export class TimekeepingMatcher {
                 filteredLogs.push(log);
             } else {
                 const prevLog = filteredLogs[filteredLogs.length - 1];
-                const timeDiffMs = log.eventTime.getTime() - prevLog.eventTime.getTime();
+                const timeDiffMs = getEventTimestamp(log.eventTime) - getEventTimestamp(prevLog.eventTime);
                 if (timeDiffMs >= 5 * 60 * 1000) {
                     filteredLogs.push(log);
                 }
@@ -82,7 +82,7 @@ export class TimekeepingMatcher {
 
         // 5. Chạy máy trạng thái xử lý từng lượt quẹt thô
         for (const log of filteredLogs) {
-            const t = log.eventTime.getTime();
+            const t = getEventTimestamp(log.eventTime);
             let logConsumed = false;
 
             for (let i = 0; i < sortedSessions.length; i++) {
@@ -189,7 +189,7 @@ export class TimekeepingMatcher {
                         }
 
                         // Nếu quẹt ra lúc tan ca
-                        if (res.checkInTime && t > res.checkInTime.getTime() + 10 * 60000) {
+                        if (res.checkInTime && t > getEventTimestamp(res.checkInTime) + 10 * 60000) {
                             res.checkOutTime = log.eventTime;
                             logConsumed = true;
                             break;
@@ -209,7 +209,7 @@ export class TimekeepingMatcher {
             const outEnd = sessionEnd + 60 * 60000;
 
             const hasOutLog = filteredLogs.some(log => {
-                const t = log.eventTime.getTime();
+                const t = getEventTimestamp(log.eventTime);
                 return t >= sessionEnd && t <= outEnd;
             });
 
@@ -295,6 +295,25 @@ export function parseDeviceTime(timeStr: string): Date {
     const normalized = timeStr.replace(' ', 'T');
     const hasTimezone = normalized.includes('Z') || normalized.includes('+') || (normalized.includes('-') && normalized.indexOf('-') !== normalized.lastIndexOf('-') && normalized.lastIndexOf('-') > 10);
     return new Date(hasTimezone ? normalized : `${normalized}Z`);
+}
+
+export function getEventTimestamp(date: Date): number {
+    if (!date) return 0;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return new Date(`${y}-${m}-${d}T${hh}:${mm}:${ss}+07:00`).getTime();
+}
+
+export function getLocalDateString(date: Date): string {
+    if (!date) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 }
 
 

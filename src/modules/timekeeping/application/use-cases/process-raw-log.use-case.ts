@@ -6,7 +6,7 @@ import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persisten
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo, parseTimekeepingCode } from '../../domain/services/timekeeping-matcher';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo, parseTimekeepingCode, getEventTimestamp, getLocalDateString } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class ProcessRawLogUseCase {
@@ -115,9 +115,7 @@ export class ProcessRawLogUseCase {
     }
 
     // 3. Tính toán khung ngày học của lượt quẹt (múi giờ +07:00)
-    const offset = 7 * 60 * 60 * 1000;
-    const localTime = new Date(eventTime.getTime() + offset);
-    const dateString = localTime.toISOString().substring(0, 10);
+    const dateString = getLocalDateString(eventTime);
 
     const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
     const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
@@ -202,7 +200,7 @@ export class ProcessRawLogUseCase {
 
     // 8. Cập nhật các ca học đối khớp (matched_sessions) cho toàn bộ logs trong ngày của học sinh này
     for (const dbLog of dbLogs) {
-      const t = dbLog.eventTime.getTime();
+      const t = getEventTimestamp(dbLog.eventTime);
       const matched = [];
 
       for (const s of domainSessions) {
