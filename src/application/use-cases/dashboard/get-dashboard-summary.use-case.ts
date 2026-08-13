@@ -23,10 +23,14 @@ export class GetDashboardSummaryUseCase {
   ) {}
 
   async execute() {
+    const maxStudentRes = await this.studentRepo.createQueryBuilder('student')
+      .select('MAX(student.createdAt)', 'max')
+      .getRawOne();
+    const maxDate = maxStudentRes?.max ? new Date(maxStudentRes.max) : new Date();
+
     const months: string[] = [];
-    const now = new Date();
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(maxDate.getFullYear(), maxDate.getMonth() - i, 1);
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       months.push(`${year}-${month}`);

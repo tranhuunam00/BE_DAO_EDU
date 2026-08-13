@@ -31,15 +31,20 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueSummary(filters: ReportFilters): Promise<RevenueSummary> {
     const { where, params } = this.billWhereClause(filters);
+    const subWhere = where.replace(/b\./g, 'sub_b.');
     const rows = await this.ds.query(
       `SELECT
          COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
          COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
        FROM student_monthly_bills b
-       JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
-       ${where}`,
+       WHERE b.id IN (
+         SELECT sub_b.id
+         FROM student_monthly_bills sub_b
+         JOIN students s ON s.id = sub_b.student_id
+         LEFT JOIN class_students cs ON cs.student_id = s.id
+         LEFT JOIN classes cl ON cl.id = cs.class_id
+         ${subWhere}
+       )`,
       params,
     );
     const expected = Number(rows[0]?.expected ?? 0);
@@ -54,16 +59,21 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueByMonth(filters: ReportFilters): Promise<RevenueByMonth[]> {
     const { where, params } = this.billWhereClause(filters, true);
+    const subWhere = where.replace(/b\./g, 'sub_b.');
     const rows = await this.ds.query(
       `SELECT
          b.month,
          COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
          COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
        FROM student_monthly_bills b
-       JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
-       ${where}
+       WHERE b.id IN (
+         SELECT sub_b.id
+         FROM student_monthly_bills sub_b
+         JOIN students s ON s.id = sub_b.student_id
+         LEFT JOIN class_students cs ON cs.student_id = s.id
+         LEFT JOIN classes cl ON cl.id = cs.class_id
+         ${subWhere}
+       )
        GROUP BY b.month
        ORDER BY b.month DESC
        LIMIT 12`,
@@ -78,18 +88,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueByCenter(filters: ReportFilters): Promise<RevenueByCenterRow[]> {
     const { where, params } = this.billWhereClause(filters);
+    const cleanWhere = where.replace(/cs\./g, 'bi.');
     const rows = await this.ds.query(
       `SELECT
          ct.id AS "centerId",
          ct.name AS "centerName",
-         COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
-         COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
-       FROM student_monthly_bills b
+         COALESCE(SUM(bi.total_amount), 0)::numeric AS expected,
+         COALESCE(SUM(bi.total_amount * (CASE WHEN b.total_amount > 0 THEN b.paid_amount / b.total_amount ELSE 0 END)), 0)::numeric AS paid
+       FROM student_monthly_bill_items bi
+       JOIN student_monthly_bills b ON b.id = bi.bill_id
        JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
+       LEFT JOIN classes cl ON cl.id = bi.class_id
        LEFT JOIN centers ct ON ct.id = cl.center_id
-       ${where}
+       ${cleanWhere}
        GROUP BY ct.id, ct.name
        ORDER BY expected DESC`,
       params,
@@ -605,7 +616,16 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       params,
     );
 
-    const monthVal = filters.month || new Date().toISOString().slice(0, 7);
+    let monthVal = filters.month;
+    if (!monthVal) {
+      const maxStudentRes = await this.ds.query(
+        `SELECT MAX(created_at) AS max FROM students`
+      );
+      monthVal = maxStudentRes[0]?.max 
+        ? new Date(maxStudentRes[0].max).toISOString().slice(0, 7)
+        : new Date().toISOString().slice(0, 7);
+    }
+
     const newStudentsRows = await this.ds.query(
       `SELECT COUNT(DISTINCT s.id)::int AS count
        FROM students s
