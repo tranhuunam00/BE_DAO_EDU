@@ -64,10 +64,24 @@ export class TimekeepingMatcher {
                 return dateVal;
             }
             if (dateVal instanceof Date) {
-                const y = dateVal.getFullYear();
-                const m = String(dateVal.getMonth() + 1).padStart(2, '0');
-                const d = String(dateVal.getDate()).padStart(2, '0');
-                return `${y}-${m}-${d}`;
+                try {
+                    const formatter = new Intl.DateTimeFormat('en-US', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    });
+                    const parts = formatter.formatToParts(dateVal);
+                    const y = parts.find(p => p.type === 'year').value;
+                    const m = parts.find(p => p.type === 'month').value;
+                    const d = parts.find(p => p.type === 'day').value;
+                    return `${y}-${m}-${d}`;
+                } catch (e) {
+                    const y = dateVal.getFullYear();
+                    const m = String(dateVal.getMonth() + 1).padStart(2, '0');
+                    const d = String(dateVal.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
             }
             return String(dateVal);
         };
