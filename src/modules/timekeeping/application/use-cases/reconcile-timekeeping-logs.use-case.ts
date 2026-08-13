@@ -23,24 +23,24 @@ export class ReconcileTimekeepingLogsUseCase {
 
   async execute(date: string): Promise<{ success: boolean; eventsProcessed: number }> {
     let totalProcessed = 0;
-    this.logger.log(`[ReconcileTimekeepingLogs] Starting manual reconcile for date: ${date}`);
+    console.log(`[ReconcileTimekeepingLogs] Starting manual reconcile for date: ${date}`);
 
     // 1. Đối soát các nhật ký quẹt thẻ thô đã được lưu trong DB cho ngày này
     try {
       const startOfDay = new Date(`${date}T00:00:00+07:00`);
       const endOfDay = new Date(`${date}T23:59:59+07:00`);
-      this.logger.log(`[ReconcileTimekeepingLogs] Querying logs from DB between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
+      console.log(`[ReconcileTimekeepingLogs] Querying logs from DB between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
 
       const dbLogs = await this.logRepository.find({
         where: {
           eventTime: Between(startOfDay, endOfDay)
         }
       });
-      this.logger.log(`[ReconcileTimekeepingLogs] Found ${dbLogs.length} logs in DB to reconcile`);
+      console.log(`[ReconcileTimekeepingLogs] Found ${dbLogs.length} logs in DB to reconcile`);
 
       for (const log of dbLogs) {
         try {
-          this.logger.log(`[ReconcileTimekeepingLogs] Reconciling log: ID=${log.id}, employeeNo=${log.employeeNo}, eventTime=${log.eventTime.toISOString()}`);
+          console.log(`[ReconcileTimekeepingLogs] Reconciling log: ID=${log.id}, employeeNo=${log.employeeNo}, eventTime=${log.eventTime.toISOString()}`);
           await this.processRawLogUseCase.execute(
             log.employeeNo,
             log.eventTime,
