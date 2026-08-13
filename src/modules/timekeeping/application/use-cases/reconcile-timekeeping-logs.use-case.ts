@@ -6,7 +6,7 @@ import { TimekeepingDeviceOrmEntity } from '../../../../infrastructure/persisten
 import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { HikvisionIsapiClient } from '../../infrastructure/external/hikvision-isapi.client';
 import { ProcessRawLogUseCase } from './process-raw-log.use-case';
-import { normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
+import { normalizeEmployeeNo, parseDeviceTime } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class ReconcileTimekeepingLogsUseCase {
@@ -112,7 +112,7 @@ export class ReconcileTimekeepingLogsUseCase {
           try {
             await this.processRawLogUseCase.execute(
               employeeNo,
-              new Date(timeStr),
+              parseDeviceTime(timeStr),
               verifyMethod,
               ev,
               eventId

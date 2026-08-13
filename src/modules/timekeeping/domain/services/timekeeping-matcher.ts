@@ -290,3 +290,10 @@ export function parseTimekeepingCode(code: string): ParsedTimekeepingCode {
     };
 }
 
+export function parseDeviceTime(timeStr: string): Date {
+    if (!timeStr) return new Date();
+    const hasTimezone = timeStr.includes('Z') || timeStr.includes('+') || (timeStr.includes('-') && timeStr.indexOf('-') !== timeStr.lastIndexOf('-') && timeStr.lastIndexOf('-') > 10);
+    return new Date(hasTimezone ? timeStr : `${timeStr}+07:00`);
+}
+
+

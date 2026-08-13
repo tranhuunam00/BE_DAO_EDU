@@ -2,6 +2,8 @@ import { Controller, Post, Body, Req, HttpCode, HttpStatus } from '@nestjs/commo
 import { ProcessRawLogUseCase } from '../../modules/timekeeping/application/use-cases/process-raw-log.use-case';
 import { MinioService } from '../../infrastructure/storage/minio.service';
 import { parseMultipartBuffer } from '../../infrastructure/utils/multipart-parser';
+import { parseDeviceTime } from '../../modules/timekeeping/domain/services/timekeeping-matcher';
+
 
 @Controller('attendance')
 export class TimekeepingWebhookController {
@@ -97,7 +99,7 @@ export class TimekeepingWebhookController {
           try {
             await this.processRawLogUseCase.execute(
               employeeNo,
-              new Date(timeStr),
+              parseDeviceTime(timeStr),
               verifyMethod,
               ev,
               eventId,
