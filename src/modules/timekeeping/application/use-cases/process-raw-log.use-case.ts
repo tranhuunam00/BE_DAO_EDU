@@ -6,7 +6,7 @@ import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persisten
 import { ClassSessionOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmployeeNo, parseTimekeepingCode } from '../../domain/services/timekeeping-matcher';
 
 @Injectable()
 export class ProcessRawLogUseCase {
@@ -36,33 +36,32 @@ export class ProcessRawLogUseCase {
   ): Promise<any[]> {
     let student: StudentOrmEntity | null = null;
     let teacher: TeacherOrmEntity | null = null;
-    let finalEmployeeNo = studentCode;
 
-    // 1. Phân loại theo tiền tố (1111 = Học sinh, 222 = Giáo viên)
-    if (studentCode.startsWith('1111')) {
-      const codeWithoutPrefix = studentCode.substring(4);
-      finalEmployeeNo = normalizeEmployeeNo(codeWithoutPrefix);
+    // 1. Phân loại theo tiền tố sử dụng hàm tiện ích parseTimekeepingCode
+    const parsed = parseTimekeepingCode(studentCode);
+    let finalEmployeeNo = parsed.normalizedCode;
+
+    if (parsed.type === 'student') {
       student = await this.studentRepository.createQueryBuilder('student')
         .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
-    } else if (studentCode.startsWith('222')) {
-      const codeWithoutPrefix = studentCode.substring(3);
-      finalEmployeeNo = normalizeEmployeeNo(codeWithoutPrefix);
+    } else if (parsed.type === 'teacher') {
+      const codes = parsed.candidates && parsed.candidates.length > 0 ? parsed.candidates : [finalEmployeeNo];
       teacher = await this.teacherRepository.createQueryBuilder('teacher')
-        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') IN (:...codes)", { codes })
         .getOne();
+      if (teacher) {
+        finalEmployeeNo = normalizeEmployeeNo(teacher.teacherId);
+      }
     } else {
       // Fallback tương thích ngược không có tiền tố
-      const normalizedCode = normalizeEmployeeNo(studentCode);
-      finalEmployeeNo = normalizedCode;
-      
       student = await this.studentRepository.createQueryBuilder('student')
-        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: normalizedCode })
+        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
       
       if (!student) {
         teacher = await this.teacherRepository.createQueryBuilder('teacher')
-          .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: normalizedCode })
+          .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
           .getOne();
       }
     }

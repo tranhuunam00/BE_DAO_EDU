@@ -249,3 +249,44 @@ export function normalizeEmployeeNo(code: string): string {
     if (!code) return '';
     return code.replace(/\D/g, '').replace(/^0+/, '');
 }
+
+export const TIMEKEEPING_STUDENT_PREFIX = '1111';
+export const TIMEKEEPING_TEACHER_PREFIX = '2222';
+export const TIMEKEEPING_TEACHER_PREFIX_LEGACY = '222';
+
+export interface ParsedTimekeepingCode {
+    type: 'student' | 'teacher' | 'unknown';
+    originalCode: string;
+    normalizedCode: string;
+    candidates?: string[];
+}
+
+export function parseTimekeepingCode(code: string): ParsedTimekeepingCode {
+    if (!code) return { type: 'unknown', originalCode: '', normalizedCode: '' };
+    
+    if (code.startsWith(TIMEKEEPING_STUDENT_PREFIX)) {
+        return {
+            type: 'student',
+            originalCode: code,
+            normalizedCode: normalizeEmployeeNo(code.substring(TIMEKEEPING_STUDENT_PREFIX.length)),
+        };
+    }
+    
+    if (code.startsWith(TIMEKEEPING_TEACHER_PREFIX) || code.startsWith(TIMEKEEPING_TEACHER_PREFIX_LEGACY)) {
+        const candidateNew = normalizeEmployeeNo(code.substring(TIMEKEEPING_TEACHER_PREFIX.length));
+        const candidateLegacy = normalizeEmployeeNo(code.substring(TIMEKEEPING_TEACHER_PREFIX_LEGACY.length));
+        return {
+            type: 'teacher',
+            originalCode: code,
+            normalizedCode: candidateNew,
+            candidates: [candidateNew, candidateLegacy],
+        };
+    }
+    
+    return {
+        type: 'unknown',
+        originalCode: code,
+        normalizedCode: normalizeEmployeeNo(code),
+    };
+}
+

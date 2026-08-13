@@ -212,7 +212,28 @@ describe('ProcessRawLogUseCase', () => {
     );
   });
 
-  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 222 và không đối khớp ca học học sinh', async () => {
+  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 2222 và không đối khớp ca học học sinh', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    const result = await useCase.execute('22222026001', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(result).toEqual([]);
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: null,
+        teacherId: 'teacher-uuid-456',
+        employeeNo: '2026001',
+      })
+    );
+    expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 222 cũ (tương thích ngược) và không đối khớp ca học học sinh', async () => {
     // Arrange
     const eventTime = new Date('2026-08-11T08:05:00+07:00');
     const verifyMethod = 'face';
