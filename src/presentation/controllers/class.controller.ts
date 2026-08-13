@@ -978,6 +978,7 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+      record.attendanceType = 'manual';
 
       if (item.evaluationScore !== undefined) {
         if (item.evaluationScore !== null && item.evaluationScore !== '') {
@@ -1037,6 +1038,7 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+      record.attendanceType = 'manual';
 
       if (item.evaluationScore !== undefined) {
         if (item.evaluationScore !== null && item.evaluationScore !== '') {

@@ -23,7 +23,7 @@ export class StudentAttendanceOrmEntity {
   @Column({ type: 'boolean', name: 'is_present', default: false })
   isPresent!: boolean;
 
-  @Column({ type: 'varchar', name: 'attendance_type', default: 'manual' })
+  @Column({ type: 'varchar', name: 'attendance_type', default: 'machine' })
   attendanceType!: string; // 'manual' | 'machine'
 
   @Column({ type: 'varchar', name: 'verify_method', nullable: true })
