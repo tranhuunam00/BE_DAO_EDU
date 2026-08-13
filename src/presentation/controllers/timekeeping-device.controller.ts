@@ -15,19 +15,19 @@ export class TimekeepingDeviceController {
   constructor(
     @InjectRepository(TimekeepingDeviceOrmEntity)
     private readonly deviceRepository: Repository<TimekeepingDeviceOrmEntity>,
-    
+
     @InjectRepository(TimekeepingLogOrmEntity)
     private readonly logRepository: Repository<TimekeepingLogOrmEntity>,
 
     @InjectRepository(TeacherOrmEntity)
     private readonly teacherRepository: Repository<TeacherOrmEntity>,
-    
+
     private readonly syncStudentUseCase: SyncStudentToDeviceUseCase,
     private readonly configureWebhookUseCase: ConfigureWebhookUseCase,
     private readonly syncTimeUseCase: SyncDeviceTimeUseCase,
     private readonly reconcileUseCase: ReconcileTimekeepingLogsUseCase,
     private readonly minioService: MinioService,
-  ) {}
+  ) { }
 
   @Get('logs')
   async listLogs(
@@ -93,7 +93,7 @@ export class TimekeepingDeviceController {
     const parsedPage = Number(page) || 1;
     const parsedLimit = Number(limit) || 20;
     const skip = (parsedPage - 1) * parsedLimit;
-    
+
     qb.skip(skip).take(parsedLimit);
 
     const [logs, total] = await qb.getManyAndCount();
@@ -185,6 +185,7 @@ export class TimekeepingDeviceController {
 
   @Post('manual-reconcile')
   async manualReconcile(@Body() body: { date: string }): Promise<{ success: boolean; eventsProcessed: number }> {
+    console.log("heheehheheheeh")
     const result = await this.reconcileUseCase.execute(body.date);
     return { success: true, eventsProcessed: result.eventsProcessed };
   }
