@@ -43,12 +43,12 @@ export class ProcessRawLogUseCase {
 
     if (parsed.type === 'student') {
       student = await this.studentRepository.createQueryBuilder('student')
-        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+        .where("LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
     } else if (parsed.type === 'teacher') {
       const codes = parsed.candidates && parsed.candidates.length > 0 ? parsed.candidates : [finalEmployeeNo];
       teacher = await this.teacherRepository.createQueryBuilder('teacher')
-        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') IN (:...codes)", { codes })
+        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '[^0-9]', '', 'g'), '0') IN (:...codes)", { codes })
         .getOne();
       if (teacher) {
         finalEmployeeNo = normalizeEmployeeNo(teacher.teacherId);
@@ -56,12 +56,12 @@ export class ProcessRawLogUseCase {
     } else {
       // Fallback tương thích ngược không có tiền tố
       student = await this.studentRepository.createQueryBuilder('student')
-        .where("LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+        .where("LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
       
       if (!student) {
         teacher = await this.teacherRepository.createQueryBuilder('teacher')
-          .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '\\D', '', 'g'), '0') = :code", { code: finalEmployeeNo })
+          .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '[^0-9]', '', 'g'), '0') = :code", { code: finalEmployeeNo })
           .getOne();
       }
     }
