@@ -292,8 +292,9 @@ export function parseTimekeepingCode(code: string): ParsedTimekeepingCode {
 
 export function parseDeviceTime(timeStr: string): Date {
     if (!timeStr) return new Date();
-    const hasTimezone = timeStr.includes('Z') || timeStr.includes('+') || (timeStr.includes('-') && timeStr.indexOf('-') !== timeStr.lastIndexOf('-') && timeStr.lastIndexOf('-') > 10);
-    return new Date(hasTimezone ? timeStr : `${timeStr}+07:00`);
+    const normalized = timeStr.replace(' ', 'T');
+    const hasTimezone = normalized.includes('Z') || normalized.includes('+') || (normalized.includes('-') && normalized.indexOf('-') !== normalized.lastIndexOf('-') && normalized.lastIndexOf('-') > 10);
+    return new Date(hasTimezone ? normalized : `${normalized}Z`);
 }
 
 
