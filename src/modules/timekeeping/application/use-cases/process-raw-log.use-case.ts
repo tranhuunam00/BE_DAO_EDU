@@ -215,8 +215,9 @@ export class ProcessRawLogUseCase {
       const matched = [];
 
       for (const s of domainSessions) {
-        const sessionStart = new Date(`${s.date}T${s.startTime}:00+07:00`).getTime();
-        const sessionEnd = new Date(`${s.date}T${s.endTime}:00+07:00`).getTime();
+        const sDateStr = getLocalDateString(s.date);
+        const sessionStart = new Date(`${sDateStr}T${s.startTime}:00+07:00`).getTime();
+        const sessionEnd = new Date(`${sDateStr}T${s.endTime}:00+07:00`).getTime();
 
         // Khoảng thời gian cho phép quẹt thẻ (+/- 1 tiếng)
         const checkInStart = sessionStart - 60 * 60000;

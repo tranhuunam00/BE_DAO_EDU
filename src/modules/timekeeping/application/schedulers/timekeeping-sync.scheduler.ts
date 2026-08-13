@@ -42,7 +42,7 @@ export class TimekeepingSyncScheduler {
   }
 
   // 3. Cron Job đối soát tự động mỗi 5 phút cho ngày hôm nay
-  @Cron('*/5 * * * *')
+  // @Cron('*/5 * * * *')
   async handleAutoReconcileEvery5Minutes() {
     this.logger.log('Bắt đầu Cron Job đối soát tự động 5 phút/lần...');
     const today = new Date();

@@ -340,12 +340,32 @@ export function getEventTimestamp(date: Date): number {
     return new Date(`${y}-${m}-${d}T${hh}:${mm}:${ss}+07:00`).getTime();
 }
 
-export function getLocalDateString(date: Date): string {
+export function getLocalDateString(date: Date | string): string {
     if (!date) return '';
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    if (typeof date === 'string') {
+        if (date.includes('T')) {
+            return date.split('T')[0];
+        }
+        return date;
+    }
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const parts = formatter.formatToParts(date);
+        const y = parts.find(p => p.type === 'year')?.value || '';
+        const m = parts.find(p => p.type === 'month')?.value || '';
+        const d = parts.find(p => p.type === 'day')?.value || '';
+        return `${y}-${m}-${d}`;
+    } catch (e) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
 }
 
 
