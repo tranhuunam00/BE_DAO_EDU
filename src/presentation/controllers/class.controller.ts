@@ -839,6 +839,31 @@ export class ClassController {
     return attendance;
   }
 
+  @Delete('sessions/:sessionId')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Xóa một buổi học chưa diễn ra' })
+  async deleteSession(@Param('sessionId') sessionId: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    }
+    if (session.status !== SessionStatus.SCHEDULED || session.attendanceLocked) {
+      throw new ConflictException(
+        'Chỉ có thể xóa các buổi học ở trạng thái chưa diễn ra và chưa khóa điểm danh.',
+      );
+    }
+
+    // Delete attendance records manually to prevent FK constraint violations
+    await this.attendanceRepo.delete({ classSessionId: sessionId });
+
+    // Delete the session
+    await this.sessionRepo.delete({ id: sessionId });
+
+    return { message: 'Đã xóa buổi học thành công' };
+  }
+
   @Post('sessions/:sessionId/start-attendance')
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Bắt đầu điểm danh (chuyển trạng thái sang Đang học)' })
