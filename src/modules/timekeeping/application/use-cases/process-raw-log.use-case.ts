@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, DataSource } from 'typeorm';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
@@ -10,6 +10,8 @@ import { TimekeepingMatcher, DomainClassSession, TimekeepingLog, normalizeEmploy
 
 @Injectable()
 export class ProcessRawLogUseCase {
+  private readonly logger = new Logger(ProcessRawLogUseCase.name);
+
   constructor(
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepository: Repository<StudentOrmEntity>,
@@ -111,11 +113,15 @@ export class ProcessRawLogUseCase {
     }
 
     if (!student) {
+      this.logger.warn(`[ProcessRawLog] Student not found for code: ${studentCode}`);
       return [];
     }
 
+    this.logger.log(`[ProcessRawLog] Found student: ID=${student.id}, Name=${student.lastName} ${student.firstName}, Code=${student.studentId}`);
+
     // 3. Tính toán khung ngày học của lượt quẹt (múi giờ +07:00)
     const dateString = getLocalDateString(eventTime);
+    this.logger.log(`[ProcessRawLog] Date string calculated from eventTime (${eventTime.toISOString()} / ${eventTime.toLocaleString()}): ${dateString}`);
 
     const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
     const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
@@ -127,6 +133,7 @@ export class ProcessRawLogUseCase {
         eventTime: Between(startOfDay, endOfDay)
       }
     });
+    this.logger.log(`[ProcessRawLog] Found ${dbLogs.length} timekeeping logs in DB for date ${dateString} between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
 
     const domainLogs: TimekeepingLog[] = dbLogs.map(log => ({
       studentId: log.studentId,
@@ -163,9 +170,11 @@ export class ProcessRawLogUseCase {
         date: row.date,
       };
     });
+    this.logger.log(`[ProcessRawLog] Found ${domainSessions.length} active sessions: ${JSON.stringify(domainSessions)}`);
 
     // 6. Chạy thuật toán đối khớp của tầng Domain
     const matchResults = TimekeepingMatcher.match(student.id, domainSessions, domainLogs);
+    this.logger.log(`[ProcessRawLog] Match results from domain matcher: ${JSON.stringify(matchResults)}`);
 
     // 7. Lưu / Cập nhật kết quả điểm danh vào bảng student_attendance
     const savedResults = [];
@@ -194,7 +203,9 @@ export class ProcessRawLogUseCase {
       attendance.lateMinutes = res.lateMinutes;
       attendance.note = res.note;
 
+      this.logger.log(`[ProcessRawLog] Saving attendance: studentId=${student.id}, sessionId=${res.classSessionId}, isPresent=${res.isPresent}, type=${res.attendanceType}, note=${res.note}`);
       const saved = await this.studentAttendanceRepository.save(attendance);
+      this.logger.log(`[ProcessRawLog] Attendance SAVED successfully: ID=${saved.id}, isPresent=${saved.isPresent}`);
       savedResults.push(saved);
     }
 
@@ -226,6 +237,7 @@ export class ProcessRawLogUseCase {
 
       dbLog.matchedSessions = matched.length > 0 ? matched : null;
       await this.timekeepingLogRepository.save(dbLog);
+      this.logger.log(`[ProcessRawLog] Updated matched_sessions for log ID=${dbLog.id} (eventTime=${dbLog.eventTime.toISOString()}): ${JSON.stringify(dbLog.matchedSessions)}`);
     }
 
     return savedResults;
