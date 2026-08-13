@@ -275,7 +275,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       `SELECT
          cs.id AS "sessionId",
          cs.class_id AS "classId",
-         cs.date AS "date"
+         TO_CHAR(cs.date::date, 'YYYY-MM-DD') AS "date"
        FROM class_sessions cs
        LEFT JOIN classes cl ON cl.id = cs.class_id
        ${where}
@@ -774,7 +774,9 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   private attendanceWhereClause(filters: ReportFilters, skipMonth = false) {
-    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
+    const conditions: string[] = [
+      `(cs.status = '${SessionStatus.COMPLETED}' OR cs.attendance_locked = true OR (cs.status = '${SessionStatus.SCHEDULED}' AND cs.date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date))`
+    ];
     const params: any[] = [];
     const idx = { value: 1 };
 
@@ -1046,7 +1048,9 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   async getStudentAttendanceReport(filters: ReportFilters): Promise<any[]> {
-    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
+    const conditions: string[] = [
+      `(cs.status = '${SessionStatus.COMPLETED}' OR cs.attendance_locked = true OR (cs.status = '${SessionStatus.SCHEDULED}' AND cs.date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date))`
+    ];
     const params: any[] = [];
     const idx = { value: 1 };
 
