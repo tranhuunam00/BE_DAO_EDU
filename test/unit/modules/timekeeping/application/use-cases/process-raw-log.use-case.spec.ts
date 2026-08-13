@@ -79,6 +79,7 @@ describe('ProcessRawLogUseCase', () => {
     timekeepingLogRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(mockInsertQueryBuilder),
       find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockImplementation(async (v) => v),
     };
 
@@ -252,6 +253,34 @@ describe('ProcessRawLogUseCase', () => {
       })
     );
     expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('nên cập nhật studentId của nhật ký cũ nếu trước đó là null và hiện tại đã tìm thấy học sinh', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+
+    const existingLog = {
+      id: 'log-uuid-999',
+      studentId: null,
+      employeeNo: '2026007',
+      eventTime,
+      verifyMethod,
+    };
+
+    jest.spyOn(timekeepingLogRepository, 'findOne').mockResolvedValueOnce(existingLog);
+    jest.spyOn(timekeepingLogRepository, 'save').mockClear();
+
+    // Act
+    await useCase.execute('2026007', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(timekeepingLogRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-uuid-999',
+        studentId: 'student-uuid-123',
+      })
+    );
   });
 
   it('phải hoàn thành việc xử lý nhật ký thô trong giới hạn SLA < 10ms cho 100 lần chạy (Performance Benchmark)', async () => {

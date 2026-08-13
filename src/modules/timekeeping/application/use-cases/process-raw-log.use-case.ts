@@ -68,20 +68,39 @@ export class ProcessRawLogUseCase {
 
     // 2. Ghi nhận nhật ký thô và chống trùng lặp qua DB Unique constraint
     try {
-      await this.timekeepingLogRepository.createQueryBuilder()
-        .insert()
-        .values({
-          studentId: student ? student.id : null,
-          teacherId: teacher ? teacher.id : null,
-          employeeNo: finalEmployeeNo,
-          eventTime,
-          verifyMethod,
-          rawPayload,
-          originalId,
-          imageKey,
-        })
-        .orIgnore() // ON CONFLICT DO NOTHING
-        .execute();
+      const existingLog = await this.timekeepingLogRepository.findOne({
+        where: { employeeNo: finalEmployeeNo, eventTime }
+      });
+
+      if (existingLog) {
+        let needsUpdate = false;
+        if (student && existingLog.studentId !== student.id) {
+          existingLog.studentId = student.id;
+          needsUpdate = true;
+        }
+        if (teacher && existingLog.teacherId !== teacher.id) {
+          existingLog.teacherId = teacher.id;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          await this.timekeepingLogRepository.save(existingLog);
+        }
+      } else {
+        await this.timekeepingLogRepository.createQueryBuilder()
+          .insert()
+          .values({
+            studentId: student ? student.id : null,
+            teacherId: teacher ? teacher.id : null,
+            employeeNo: finalEmployeeNo,
+            eventTime,
+            verifyMethod,
+            rawPayload,
+            originalId,
+            imageKey,
+          })
+          .orIgnore() // ON CONFLICT DO NOTHING
+          .execute();
+      }
     } catch (err) {
       // Bỏ qua nếu có lỗi trùng lặp ràng buộc duy nhất
     }

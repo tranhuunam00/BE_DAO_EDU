@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { TimekeepingDeviceOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-device.orm-entity';
+import { TimekeepingLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { HikvisionIsapiClient } from '../../infrastructure/external/hikvision-isapi.client';
 import { ProcessRawLogUseCase } from './process-raw-log.use-case';
 import { normalizeEmployeeNo } from '../../domain/services/timekeeping-matcher';
@@ -14,13 +15,47 @@ export class ReconcileTimekeepingLogsUseCase {
   constructor(
     @InjectRepository(TimekeepingDeviceOrmEntity)
     private readonly deviceRepository: Repository<TimekeepingDeviceOrmEntity>,
+    @InjectRepository(TimekeepingLogOrmEntity)
+    private readonly logRepository: Repository<TimekeepingLogOrmEntity>,
     private readonly processRawLogUseCase: ProcessRawLogUseCase,
     private readonly configService: ConfigService,
   ) {}
 
   async execute(date: string): Promise<{ success: boolean; eventsProcessed: number }> {
-    const devices = await this.deviceRepository.find();
     let totalProcessed = 0;
+
+    // 1. Đối soát các nhật ký quẹt thẻ thô đã được lưu trong DB cho ngày này
+    try {
+      const startOfDay = new Date(`${date}T00:00:00+07:00`);
+      const endOfDay = new Date(`${date}T23:59:59+07:00`);
+
+      const dbLogs = await this.logRepository.find({
+        where: {
+          eventTime: Between(startOfDay, endOfDay)
+        }
+      });
+
+      for (const log of dbLogs) {
+        try {
+          await this.processRawLogUseCase.execute(
+            log.employeeNo,
+            log.eventTime,
+            log.verifyMethod,
+            log.rawPayload,
+            log.originalId || undefined,
+            log.imageKey || undefined
+          );
+          totalProcessed++;
+        } catch (err: any) {
+          this.logger.error(`Lỗi đối soát lại log DB cho mã ${log.employeeNo}: ${err.message || err}`);
+        }
+      }
+    } catch (dbErr: any) {
+      this.logger.error(`Lỗi truy vấn log DB để đối soát: ${dbErr.message || dbErr}`);
+    }
+
+    // 2. Tiếp tục lấy dữ liệu từ các thiết bị chấm công (nếu hoạt động)
+    const devices = await this.deviceRepository.find();
 
     for (const device of devices) {
       const username = device.username || this.configService.get<string>('TIMEKEEPING_DEVICE_USERNAME') || 'admin';
