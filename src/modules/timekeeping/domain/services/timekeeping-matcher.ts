@@ -72,9 +72,9 @@ export class TimekeepingMatcher {
                         day: '2-digit'
                     });
                     const parts = formatter.formatToParts(dateVal);
-                    const y = parts.find(p => p.type === 'year').value;
-                    const m = parts.find(p => p.type === 'month').value;
-                    const d = parts.find(p => p.type === 'day').value;
+                    const y = parts.find(p => p.type === 'year')?.value || '';
+                    const m = parts.find(p => p.type === 'month')?.value || '';
+                    const d = parts.find(p => p.type === 'day')?.value || '';
                     return `${y}-${m}-${d}`;
                 } catch (e) {
                     const y = dateVal.getFullYear();
