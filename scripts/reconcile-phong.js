@@ -48,7 +48,25 @@ function getLocalDateString(date) {
   return `${y}-${m}-${d}`;
 }
 
-const getLocalDate = (dateStr, timeStr) => {
+function getFormattedDate(dateVal) {
+  if (!dateVal) return '';
+  if (typeof dateVal === 'string') {
+    if (dateVal.includes('T')) {
+      return dateVal.split('T')[0];
+    }
+    return dateVal;
+  }
+  if (dateVal instanceof Date) {
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const d = String(dateVal.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(dateVal);
+}
+
+const getLocalDate = (dateVal, timeStr) => {
+  const dateStr = getFormattedDate(dateVal);
   return new Date(`${dateStr}T${timeStr}:00+07:00`);
 };
 
