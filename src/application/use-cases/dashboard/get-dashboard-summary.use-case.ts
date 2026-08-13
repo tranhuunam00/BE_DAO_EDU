@@ -23,10 +23,13 @@ export class GetDashboardSummaryUseCase {
   ) {}
 
   async execute() {
-    const maxStudentRes = await this.studentRepo.createQueryBuilder('student')
-      .select('MAX(student.createdAt)', 'max')
-      .getRawOne();
-    const maxDate = maxStudentRes?.max ? new Date(maxStudentRes.max) : new Date();
+    const latestStudents = await this.studentRepo.find({
+      order: { createdAt: 'DESC' },
+      take: 1
+    });
+    const maxDate = latestStudents[0]?.createdAt 
+      ? new Date(latestStudents[0].createdAt) 
+      : new Date();
 
     const months: string[] = [];
     for (let i = 5; i >= 0; i--) {
