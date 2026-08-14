@@ -106,7 +106,76 @@ export class ProcessRawLogUseCase {
     }
 
     if (teacher) {
-      // Nếu là giáo viên, chỉ ghi log và không chạy đối khớp ca học của học sinh
+      console.log(`[ProcessRawLog] Found teacher: ID=${teacher.id}, Name=${teacher.lastName} ${teacher.firstName}, Code=${teacher.teacherId}`);
+      const dateString = getLocalDateString(eventTime);
+      const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
+      const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
+
+      // 1. Lấy tất cả nhật ký quẹt thẻ trong ngày của giáo viên này
+      const teacherLogs = await this.timekeepingLogRepository.find({
+        where: {
+          teacherId: teacher.id,
+          eventTime: Between(startOfDay, endOfDay),
+        },
+      });
+
+      // 2. Lấy danh sách ca học giáo viên này phụ trách (dạy chính hoặc trợ giảng) trong ngày
+      const sessions = await this.dataSource.getRepository(ClassSessionOrmEntity)
+        .createQueryBuilder('session')
+        .innerJoin('classes', 'c', 'c.id = session.class_id')
+        .where('(session.teacher_id = :teacherId OR session.assistant_id = :teacherId)', { teacherId: teacher.id })
+        .andWhere('session.date = :date', { date: dateString })
+        .select([
+          'session.id AS id',
+          'c.class_name AS className',
+          'session.startTime AS startTime',
+          'session.endTime AS endTime',
+          'session.date AS date',
+        ])
+        .getRawMany();
+
+      const domainSessions: DomainClassSession[] = sessions.map(row => {
+        const startTimeVal = row.starttime || row.startTime || '';
+        const endTimeVal = row.endtime || row.endTime || '';
+        return {
+          id: row.id,
+          className: row.classname || row.className || '',
+          startTime: startTimeVal ? startTimeVal.substring(0, 5) : '',
+          endTime: endTimeVal ? endTimeVal.substring(0, 5) : '',
+          date: row.date,
+        };
+      });
+
+      // 3. Đối khớp thời gian quẹt thẻ với các ca dạy (khoảng +/- 60 phút)
+      for (const dbLog of teacherLogs) {
+        const t = getEventTimestamp(dbLog.eventTime);
+        const matched = [];
+
+        for (const s of domainSessions) {
+          const sDateStr = getLocalDateString(s.date);
+          const sessionStart = new Date(`${sDateStr}T${s.startTime}:00+07:00`).getTime();
+          const sessionEnd = new Date(`${sDateStr}T${s.endTime}:00+07:00`).getTime();
+
+          const checkInStart = sessionStart - 60 * 60000;
+          const checkInEnd = sessionEnd;
+          const checkOutStart = sessionStart;
+          const checkOutEnd = sessionEnd + 60 * 60000;
+
+          if ((t >= checkInStart && t <= checkInEnd) || (t >= checkOutStart && t <= checkOutEnd)) {
+            matched.push({
+              id: s.id,
+              className: s.className,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              date: s.date,
+            });
+          }
+        }
+
+        dbLog.matchedSessions = matched.length > 0 ? matched : null;
+        await this.timekeepingLogRepository.save(dbLog);
+      }
+
       return [];
     }
 

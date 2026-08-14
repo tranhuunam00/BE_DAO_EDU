@@ -257,6 +257,71 @@ describe('ProcessRawLogUseCase', () => {
     expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
   });
 
+  it('nên tự động đối khớp ca dạy (matchedSessions) cho giáo viên khi quẹt thẻ đúng khung giờ dạy', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    const teacherLog = {
+      id: 'log-teacher-1',
+      teacherId: 'teacher-uuid-456',
+      studentId: null,
+      employeeNo: '2222026001',
+      eventTime,
+      verifyMethod,
+      matchedSessions: null,
+    };
+
+    jest.spyOn(timekeepingLogRepository, 'find').mockResolvedValueOnce([teacherLog]);
+    jest.spyOn(timekeepingLogRepository, 'save').mockClear();
+
+    // Act
+    await useCase.execute('2222026001', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(timekeepingLogRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-teacher-1',
+        matchedSessions: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'session-uuid-111',
+            className: 'Lớp Tiếng Anh A1',
+            startTime: '08:00',
+            endTime: '10:00',
+          }),
+        ]),
+      })
+    );
+  });
+
+  it('nên gán matchedSessions = null cho giáo viên khi quẹt thẻ lệch ngoài khung giờ ca dạy', async () => {
+    // Arrange: Quẹt lúc 23:00 (ca học từ 08:00 - 10:00)
+    const eventTime = new Date('2026-08-11T23:00:00+07:00');
+    const verifyMethod = 'face';
+    const teacherLog = {
+      id: 'log-teacher-2',
+      teacherId: 'teacher-uuid-456',
+      studentId: null,
+      employeeNo: '2222026001',
+      eventTime,
+      verifyMethod,
+      matchedSessions: null,
+    };
+
+    jest.spyOn(timekeepingLogRepository, 'find').mockResolvedValueOnce([teacherLog]);
+    jest.spyOn(timekeepingLogRepository, 'save').mockClear();
+
+    // Act
+    await useCase.execute('2222026001', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(timekeepingLogRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-teacher-2',
+        matchedSessions: null,
+      })
+    );
+  });
+
   it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có số không đứng đầu nhưng vẫn giữ tiền tố 222', async () => {
     // Arrange
     const eventTime = new Date('2026-08-11T08:05:00+07:00');
