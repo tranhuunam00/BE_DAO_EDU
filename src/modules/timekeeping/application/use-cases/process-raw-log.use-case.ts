@@ -39,22 +39,20 @@ export class ProcessRawLogUseCase {
     let student: StudentOrmEntity | null = null;
     let teacher: TeacherOrmEntity | null = null;
 
+    const cleanStudentCode = normalizeEmployeeNo(studentCode);
+
     // 1. Phân loại theo tiền tố sử dụng hàm tiện ích parseTimekeepingCode
-    const parsed = parseTimekeepingCode(studentCode);
-    let finalEmployeeNo = parsed.normalizedCode;
+    const parsed = parseTimekeepingCode(cleanStudentCode);
+    const finalEmployeeNo = parsed.normalizedCode;
 
     if (parsed.type === 'student') {
       student = await this.studentRepository.createQueryBuilder('student')
         .where("LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
     } else if (parsed.type === 'teacher') {
-      const codes = parsed.candidates && parsed.candidates.length > 0 ? parsed.candidates : [finalEmployeeNo];
       teacher = await this.teacherRepository.createQueryBuilder('teacher')
-        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '[^0-9]', '', 'g'), '0') IN (:...codes)", { codes })
+        .where("LTRIM(REGEXP_REPLACE(teacher.teacherId, '[^0-9]', '', 'g'), '0') = :code", { code: finalEmployeeNo })
         .getOne();
-      if (teacher) {
-        finalEmployeeNo = normalizeEmployeeNo(teacher.teacherId);
-      }
     } else {
       // Fallback tương thích ngược không có tiền tố
       student = await this.studentRepository.createQueryBuilder('student')
@@ -71,7 +69,7 @@ export class ProcessRawLogUseCase {
     // 2. Ghi nhận nhật ký thô và chống trùng lặp qua DB Unique constraint
     try {
       const existingLog = await this.timekeepingLogRepository.findOne({
-        where: { employeeNo: finalEmployeeNo, eventTime }
+        where: { employeeNo: cleanStudentCode, eventTime }
       });
 
       if (existingLog) {
@@ -93,7 +91,7 @@ export class ProcessRawLogUseCase {
           .values({
             studentId: student ? student.id : null,
             teacherId: teacher ? teacher.id : null,
-            employeeNo: finalEmployeeNo,
+            employeeNo: cleanStudentCode,
             eventTime,
             verifyMethod,
             rawPayload,

@@ -37,20 +37,24 @@ export class TimekeepingMatcher {
         const sortedSessions = [...sessions].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
         // 2. Lọc nhật ký của đúng học sinh và sắp xếp theo thời gian tăng dần
-        const studentLogs = logs
+        const studentLogItems = logs
             .filter(log => log.studentId === studentId)
-            .sort((a, b) => getEventTimestamp(a.eventTime) - getEventTimestamp(b.eventTime));
+            .map(log => ({
+                log,
+                timestamp: getEventTimestamp(log.eventTime)
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
 
         // 3. Khử quẹt trùng trong vòng 5 phút (Anti-double-scan)
-        const filteredLogs: TimekeepingLog[] = [];
-        for (const log of studentLogs) {
-            if (filteredLogs.length === 0) {
-                filteredLogs.push(log);
+        const filteredLogItems: { log: TimekeepingLog; timestamp: number }[] = [];
+        for (const item of studentLogItems) {
+            if (filteredLogItems.length === 0) {
+                filteredLogItems.push(item);
             } else {
-                const prevLog = filteredLogs[filteredLogs.length - 1];
-                const timeDiffMs = getEventTimestamp(log.eventTime) - getEventTimestamp(prevLog.eventTime);
+                const prevItem = filteredLogItems[filteredLogItems.length - 1];
+                const timeDiffMs = item.timestamp - prevItem.timestamp;
                 if (timeDiffMs >= 5 * 60 * 1000) {
-                    filteredLogs.push(log);
+                    filteredLogItems.push(item);
                 }
             }
         }
@@ -113,8 +117,9 @@ export class TimekeepingMatcher {
         };
 
         // 5. Chạy máy trạng thái xử lý từng lượt quẹt thô
-        for (const log of filteredLogs) {
-            const t = getEventTimestamp(log.eventTime);
+        for (const item of filteredLogItems) {
+            const t = item.timestamp;
+            const log = item.log;
             let logConsumed = false;
 
             for (let i = 0; i < sortedSessions.length; i++) {
@@ -240,8 +245,8 @@ export class TimekeepingMatcher {
             const sessionEnd = getLocalDate(s.date, s.endTime).getTime();
             const outEnd = sessionEnd + 60 * 60000;
 
-            const hasOutLog = filteredLogs.some(log => {
-                const t = getEventTimestamp(log.eventTime);
+            const hasOutLog = filteredLogItems.some(item => {
+                const t = item.timestamp;
                 return t >= sessionEnd && t <= outEnd;
             });
 
@@ -283,14 +288,12 @@ export function normalizeEmployeeNo(code: string): string {
 }
 
 export const TIMEKEEPING_STUDENT_PREFIX = '1111';
-export const TIMEKEEPING_TEACHER_PREFIX = '2222';
-export const TIMEKEEPING_TEACHER_PREFIX_LEGACY = '222';
+export const TIMEKEEPING_TEACHER_PREFIX = '222';
 
 export interface ParsedTimekeepingCode {
     type: 'student' | 'teacher' | 'unknown';
     originalCode: string;
     normalizedCode: string;
-    candidates?: string[];
 }
 
 export function parseTimekeepingCode(code: string): ParsedTimekeepingCode {
@@ -304,14 +307,11 @@ export function parseTimekeepingCode(code: string): ParsedTimekeepingCode {
         };
     }
     
-    if (code.startsWith(TIMEKEEPING_TEACHER_PREFIX) || code.startsWith(TIMEKEEPING_TEACHER_PREFIX_LEGACY)) {
-        const candidateNew = normalizeEmployeeNo(code.substring(TIMEKEEPING_TEACHER_PREFIX.length));
-        const candidateLegacy = normalizeEmployeeNo(code.substring(TIMEKEEPING_TEACHER_PREFIX_LEGACY.length));
+    if (code.startsWith(TIMEKEEPING_TEACHER_PREFIX)) {
         return {
             type: 'teacher',
             originalCode: code,
-            normalizedCode: candidateNew,
-            candidates: [candidateNew, candidateLegacy],
+            normalizedCode: normalizeEmployeeNo(code.substring(TIMEKEEPING_TEACHER_PREFIX.length)),
         };
     }
     

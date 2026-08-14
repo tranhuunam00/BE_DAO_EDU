@@ -235,4 +235,37 @@ describe('TimekeepingMatcher (TDD Chức năng & Performance SLA)', () => {
             expect(results.length).toBe(2);
         });
     });
+
+    describe('5. parseTimekeepingCode & normalizeEmployeeNo Utility Tests', () => {
+        it('nên chuẩn hóa mã số bằng cách bỏ ký tự không phải số và số không ở đầu', () => {
+            const { normalizeEmployeeNo } = require('./timekeeping-matcher');
+            expect(normalizeEmployeeNo('00012345')).toBe('12345');
+            expect(normalizeEmployeeNo('000111112345')).toBe('111112345');
+            expect(normalizeEmployeeNo('HV-002026-007')).toBe('2026007');
+        });
+
+        it('nên nhận diện đúng loại mã học sinh và giáo viên khi dùng tiền tố', () => {
+            const { parseTimekeepingCode } = require('./timekeeping-matcher');
+            
+            // Student prefix 1111
+            const p1 = parseTimekeepingCode('111112345');
+            expect(p1.type).toBe('student');
+            expect(p1.normalizedCode).toBe('12345');
+
+            // Teacher prefix 222 (new)
+            const p2 = parseTimekeepingCode('22212345');
+            expect(p2.type).toBe('teacher');
+            expect(p2.normalizedCode).toBe('12345');
+
+            // Old prefix 2222 should be treated as teacher starting with 2 (prefix 222 + tail 2026001)
+            const p3 = parseTimekeepingCode('2222026001');
+            expect(p3.type).toBe('teacher');
+            expect(p3.normalizedCode).toBe('2026001'); // because '222' prefix is removed, leaving '2026001'
+
+            // Unknown prefix
+            const p4 = parseTimekeepingCode('999912345');
+            expect(p4.type).toBe('unknown');
+            expect(p4.normalizedCode).toBe('999912345');
+        });
+    });
 });

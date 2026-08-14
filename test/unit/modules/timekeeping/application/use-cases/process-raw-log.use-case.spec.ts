@@ -134,10 +134,33 @@ describe('ProcessRawLogUseCase', () => {
     // Assert
     expect(studentRepository.createQueryBuilder).toHaveBeenCalledWith('student');
     expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-      "LTRIM(REGEXP_REPLACE(student.studentId, '\\D', '', 'g'), '0') = :code",
+      "LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code",
       { code: '2026007' }
     );
     expect(studentAttendanceRepository.save).toHaveBeenCalled();
+  });
+
+  it('nên tìm được học sinh mang mã HV-2026-007 khi mã quẹt có tiền tố 1111 và lưu log với mã có tiền tố', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    await useCase.execute('11112026007', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(studentRepository.createQueryBuilder).toHaveBeenCalledWith('student');
+    expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+      "LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code",
+      { code: '2026007' }
+    );
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: 'student-uuid-123',
+        employeeNo: '11112026007',
+      })
+    );
   });
 
   it('nên lưu nhật ký thô với studentId là null và không chạy đối khớp khi không tìm thấy học sinh', async () => {
@@ -213,28 +236,7 @@ describe('ProcessRawLogUseCase', () => {
     );
   });
 
-  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 2222 và không đối khớp ca học học sinh', async () => {
-    // Arrange
-    const eventTime = new Date('2026-08-11T08:05:00+07:00');
-    const verifyMethod = 'face';
-    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
-
-    // Act
-    const result = await useCase.execute('22222026001', eventTime, verifyMethod, {});
-
-    // Assert
-    expect(result).toEqual([]);
-    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        studentId: null,
-        teacherId: 'teacher-uuid-456',
-        employeeNo: '2026001',
-      })
-    );
-    expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
-  });
-
-  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 222 cũ (tương thích ngược) và không đối khớp ca học học sinh', async () => {
+  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có tiền tố 222 và không đối khớp ca học học sinh', async () => {
     // Arrange
     const eventTime = new Date('2026-08-11T08:05:00+07:00');
     const verifyMethod = 'face';
@@ -249,7 +251,28 @@ describe('ProcessRawLogUseCase', () => {
       expect.objectContaining({
         studentId: null,
         teacherId: 'teacher-uuid-456',
-        employeeNo: '2026001',
+        employeeNo: '2222026001',
+      })
+    );
+    expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('nên ghi nhận nhật ký của giáo viên khi mã quẹt có số không đứng đầu nhưng vẫn giữ tiền tố 222', async () => {
+    // Arrange
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+    jest.spyOn(mockInsertQueryBuilder, 'values').mockClear();
+
+    // Act
+    const result = await useCase.execute('0002222026001', eventTime, verifyMethod, {});
+
+    // Assert
+    expect(result).toEqual([]);
+    expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: null,
+        teacherId: 'teacher-uuid-456',
+        employeeNo: '2222026001',
       })
     );
     expect(studentAttendanceRepository.save).not.toHaveBeenCalled();
