@@ -31,7 +31,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto } from '../../application/dtos/class.dto';
+import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto, GenerateSessionsDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
@@ -806,8 +806,9 @@ export class ClassController {
   async generateSessionsEndpoint(
     @Param('id') classId: string,
     @Query('fromStartDate') fromStartDateQuery?: string,
+    @Body() dto?: GenerateSessionsDto,
+    @Query('fromDate') queryFromDate?: string,
   ) {
-    const fromStartDate = fromStartDateQuery === 'true';
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     if (classEntity.status !== 'Active') {
       throw new ConflictException(
@@ -824,7 +825,22 @@ export class ClassController {
       throw new ConflictException('Lớp học chưa cấu hình ngày khai giảng.');
     }
 
-    await this.regenerateFutureSessions(classId, fromStartDate);
+    let targetFromDate: string | boolean = false;
+    if (dto?.fromDate) {
+      targetFromDate = dto.fromDate;
+    } else if (queryFromDate) {
+      targetFromDate = queryFromDate;
+    } else if (dto?.fromStartDate === true || dto?.fromStartDate === 'true' || fromStartDateQuery === 'true') {
+      targetFromDate = true;
+    }
+
+    if (typeof targetFromDate === 'string') {
+      if (classEntity.finishDate && targetFromDate > classEntity.finishDate) {
+        throw new ConflictException('Ngày bắt đầu sinh lịch không được sau ngày kết thúc lớp học.');
+      }
+    }
+
+    await this.regenerateFutureSessions(classId, targetFromDate);
     return { message: 'Đã sinh buổi học thành công' };
   }
 
@@ -1354,7 +1370,7 @@ export class ClassController {
 
   // ── Session generation ───────────────────────────────────────────────────────
 
-  private async generateSessions(classId: string, fromStartDate = false) {
+  private async generateSessions(classId: string, fromDateOrStart: string | boolean = false) {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
@@ -1368,7 +1384,15 @@ export class ClassController {
     }
 
     const todayStr = this.formatUtcDate(new Date());
-    const startFromStr = fromStartDate ? classEntity.startDate : (classEntity.startDate > todayStr ? classEntity.startDate : todayStr);
+    let startFromStr: string;
+    if (typeof fromDateOrStart === 'string' && fromDateOrStart) {
+      startFromStr = fromDateOrStart;
+    } else if (fromDateOrStart === true) {
+      startFromStr = classEntity.startDate;
+    } else {
+      startFromStr = classEntity.startDate > todayStr ? classEntity.startDate : todayStr;
+    }
+
     const endDateStr = classEntity.finishDate
       ? classEntity.finishDate
       : this.formatUtcDate(
@@ -1480,10 +1504,18 @@ export class ClassController {
     });
   }
 
-  private async regenerateFutureSessions(classId: string, fromStartDate = false) {
+  private async regenerateFutureSessions(classId: string, fromDateOrStart: string | boolean = false) {
     const today = this.formatUtcDate(new Date());
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    const deleteFrom = (fromStartDate && classEntity.startDate) ? classEntity.startDate : today;
+    
+    let deleteFrom: string;
+    if (typeof fromDateOrStart === 'string' && fromDateOrStart) {
+      deleteFrom = fromDateOrStart;
+    } else if (fromDateOrStart === true && classEntity?.startDate) {
+      deleteFrom = classEntity.startDate;
+    } else {
+      deleteFrom = (classEntity?.startDate && classEntity.startDate > today) ? classEntity.startDate : today;
+    }
 
     // Find the sessions to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
     const sessionsToDelete = await this.sessionRepo.find({
@@ -1516,7 +1548,7 @@ export class ClassController {
       .execute();
 
     // Regenerate
-    await this.generateSessions(classId, fromStartDate);
+    await this.generateSessions(classId, fromDateOrStart);
 
     const logRepo = this.notificationRepo?.manager?.getRepository
       ? this.notificationRepo.manager.getRepository(NotificationLogOrmEntity)
@@ -1531,7 +1563,7 @@ export class ClassController {
         title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
         metadata: {
           classId,
-          fromStartDate,
+          fromDateOrStart,
           deletedSessionsCount: deleteResult.affected || 0,
           source: 'auto_regenerate_future_sessions',
         },

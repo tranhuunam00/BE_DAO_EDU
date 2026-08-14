@@ -144,3 +144,15 @@ export class CreateAdhocSessionDto {
   @IsOptional()
   assistantId?: string | null;
 }
+
+export class GenerateSessionsDto {
+  @ApiProperty({ required: false, example: '2026-09-01', description: 'Ngày bắt đầu sinh lịch (YYYY-MM-DD)' })
+  @IsDateString()
+  @IsOptional()
+  fromDate?: string;
+
+  @ApiProperty({ required: false, description: 'Tùy chọn sinh từ ngày khai giảng của lớp học' })
+  @IsOptional()
+  fromStartDate?: boolean | string;
+}
+
