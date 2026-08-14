@@ -74,13 +74,49 @@ export class ProcessRawLogUseCase {
 
       if (existingLog) {
         let needsUpdate = false;
-        if (student && existingLog.studentId !== student.id) {
-          existingLog.studentId = student.id;
-          needsUpdate = true;
-        }
-        if (teacher && existingLog.teacherId !== teacher.id) {
-          existingLog.teacherId = teacher.id;
-          needsUpdate = true;
+        if (parsed.type === 'teacher') {
+          // 1. Mã tiền tố Giáo viên (222...): Bắt buộc xóa sạch studentId và cập nhật teacherId
+          if (existingLog.studentId !== null) {
+            existingLog.studentId = null;
+            needsUpdate = true;
+          }
+          const targetTeacherId = teacher ? teacher.id : null;
+          if (existingLog.teacherId !== targetTeacherId) {
+            existingLog.teacherId = targetTeacherId;
+            needsUpdate = true;
+          }
+        } else if (parsed.type === 'student') {
+          // 2. Mã tiền tố Học sinh (1111...): Bắt buộc xóa sạch teacherId và cập nhật studentId
+          if (existingLog.teacherId !== null) {
+            existingLog.teacherId = null;
+            needsUpdate = true;
+          }
+          const targetStudentId = student ? student.id : null;
+          if (existingLog.studentId !== targetStudentId) {
+            existingLog.studentId = targetStudentId;
+            needsUpdate = true;
+          }
+        } else {
+          // 3. Fallback không có tiền tố: Ưu tiên entity tìm được và xóa entity còn lại
+          if (student) {
+            if (existingLog.studentId !== student.id) {
+              existingLog.studentId = student.id;
+              needsUpdate = true;
+            }
+            if (existingLog.teacherId !== null) {
+              existingLog.teacherId = null;
+              needsUpdate = true;
+            }
+          } else if (teacher) {
+            if (existingLog.teacherId !== teacher.id) {
+              existingLog.teacherId = teacher.id;
+              needsUpdate = true;
+            }
+            if (existingLog.studentId !== null) {
+              existingLog.studentId = null;
+              needsUpdate = true;
+            }
+          }
         }
         if (needsUpdate) {
           await this.timekeepingLogRepository.save(existingLog);

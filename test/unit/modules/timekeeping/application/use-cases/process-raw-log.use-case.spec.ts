@@ -351,6 +351,7 @@ describe('ProcessRawLogUseCase', () => {
     const existingLog = {
       id: 'log-uuid-999',
       studentId: null,
+      teacherId: null,
       employeeNo: '2026007',
       eventTime,
       verifyMethod,
@@ -367,6 +368,71 @@ describe('ProcessRawLogUseCase', () => {
       expect.objectContaining({
         id: 'log-uuid-999',
         studentId: 'student-uuid-123',
+        teacherId: null,
+      })
+    );
+  });
+
+  it('nên xóa sạch studentId (gán null) và cập nhật teacherId khi quẹt mã giáo viên (222) vào nhật ký cũ đang bị gán nhầm studentId', async () => {
+    // Arrange: Nhật ký cũ bị gán nhầm studentId
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+
+    const existingCorruptedLog = {
+      id: 'log-corrupted-1',
+      studentId: 'student-uuid-wrong',
+      teacherId: null,
+      employeeNo: '2222026001',
+      eventTime,
+      verifyMethod,
+      matchedSessions: null,
+    };
+
+    jest.spyOn(timekeepingLogRepository, 'findOne').mockResolvedValueOnce(existingCorruptedLog);
+    jest.spyOn(timekeepingLogRepository, 'find').mockResolvedValueOnce([existingCorruptedLog]);
+    jest.spyOn(timekeepingLogRepository, 'save').mockClear();
+
+    // Act: Quẹt mã giáo viên 2222026001
+    await useCase.execute('2222026001', eventTime, verifyMethod, {});
+
+    // Assert: studentId bị reset về null, teacherId được gán đúng teacher-uuid-456
+    expect(timekeepingLogRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-corrupted-1',
+        studentId: null,
+        teacherId: 'teacher-uuid-456',
+      })
+    );
+  });
+
+  it('nên xóa sạch teacherId (gán null) và cập nhật studentId khi quẹt mã học sinh (1111) vào nhật ký cũ đang bị gán nhầm teacherId', async () => {
+    // Arrange: Nhật ký cũ bị gán nhầm teacherId
+    const eventTime = new Date('2026-08-11T08:05:00+07:00');
+    const verifyMethod = 'face';
+
+    const existingCorruptedLog = {
+      id: 'log-corrupted-2',
+      studentId: null,
+      teacherId: 'teacher-uuid-wrong',
+      employeeNo: '11112026007',
+      eventTime,
+      verifyMethod,
+      matchedSessions: null,
+    };
+
+    jest.spyOn(timekeepingLogRepository, 'findOne').mockResolvedValueOnce(existingCorruptedLog);
+    jest.spyOn(timekeepingLogRepository, 'find').mockResolvedValueOnce([existingCorruptedLog]);
+    jest.spyOn(timekeepingLogRepository, 'save').mockClear();
+
+    // Act: Quẹt mã học sinh 11112026007
+    await useCase.execute('11112026007', eventTime, verifyMethod, {});
+
+    // Assert: teacherId bị reset về null, studentId được gán đúng student-uuid-123
+    expect(timekeepingLogRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'log-corrupted-2',
+        studentId: 'student-uuid-123',
+        teacherId: null,
       })
     );
   });
