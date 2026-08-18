@@ -64,6 +64,21 @@ export class MinioService extends FileStoragePort {
         },
       );
 
+      const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT');
+      if (externalEndpoint) {
+        let protocol = 'http';
+        let host = externalEndpoint;
+        if (externalEndpoint.startsWith('http://') || externalEndpoint.startsWith('https://')) {
+          const targetUrl = new URL(externalEndpoint);
+          protocol = targetUrl.protocol.replace(':', '');
+          host = targetUrl.host;
+        } else {
+          const useSSL = this.configService.get<string>('MINIO_USE_SSL', 'false') === 'true';
+          protocol = useSSL ? 'https' : 'http';
+        }
+        return `${protocol}://${host}/${this.bucketName}/${fileName}`;
+      }
+
       const endPoint = this.configService.get<string>(
         'MINIO_ENDPOINT',
         'localhost',
@@ -101,11 +116,40 @@ export class MinioService extends FileStoragePort {
       15 * 60,
     );
 
-    const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT') || '103.90.227.173';
-    if (url.includes('localhost')) {
-      url = url.replace('localhost', externalEndpoint);
-    } else if (url.includes('127.0.0.1')) {
-      url = url.replace('127.0.0.1', externalEndpoint);
+    const externalEndpoint = this.configService.get<string>('MINIO_EXTERNAL_ENDPOINT');
+    if (externalEndpoint) {
+      try {
+        const parsedUrl = new URL(url);
+        if (externalEndpoint.startsWith('http://') || externalEndpoint.startsWith('https://')) {
+          const targetUrl = new URL(externalEndpoint);
+          parsedUrl.protocol = targetUrl.protocol;
+          parsedUrl.host = targetUrl.host;
+        } else {
+          parsedUrl.host = externalEndpoint;
+          if (parsedUrl.port) {
+            parsedUrl.port = '';
+          }
+        }
+        url = parsedUrl.toString();
+      } catch (e) {
+        const port = this.configService.get<number>('MINIO_PORT', 9005);
+        if (url.includes(`localhost:${port}`)) {
+          url = url.replace(`localhost:${port}`, externalEndpoint);
+        } else if (url.includes(`127.0.0.1:${port}`)) {
+          url = url.replace(`127.0.0.1:${port}`, externalEndpoint);
+        } else if (url.includes('localhost')) {
+          url = url.replace('localhost', externalEndpoint);
+        } else if (url.includes('127.0.0.1')) {
+          url = url.replace('127.0.0.1', externalEndpoint);
+        }
+      }
+    } else {
+      const defaultEndpoint = '103.90.227.173';
+      if (url.includes('localhost')) {
+        url = url.replace('localhost', defaultEndpoint);
+      } else if (url.includes('127.0.0.1')) {
+        url = url.replace('127.0.0.1', defaultEndpoint);
+      }
     }
 
     return url;
