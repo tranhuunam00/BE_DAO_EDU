@@ -70,20 +70,30 @@ export class BillingCalculator {
     });
   }
 
+  private static normalizeDate(d: string | Date | undefined | null): string {
+    if (!d) return '';
+    if (typeof d === 'string') return d.slice(0, 10);
+    return d.toISOString().slice(0, 10);
+  }
+
   static getActivePricing(
     pricings: PricingRule[],
     date: string,
     rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession',
     levelId: string,
   ): PricingRule | undefined {
+    const targetDate = this.normalizeDate(date);
     const sorted = this.sortPricings(pricings);
-    return sorted.find(
-      (rule) =>
+    return sorted.find((rule) => {
+      const from = this.normalizeDate(rule.effectiveFrom);
+      const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
+      return (
         rule.courseLevelId === levelId &&
         Number(rule[rateField]) > 0 &&
-        rule.effectiveFrom <= date &&
-        (rule.effectiveTo === null || rule.effectiveTo >= date),
-    );
+        from <= targetDate &&
+        (to === null || to >= targetDate)
+      );
+    });
   }
 
   static calculate(
@@ -101,13 +111,17 @@ export class BillingCalculator {
         rateField = 'taWagePerSession' as any;
       }
 
-      const pricing = sortedPricings.find(
-        (rule) =>
+      const targetDate = this.normalizeDate(source.date);
+      const pricing = sortedPricings.find((rule) => {
+        const from = this.normalizeDate(rule.effectiveFrom);
+        const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
+        return (
           rule.courseLevelId === source.courseLevelId &&
           Number(rule[rateField]) > 0 &&
-          rule.effectiveFrom <= source.date &&
-          (rule.effectiveTo === null || rule.effectiveTo >= source.date),
-      );
+          from <= targetDate &&
+          (to === null || to >= targetDate)
+        );
+      });
       
       let rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
       if (amountField === 'pricePerSession' && source.isPresent === false) {

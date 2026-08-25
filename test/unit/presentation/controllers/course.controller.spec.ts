@@ -1061,4 +1061,115 @@ describe('CourseController & Level Pricing Management Comprehensive Test Suite (
       expect(list[3].teacherWagePerSession).toBe(100000);
     });
   });
+
+  // =========================================================================
+  // CATEGORY 9: Kiểm Thử Nghiêm Ngặt Tính Không Trùng Lặp Khoảng Ngày (Zero Overlap)
+  // =========================================================================
+  describe('Category 9: Đảm Bảo Tuyệt Đối Không Trùng Lặp Khoảng Ngày & Tự Động Sửa Lành (Zero Overlap)', () => {
+    it('Case 43: Không bao giờ có 2 bản ghi cùng có effectiveTo = null khi thêm xen kẽ', async () => {
+      // 1. Thêm mốc 25/08/2026 -> null
+      await controller.addPricing('level-1', {
+        pricePerSession: 150000,
+        effectiveFrom: '2026-08-25',
+      } as any);
+
+      // 2. Thêm mốc trước đó: 02/08/2026 (để trống effectiveTo)
+      await controller.addPricing('level-1', {
+        pricePerSession: 150000,
+        effectiveFrom: '2026-08-02',
+      } as any);
+
+      // 3. Thêm mốc trước nữa: 01/08/2026 (để trống effectiveTo)
+      await controller.addPricing('level-1', {
+        pricePerSession: 150000,
+        effectiveFrom: '2026-08-01',
+      } as any);
+
+      const list = pricingDataStore.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+
+      // Bản ghi 1: 01/08/2026 -> 01/08/2026
+      expect(list[0].effectiveFrom).toBe('2026-08-01');
+      expect(list[0].effectiveTo).toBe('2026-08-01');
+
+      // Bản ghi 2: 02/08/2026 -> 24/08/2026
+      expect(list[1].effectiveFrom).toBe('2026-08-02');
+      expect(list[1].effectiveTo).toBe('2026-08-24');
+
+      // Bản ghi 3: 25/08/2026 -> null (Hiện hành DUY NHẤT)
+      expect(list[2].effectiveFrom).toBe('2026-08-25');
+      expect(list[2].effectiveTo).toBeNull();
+
+      // Đếm số lượng bản ghi có effectiveTo = null -> CHÍNH XÁC LÀ 1
+      const nullEndCount = list.filter((p) => p.effectiveTo === null).length;
+      expect(nullEndCount).toBe(1);
+    });
+
+    it('Case 44: Tự động sửa lành (Auto-healing) khi DB có sẵn 2 bản ghi legacy cùng có effectiveTo = null', async () => {
+      // Giả lập DB cũ có 2 bản ghi cùng mang null
+      pricingDataStore = [
+        {
+          id: 'p-legacy-1',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 1300000,
+          taWagePerSession: 0,
+          effectiveFrom: '2026-08-02',
+          effectiveTo: null, // Legacy bị hở đuôi
+        } as any,
+        {
+          id: 'p-legacy-2',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 1300000,
+          taWagePerSession: 0,
+          effectiveFrom: '2026-08-25',
+          effectiveTo: null,
+        } as any,
+      ];
+
+      // Khi use case getPricing chạy
+      const result = await getUseCase.execute('level-1');
+
+      // Bản ghi 1 phải tự động được đóng lại tại 24/08/2026
+      const p1 = result.find((p) => p.id === 'p-legacy-1');
+      expect(p1?.effectiveTo).toBe('2026-08-24');
+
+      // Bản ghi 2 là Hiện hành duy nhất
+      const p2 = result.find((p) => p.id === 'p-legacy-2');
+      expect(p2?.effectiveTo).toBeNull();
+    });
+
+    it('Case 45: Chặn cập nhật ngày (Update Pricing) khi khoảng ngày mới đè lên hoặc giao nhau với bản ghi khác', async () => {
+      pricingDataStore = [
+        {
+          id: 'p-seg-1',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: '2026-05-31',
+        } as any,
+        {
+          id: 'p-seg-2',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 80000,
+          taWagePerSession: 40000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+        } as any,
+      ];
+
+      // Cố tình sửa p-seg-1 kéo dài đến 2026-06-15 (lấn sang p-seg-2)
+      await expect(
+        updateUseCase.execute('p-seg-1', { effectiveTo: '2026-06-15' })
+      ).rejects.toThrow(/Khoảng thời gian áp dụng bị trùng lặp/);
+
+      // Cố tình sửa p-seg-2 bắt đầu từ 2026-05-15 (lấn sang p-seg-1)
+      await expect(
+        updateUseCase.execute('p-seg-2', { effectiveFrom: '2026-05-15' })
+      ).rejects.toThrow(/Khoảng thời gian áp dụng bị trùng lặp/);
+    });
+  });
 });

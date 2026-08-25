@@ -365,7 +365,12 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const getEffectiveRate = (classId: string, date?: string): number => {
       const rules = pricingRulesByClass.get(classId) || [];
       if (!date) return rules[0]?.rate || 0;
-      const matched = rules.find((r) => r.effectiveFrom <= date && (!r.effectiveTo || r.effectiveTo >= date));
+      const targetDate = String(date).slice(0, 10);
+      const matched = rules.find((r) => {
+        const from = String(r.effectiveFrom).slice(0, 10);
+        const to = r.effectiveTo ? String(r.effectiveTo).slice(0, 10) : null;
+        return from <= targetDate && (!to || to >= targetDate);
+      });
       if (matched) return matched.rate;
       return rules[0]?.rate || 0;
     };
