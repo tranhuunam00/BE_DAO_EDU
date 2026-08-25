@@ -295,11 +295,13 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          sa.evaluation_score AS "evaluationScore",
          sa.evaluation_comment AS "evaluationComment",
          cs.class_id AS "classId",
-         TO_CHAR(cs.date::date, 'YYYY-MM') AS "month"
+         TO_CHAR(cs.date::date, 'YYYY-MM') AS "month",
+         b_direct.status AS "directBillStatus"
        FROM student_attendance sa
        JOIN class_sessions cs ON cs.id = sa.class_session_id
        JOIN students s ON s.id = sa.student_id
        LEFT JOIN classes cl ON cl.id = cs.class_id
+       LEFT JOIN student_monthly_bills b_direct ON b_direct.id = sa.bill_id
        ${where}
        ORDER BY s.last_name ASC`,
       params,
@@ -389,11 +391,13 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       sessionDateMap.set(sess.sessionId, sess.date);
     }
 
-    // Map student monthly rates: key = `${studentId}_${classId}_${month}` -> rate
+    // Map student monthly rates & payment status: key = `${studentId}_${classId}_${month}`
     const rateMap = new Map<string, number>();
+    const billStatusMap = new Map<string, string>();
     for (const item of billingItems) {
       const key = `${item.studentId}_${item.classId}_${item.month}`;
       rateMap.set(key, Number(item.rate));
+      billStatusMap.set(key, item.paymentStatus);
     }
 
     // Initialize and map students and attendance
@@ -422,12 +426,14 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
       const sessionDate = sessionDateMap.get(record.sessionId);
       const sessionRate = rateMap.get(rateKey) ?? getEffectiveRate(record.classId, sessionDate);
+      const sessionBillStatus = record.directBillStatus || billStatusMap.get(rateKey) || 'Unpaid';
 
       student.attendance[record.sessionId] = {
         isPresent: record.isPresent,
         rate: sessionRate,
         evaluationScore: record.evaluationScore !== null && record.evaluationScore !== undefined ? String(record.evaluationScore) : null,
         evaluationComment: record.evaluationComment,
+        paymentStatus: sessionBillStatus,
       };
 
       if (record.isPresent) {
