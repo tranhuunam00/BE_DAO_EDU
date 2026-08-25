@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
@@ -39,6 +39,8 @@ import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/t
 import { CoursePricingPersistencePort } from './application/ports/course-pricing-persistence.port';
 import { TypeOrmCoursePricingPersistenceAdapter } from './infrastructure/persistence/typeorm-course-pricing-persistence.adapter';
 import { GetCourseLevelPricingUseCase } from './application/use-cases/get-course-level-pricing.use-case';
+import { UpdateCourseLevelPricingUseCase } from './application/use-cases/update-course-level-pricing.use-case';
+import { DeleteCourseLevelPricingUseCase } from './application/use-cases/delete-course-level-pricing.use-case';
 
 @Module({
   imports: [
@@ -135,6 +137,18 @@ import { GetCourseLevelPricingUseCase } from './application/use-cases/get-course
       provide: GetCourseLevelPricingUseCase,
       useFactory: (persistence: CoursePricingPersistencePort) =>
         new GetCourseLevelPricingUseCase(persistence),
+      inject: [CoursePricingPersistencePort],
+    },
+    {
+      provide: UpdateCourseLevelPricingUseCase,
+      useFactory: (persistence: CoursePricingPersistencePort) =>
+        new UpdateCourseLevelPricingUseCase(persistence),
+      inject: [CoursePricingPersistencePort],
+    },
+    {
+      provide: DeleteCourseLevelPricingUseCase,
+      useFactory: (persistence: CoursePricingPersistencePort) =>
+        new DeleteCourseLevelPricingUseCase(persistence),
       inject: [CoursePricingPersistencePort],
     },
   ],

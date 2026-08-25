@@ -338,21 +338,41 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       billParams,
     );
 
-    // Fetch default pricing for fallback
+    // Fetch pricing rules for each class
     const defaultPricing = await this.ds.query(
       `SELECT
          cl.id AS "classId",
+         p.effective_from AS "effectiveFrom",
+         p.effective_to AS "effectiveTo",
          COALESCE(p.price_per_session, 0)::numeric AS "rate"
        FROM classes cl
-       LEFT JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id`
+       JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id
+       WHERE p.price_per_session > 0
+       ORDER BY p.effective_from DESC`
     );
-    const pricingMap = new Map<string, number>();
+    const pricingRulesByClass = new Map<string, Array<{ effectiveFrom: string; effectiveTo: string | null; rate: number }>>();
     for (const p of defaultPricing) {
-      pricingMap.set(p.classId, Number(p.rate));
+      if (!pricingRulesByClass.has(p.classId)) {
+        pricingRulesByClass.set(p.classId, []);
+      }
+      pricingRulesByClass.get(p.classId)!.push({
+        effectiveFrom: p.effectiveFrom,
+        effectiveTo: p.effectiveTo,
+        rate: Number(p.rate),
+      });
     }
 
-    // Map sessions to class
+    const getEffectiveRate = (classId: string, date?: string): number => {
+      const rules = pricingRulesByClass.get(classId) || [];
+      if (!date) return rules[0]?.rate || 0;
+      const matched = rules.find((r) => r.effectiveFrom <= date && (!r.effectiveTo || r.effectiveTo >= date));
+      if (matched) return matched.rate;
+      return rules[0]?.rate || 0;
+    };
+
+    // Map sessions to class & map session dates
     const sessionsByClass = new Map<string, any[]>();
+    const sessionDateMap = new Map<string, string>();
     for (const sess of sessions) {
       if (!sessionsByClass.has(sess.classId)) {
         sessionsByClass.set(sess.classId, []);
@@ -361,6 +381,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         sessionId: sess.sessionId,
         date: sess.date,
       });
+      sessionDateMap.set(sess.sessionId, sess.date);
     }
 
     // Map student monthly rates: key = `${studentId}_${classId}_${month}` -> rate
@@ -394,7 +415,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
       const student = classMap.get(record.studentId)!;
       const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
-      const sessionRate = rateMap.get(rateKey) ?? pricingMap.get(record.classId) ?? 0;
+      const sessionDate = sessionDateMap.get(record.sessionId);
+      const sessionRate = rateMap.get(rateKey) ?? getEffectiveRate(record.classId, sessionDate);
 
       student.attendance[record.sessionId] = {
         isPresent: record.isPresent,
@@ -430,7 +452,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     }
 
     for (const [classId, classMap] of studentsByClass.entries()) {
-      const defaultRate = pricingMap.get(classId) || 0;
+      const defaultRate = getEffectiveRate(classId);
       for (const student of classMap.values()) {
         if (student.pricePerSession === 0) {
           student.pricePerSession = defaultRate;
