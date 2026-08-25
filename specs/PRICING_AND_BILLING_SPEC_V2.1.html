@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đặc Tả Hệ Thống Quản Lý Lịch Sử Biểu Giá & Tính Phí Buổi Học (DAO EDU v2.1)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19; --bg-secondary: #111827; --bg-card: rgba(17, 24, 39, 0.8);
+      --bg-card-hover: rgba(31, 41, 55, 0.9); --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #f8fafc; --text-secondary: #94a3b8; --text-muted: #64748b;
+      --accent-blue: #3b82f6; --accent-cyan: #06b6d4; --accent-green: #10b981;
+      --accent-amber: #f59e0b; --accent-rose: #f43f5e; --accent-purple: #8b5cf6;
+      --font-main: 'Plus Jakarta Sans', system-ui, sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-main); background-color: var(--bg-primary); color: var(--text-primary);
+      line-height: 1.65; padding: 0;
+      background-image: radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 60%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 50% 90%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+    .container { max-width: 1300px; margin: 0 auto; padding: 40px 24px 80px 24px; }
+    header { margin-bottom: 40px; }
+    .badge-hero {
+      display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px;
+      background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 9999px; font-size: 0.85rem; font-weight: 600; color: #60a5fa; margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 14px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .subtitle { font-size: 1.1rem; color: var(--text-secondary); max-width: 860px; }
+    .meta-bar { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color); }
+    .meta-item { font-size: 0.88rem; color: var(--text-muted); }
+    .meta-item strong { color: var(--text-primary); }
+    .nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 40px; }
+    .nav-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px;
+      padding: 12px 16px; text-decoration: none; color: var(--text-primary); font-weight: 600; font-size: 0.88rem;
+      transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-card:hover { border-color: var(--accent-blue); background: var(--bg-card-hover); transform: translateY(-2px); }
+    .nav-card span.num { color: var(--accent-blue); font-family: var(--font-mono); font-size: 0.78rem; }
+    section { margin-bottom: 48px; scroll-margin-top: 24px; }
+    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .section-header .icon-box {
+      width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--accent-blue); font-size: 1rem;
+    }
+    h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 22px; margin-bottom: 18px; }
+    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .rules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+    .rule-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px;
+      position: relative; overflow: hidden;
+    }
+    .rule-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .rule-card.rule-1::before { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+    .rule-card.rule-2::before { background: linear-gradient(90deg, #10b981, #059669); }
+    .rule-card.rule-3::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .rule-card.rule-4::before { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+    .rule-card.rule-5::before { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+    .rule-card.rule-6::before { background: linear-gradient(90deg, #f43f5e, #e11d48); }
+    .rule-tag { font-size: 0.72rem; font-family: var(--font-mono); font-weight: 700; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-bottom: 10px; }
+    .tag-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .tag-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .tag-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tag-purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .tag-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+    .table-container { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-card); margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left; }
+    th { background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-size: 0.78rem; text-transform: uppercase; }
+    td { padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); color: var(--text-primary); }
+    tr:last-child td { border-bottom: none; }
+    .code-badge { font-family: var(--font-mono); font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: #e2e8f0; }
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; }
+    .status-pass { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .timeline-visual { display: flex; height: 42px; border-radius: 8px; overflow: hidden; margin: 14px 0; border: 1px solid var(--border-color); }
+    .segment { display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600; color: #fff; padding: 0 10px; }
+    .seg-1 { background: #2563eb; flex: 2; } .seg-2 { background: #059669; flex: 1.5; }
+    .seg-3 { background: #d97706; flex: 2; } .seg-4 { background: #7c3aed; flex: 3; }
+    .formula-box {
+      background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(59, 130, 246, 0.3); border-left: 4px solid var(--accent-blue);
+      border-radius: 6px; padding: 12px 16px; font-family: var(--font-mono); font-size: 0.84rem; color: #93c5fd; margin: 12px 0; overflow-x: auto;
+    }
+    footer { border-top: 1px solid var(--border-color); padding-top: 24px; margin-top: 48px; display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-hero">DAO EDU ARCHITECTURE SPECIFICATION v2.1</div>
+      <h1>Đặc Tả Hệ Thống Quản Lý Lịch Sử Biểu Giá & Tính Phí Buổi Học</h1>
+      <p class="subtitle">Tài liệu kỹ thuật chuẩn mực quy định cơ chế khóa chốt sổ kế toán, phân đoạn dòng thời gian không trùng lặp (Zero Date Overlap), tự động sửa lành (Auto-Healing), chuẩn hóa múi giờ Việt Nam (UTC+7) và bộ 45 Unit Tests xác thực.</p>
+      <div class="meta-bar">
+        <div class="meta-item">Phiên bản: <strong>Release Production v2.1</strong></div>
+        <div class="meta-item">Múi giờ: <strong>Asia/Ho_Chi_Minh (UTC+7)</strong></div>
+        <div class="meta-item">Kiểm thử: <strong>45/45 Tests Passed (100%)</strong></div>
+        <div class="meta-item">Cơ sở dữ liệu: <strong>PostgreSQL / TypeORM</strong></div>
+      </div>
+    </header>
+
+    <div class="nav-grid">
+      <a href="#rules" class="nav-card"><div><div class="num">01. NGUYÊN TẮC</div>6 Quy Tắc Bất Biến</div>&rarr;</a>
+      <a href="#slicing" class="nav-card"><div><div class="num">02. THUẬT TOÁN</div>Tách Dòng Thời Gian</div>&rarr;</a>
+      <a href="#billing" class="nav-card"><div><div class="num">03. TÍNH TIỀN</div>So Khớp Ngày Buổi Học</div>&rarr;</a>
+      <a href="#timezone" class="nav-card"><div><div class="num">04. MÚI GIỜ</div>Chuẩn Hóa UTC+7</div>&rarr;</a>
+      <a href="#tests" class="nav-card"><div><div class="num">05. KIỂM THỬ</div>Ma Trận 45 Test Cases</div>&rarr;</a>
+      <a href="#runbook" class="nav-card"><div><div class="num">06. VẬN HÀNH</div>Cẩm Nang Xử Lý Sự Cố</div>&rarr;</a>
+    </div>
+
+    <!-- 1. BỘ QUY TẮC BẤT BIẾN -->
+    <section id="rules">
+      <div class="section-header"><div class="icon-box">🛡️</div><h2>1. Sáu Quy Tắc Vàng Bất Biến (Golden Invariants)</h2></div>
+      <div class="rules-grid">
+        <div class="rule-card rule-1">
+          <span class="rule-tag tag-blue">Quy Tắc 1</span>
+          <div class="card-title">Duy Nhất 1 Bản Ghi "Hiện Hành"</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Chỉ có duy nhất 1 bản ghi mang <span class="code-badge">effectiveTo === null</span>, bắt buộc có ngày bắt đầu lớn nhất trong tương lai.</p>
+          <div class="formula-box">Count({ p | p.effectiveTo == null }) &le; 1</div>
+        </div>
+        <div class="rule-card rule-2">
+          <span class="rule-tag tag-green">Quy Tắc 2</span>
+          <div class="card-title">Tuyệt Đối Không Trùng Ngày (Zero Overlap)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Hai khoảng thời gian bất kỳ không bao giờ giao nhau. Ngày kết thúc bản ghi trước phải &le; ngày bắt đầu bản ghi sau trừ 1 ngày.</p>
+          <div class="formula-box">A.effectiveTo &le; B.effectiveFrom - 1 Ngày</div>
+        </div>
+        <div class="rule-card rule-3">
+          <span class="rule-tag tag-amber">Quy Tắc 3</span>
+          <div class="card-title">Bảo Toàn Đơn Giá Quá Khứ (Reconciliation Lock)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Chặn sửa/xóa/lùi ngày làm thay đổi đơn giá các buổi học đã có hóa đơn học sinh hoặc đã chốt lương GV/TG.</p>
+          <div class="formula-box">newEffectiveFrom > max(lastStudentBillDate, lastTeacherWageDate)</div>
+        </div>
+        <div class="rule-card rule-4">
+          <span class="rule-tag tag-purple">Quy Tắc 4</span>
+          <div class="card-title">Kế Thừa Giá Trị Không Cấu Hình (Value Inheritance)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Khi chỉ đổi 1 loại giá (VD: chỉ tăng học phí), tự động kế thừa đơn giá lương hiện hành trước đó thay vì gán về 0đ.</p>
+        </div>
+        <div class="rule-card rule-5">
+          <span class="rule-tag tag-blue">Quy Tắc 5</span>
+          <div class="card-title">Tự Động Sửa Lành Dữ Liệu Cũ (Auto-Healing)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Khi tải dữ liệu qua API, nếu phát hiện bản ghi legacy nào bị hở đuôi null trước bản ghi sau, tự động đóng đuôi và lưu DB.</p>
+        </div>
+        <div class="rule-card rule-6">
+          <span class="rule-tag tag-rose">Quy Tắc 6</span>
+          <div class="card-title">Chuẩn Hóa Múi Giờ Việt Nam (UTC+7 / GMT+7)</div>
+          <p style="color: var(--text-secondary); font-size: 0.88rem;">Mọi mốc thời gian tạo/sửa từ PostgreSQL được format qua múi giờ <span class="code-badge">Asia/Ho_Chi_Minh</span>, bù đủ +7 tiếng.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. THUẬT TOÁN TÁCH DÒNG THỜI GIAN -->
+    <section id="slicing">
+      <div class="section-header"><div class="icon-box">📐</div><h2>2. Thuật Toán Tách & Cắt Dòng Thời Gian (Timeline Slicing)</h2></div>
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Kịch Bản</th><th>Dữ Liệu Đầu Vào</th><th>Trạng Thái Cũ</th><th>Kết Quả Xử Lý Sau Khi Tách</th></tr></thead>
+            <tbody>
+              <tr><td><strong>1. Trùng Ngày Bắt Đầu</strong></td><td><span class="code-badge">01/08/2026</span> (Giá mới 180k)</td><td>Đã có <span class="code-badge">01/08/2026 &rarr; null</span></td><td><strong style="color: #38bdf8;">Cập nhật đè trực tiếp</strong> vào bản ghi cũ, giữ nguyên ID & createdAt.</td></tr>
+              <tr><td><strong>2. Chèn Giá Hè Giữa Khoảng</strong></td><td><span class="code-badge">01/06 &rarr; 31/08</span> (Giá hè 80k)</td><td>Đang có <span class="code-badge">01/01 &rarr; null</span> (100k)</td><td>Sinh ra <strong>3 đoạn</strong>: [01/01&rarr;31/05] (100k), [01/06&rarr;31/08] (80k), [01/09&rarr;null] (100k).</td></tr>
+              <tr><td><strong>3. Chèn Vào Quá Khứ</strong></td><td><span class="code-badge">02/08/2026</span> (để trống đến ngày)</td><td>Phía sau đã có <span class="code-badge">25/08 &rarr; null</span></td><td>Bản ghi mới <strong>tự động đóng đuôi</strong> [02/08 &rarr; 24/08], bản ghi 25/08 làm Hiện hành duy nhất.</td></tr>
+              <tr><td><strong>4. Mốc Tương Lai Mở</strong></td><td><span class="code-badge">01/01/2027 &rarr; null</span> (150k)</td><td>Đang có <span class="code-badge">01/08/2026 &rarr; null</span> (120k)</td><td>Bản ghi cũ đóng tại <span class="code-badge">31/12/2026</span>, bản ghi 2027 làm Hiện hành duy nhất.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 18px;">
+          <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px;">Minh Họa Chuỗi Dòng Thời Gian Liên Tục:</div>
+          <div class="timeline-visual">
+            <div class="segment seg-1">01/01 - 31/05 (100k)</div>
+            <div class="segment seg-2">01/06 - 31/08 (80k)</div>
+            <div class="segment seg-3">01/09 - 31/12 (120k)</div>
+            <div class="segment seg-4">01/01/2027 &rarr; Nay (150k)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. LOGIC TÍNH TIỀN THEO NGÀY -->
+    <section id="billing">
+      <div class="section-header"><div class="icon-box">💰</div><h2>3. Cơ Chế Tính Tiền Buổi Học (Billing Calculator)</h2></div>
+      <div class="card">
+        <div class="formula-box">
+targetDate = normalizeDate(session.date); // 'YYYY-MM-DD'
+matchedPricing = pricings.find(rule => 
+  rule.courseLevelId === session.courseLevelId && Number(rule[rateField]) > 0 &&
+  normalizeDate(rule.effectiveFrom) &le; targetDate &&
+  (rule.effectiveTo === null || normalizeDate(rule.effectiveTo) &ge; targetDate)
+);
+rate = matchedPricing ? matchedPricing[rateField] : 0;
+        </div>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 8px;">
+          • <strong>Học phí học sinh</strong>: Tự động gán 0đ nếu học sinh vắng mặt (<span class="code-badge">isPresent === false</span>).<br>
+          • <strong>Lương GV / TG</strong>: Phân biệt vai trò <span class="code-badge">roleInSession</span> để lấy đúng mức lương tương ứng.
+        </p>
+      </div>
+    </section>
+
+    <!-- 4. CHUẨN HÓA MÚI GIỜ VIỆT NAM -->
+    <section id="timezone">
+      <div class="section-header"><div class="icon-box">⏰</div><h2>4. Chuẩn Hóa Múi Giờ Việt Nam (Asia/Ho_Chi_Minh UTC+7)</h2></div>
+      <div class="card">
+        <div class="formula-box">
+export const formatVietnamDateTime = (dateVal: string | Date): string => {
+  let s = String(dateVal).trim();
+  if (!s.endsWith('Z') && !s.includes('+') && !s.includes('T')) s = s.replace(' ', 'T') + 'Z';
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(new Date(s)).replace(',', '');
+};
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. MA TRẬN 45 UNIT TESTS -->
+    <section id="tests">
+      <div class="section-header"><div class="icon-box">🧪</div><h2>5. Ma Trận Toàn Diện 45 Unit Test Cases (100% Passed)</h2></div>
+      <div class="table-container">
+        <table>
+          <thead><tr><th style="width: 70px;">Case</th><th style="width: 200px;">Danh Mục</th><th>Mục Tiêu Kiểm Thử</th><th style="width: 90px; text-align: center;">Kết Quả</th></tr></thead>
+          <tbody>
+            <tr><td><strong>C1-C5</strong></td><td><span class="code-badge">Cat 1: Date Guard</span></td><td>Chặn thêm đơn giá khi effectiveFrom &le; ngày chốt sổ; chặn effectiveFrom > effectiveTo</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C6-C9</strong></td><td><span class="code-badge">Cat 2: Inheritance</span></td><td>Kế thừa đầy đủ các loại giá không đổi; khởi tạo 0đ nếu chưa từng có giá</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C10-C14</strong></td><td><span class="code-badge">Cat 3: Slicing</span></td><td>Ghi đè trùng ngày; Tách 3 đoạn; Đè tương lai mở; Tự động đóng đuôi khi chèn quá khứ</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C15-C22</strong></td><td><span class="code-badge">Cat 4: Update</span></td><td>8 Cases kiểm tra cờ khóa, chặn sửa các mốc ngày/đơn giá đã có dữ liệu chốt sổ</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C23-C26</strong></td><td><span class="code-badge">Cat 5: Delete</span></td><td>4 Cases chặn xóa bản ghi khi đã có hóa đơn/phiếu lương, cho phép xóa bản ghi nháp</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C27-C32</strong></td><td><span class="code-badge">Cat 6-7: Operations</span></td><td>6 Cases khám phá cờ khóa độc lập, ủy quyền use cases, chặn xóa level đã có lớp/buổi học</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C33-C42</strong></td><td><span class="code-badge">Cat 8: Integrity</span></td><td>10 Cases bảo toàn tuyệt đối đơn giá các buổi học trong quá khứ sau 5 thao tác liên tiếp</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C43</strong></td><td><span class="code-badge">Cat 9: Zero Overlap</span></td><td>Không bao giờ có 2 bản ghi cùng có effectiveTo = null khi thêm xen kẽ nhiều lần</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C44</strong></td><td><span class="code-badge">Cat 9: Auto-Healing</span></td><td>Tự động sửa lành (Auto-healing) khi DB có sẵn 2 bản ghi legacy cùng mở đuôi null</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+            <tr><td><strong>C45</strong></td><td><span class="code-badge">Cat 9: Overlap Guard</span></td><td>Chặn cập nhật ngày khi khoảng ngày mới đè lên hoặc giao nhau với bản ghi khác</td><td style="text-align: center;"><span class="status-badge status-pass">PASS</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. CẨM NANG VẬN HÀNH -->
+    <section id="runbook">
+      <div class="section-header"><div class="icon-box">📘</div><h2>6. Cẩm Nang Vận Hành & Xử Lý Sự Cố (Runbook)</h2></div>
+      <div class="card">
+        <h4 style="color: #f59e0b; margin-bottom: 6px;">❓ Báo thêm đơn giá thành công nhưng không thấy thêm dòng mới?</h4>
+        <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 14px;"><strong>Nguyên nhân:</strong> Chọn Ngày bắt đầu trùng với bản ghi đã có. Hệ thống cập nhật đè giá trị mới vào chính bản ghi đó.</p>
+        <h4 style="color: #f59e0b; margin-bottom: 6px;">❓ Nút Xóa bị mờ kèm icon 🔒?</h4>
+        <p style="color: var(--text-secondary); font-size: 0.88rem;"><strong>Nguyên nhân:</strong> Khoảng thời gian đã có buổi học được thu tiền học sinh hoặc chốt lương GV/TG. Hệ thống khóa để bảo vệ sổ sách kế toán.</p>
+      </div>
+    </section>
+
+    <footer>
+      <div>&copy; 2026 DAO EDU - Academic & Financial Management System.</div>
+      <div>Spec Doc v2.1 for Engineering & QA Teams.</div>
+    </footer>
+  </div>
+</body>
+</html>
