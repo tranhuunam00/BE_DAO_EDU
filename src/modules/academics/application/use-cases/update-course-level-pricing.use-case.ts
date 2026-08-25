@@ -99,6 +99,29 @@ export class UpdateCourseLevelPricingUseCase {
       throw new AcademicError('PRICING_CONFLICT', 'Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
+    if (isDateChanged) {
+      const allPricings = await this.persistence.findPricingByLevelId(levelId);
+      const otherPricings = allPricings.filter((p) => p.id !== id);
+      const hasOverlap = otherPricings.some((p) => {
+        const pFrom = p.effectiveFrom;
+        const pTo = p.effectiveTo;
+        if (newTo === null) {
+          return pTo === null || pTo >= newFrom;
+        }
+        if (pTo === null) {
+          return pFrom <= newTo;
+        }
+        return newFrom <= pTo && newTo >= pFrom;
+      });
+
+      if (hasOverlap) {
+        throw new AcademicError(
+          'PRICING_CONFLICT',
+          'Khoảng thời gian áp dụng bị trùng lặp với một bản ghi biểu giá khác.'
+        );
+      }
+    }
+
     if (dto.pricePerSession !== undefined) pricing.pricePerSession = dto.pricePerSession;
     if (dto.teacherWagePerSession !== undefined) pricing.teacherWagePerSession = dto.teacherWagePerSession;
     if (dto.taWagePerSession !== undefined) pricing.taWagePerSession = dto.taWagePerSession;

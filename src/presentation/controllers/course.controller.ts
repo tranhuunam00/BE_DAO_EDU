@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, Not } from 'typeorm';
@@ -342,6 +342,12 @@ export class CourseController {
       coveringPricing.effectiveTo = dayjs(newFrom).subtract(1, 'day').format('YYYY-MM-DD');
       await this.pricingRepo.save(coveringPricing);
 
+      const nextPricing = existingList.find((p) => p.effectiveFrom > newFrom);
+      let resolvedNewTo = newTo;
+      if (nextPricing && (!resolvedNewTo || resolvedNewTo >= nextPricing.effectiveFrom)) {
+        resolvedNewTo = dayjs(nextPricing.effectiveFrom).subtract(1, 'day').format('YYYY-MM-DD');
+      }
+
       // Create new middle / forward record
       const newPricing = this.pricingRepo.create({
         courseLevelId: level.id,
@@ -349,18 +355,22 @@ export class CourseController {
         teacherWagePerSession: finalTeacherWage,
         taWagePerSession: finalTaWage,
         effectiveFrom: newFrom,
-        effectiveTo: newTo,
+        effectiveTo: resolvedNewTo,
       });
       const savedNew = await this.pricingRepo.save(newPricing);
 
-      // If new record has a closed end date (newTo != null) and old record extended beyond newTo:
-      if (newTo !== null && (oldEffectiveTo === null || oldEffectiveTo > newTo)) {
+      // If new record has a closed end date (resolvedNewTo != null) and old record extended beyond resolvedNewTo:
+      if (
+        resolvedNewTo !== null &&
+        (oldEffectiveTo === null || oldEffectiveTo > resolvedNewTo) &&
+        (!nextPricing || nextPricing.effectiveFrom > dayjs(resolvedNewTo).add(1, 'day').format('YYYY-MM-DD'))
+      ) {
         const suffixPricing = this.pricingRepo.create({
           courseLevelId: level.id,
           pricePerSession: coveringPricing.pricePerSession,
           teacherWagePerSession: coveringPricing.teacherWagePerSession,
           taWagePerSession: coveringPricing.taWagePerSession,
-          effectiveFrom: dayjs(newTo).add(1, 'day').format('YYYY-MM-DD'),
+          effectiveFrom: dayjs(resolvedNewTo).add(1, 'day').format('YYYY-MM-DD'),
           effectiveTo: oldEffectiveTo,
         });
         await this.pricingRepo.save(suffixPricing);
