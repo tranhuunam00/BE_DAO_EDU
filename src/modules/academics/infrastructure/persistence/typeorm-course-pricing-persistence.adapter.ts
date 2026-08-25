@@ -16,7 +16,7 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
   async findPricingByLevelId(levelId: string): Promise<CourseLevelPricingOrmEntity[]> {
     return this.pricingRepo.find({
       where: { courseLevelId: levelId },
-      order: { effectiveFrom: 'DESC' },
+      order: { updatedAt: 'DESC', createdAt: 'DESC' },
     });
   }
 
