@@ -69,6 +69,7 @@ export class CourseController {
 
     return {
       items,
+      courses: items,
       total,
       page,
       limit,
