@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsNotEmpty, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsNumber, IsBoolean, IsArray, ValidateNested, IsDateString, Min, Max, Allow } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ClassScheduleDto {
@@ -103,6 +103,52 @@ export class StudentEvaluationDto {
   @IsString()
   @IsOptional()
   evaluationComment?: string | null;
+
+  @ApiProperty({ required: false, description: 'Tiêu chí 1-chạm' })
+  @IsOptional()
+  @Allow()
+  criteria?: any;
+
+  @ApiProperty({ required: false, description: 'Đánh dấu do AI sinh' })
+  @IsOptional()
+  @IsBoolean()
+  isAiGenerated?: boolean;
+
+  @ApiProperty({ required: false, description: 'Đánh dấu giáo viên đã duyệt' })
+  @IsOptional()
+  @IsBoolean()
+  isApprovedByTeacher?: boolean;
+
+  @ApiProperty({ required: false, description: 'Điểm số' })
+  @IsOptional()
+  @IsString()
+  score?: string | null;
+
+  @ApiProperty({ required: false, description: 'Nhận xét' })
+  @IsOptional()
+  @IsString()
+  comment?: string | null;
+
+  @ApiProperty({ required: false, description: 'Đã duyệt' })
+  @IsOptional()
+  @IsBoolean()
+  isApproved?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  homeworkStatus?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  participation?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  understanding?: any;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  behaviorTags?: any;
 }
 
 export class SaveEvaluationsDto {

@@ -39,6 +39,7 @@ import { LeadInteractionOrmEntity } from './entities/lead-interaction.orm-entity
 import { StudyMaterialOrmEntity } from './entities/study-material.orm-entity';
 import { TimekeepingDeviceOrmEntity } from './entities/timekeeping-device.orm-entity';
 import { TimekeepingLogOrmEntity } from './entities/timekeeping-log.orm-entity';
+import { StudentSessionEvaluationOrmEntity } from './entities/student-session-evaluation.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -82,4 +83,5 @@ export const TYPEORM_ENTITIES = [
   StudyMaterialOrmEntity,
   TimekeepingDeviceOrmEntity,
   TimekeepingLogOrmEntity,
+  StudentSessionEvaluationOrmEntity,
 ];

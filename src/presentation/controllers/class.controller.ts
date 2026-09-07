@@ -1077,64 +1077,6 @@ export class ClassController {
     return { message: 'Đã cập nhật điểm danh thành công (Admin override)' };
   }
 
-  @Post('sessions/:sessionId/evaluations')
-  @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Cập nhật đánh giá buổi học của học sinh (Giáo viên, trợ giảng, admin có thể sửa bất kì lúc nào)' })
-  async saveEvaluations(
-    @Request() req: any,
-    @Param('sessionId') sessionId: string,
-    @Body() body: SaveEvaluationsDto,
-  ) {
-    const session = await this.sessionRepo.findOneOrFail({
-      where: { id: sessionId },
-      relations: { classEntity: true },
-    });
-
-    await this.validateAttendancePermission(session, req);
-
-    const enrollments = await this.classStudentRepo.find({
-      where: { classId: session.classId, status: 'Active' },
-    });
-    const enrolledStudentIds = enrollments.map((e) => e.studentId);
-    for (const item of body.evaluations) {
-      if (!enrolledStudentIds.includes(item.studentId)) {
-        throw new BadRequestException(
-          `Học sinh với ID ${item.studentId} không thuộc lớp học này.`,
-        );
-      }
-    }
-
-    for (const item of body.evaluations) {
-      if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
-        const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
-        if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
-          throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
-        }
-      }
-
-      let record = await this.attendanceRepo.findOne({
-        where: { classSessionId: sessionId, studentId: item.studentId }
-      });
-
-      if (!record) {
-        record = this.attendanceRepo.create({
-          classSessionId: sessionId,
-          studentId: item.studentId,
-          isPresent: false,
-        });
-      }
-
-      if (item.evaluationScore !== undefined) {
-        record.evaluationScore = item.evaluationScore !== null && item.evaluationScore !== '' ? String(item.evaluationScore) : null;
-      }
-      if (item.evaluationComment !== undefined) {
-        record.evaluationComment = item.evaluationComment;
-      }
-      await this.attendanceRepo.save(record);
-    }
-
-    return { message: 'Đã cập nhật đánh giá học sinh thành công' };
-  }
 
   @Post('sessions/:sessionId/complete')
   @Roles(Role.ADMIN, Role.TEACHER)

@@ -19,6 +19,7 @@ import { FacebookLeadScansModule } from './modules/facebook-lead-scans/facebook-
 import { StudyMaterialsModule } from './modules/study-materials/study-materials.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TimekeepingModule } from './modules/timekeeping/timekeeping.module';
+import { StudentEvaluationsModule } from './modules/student-evaluations/student-evaluations.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { TimekeepingModule } from './modules/timekeeping/timekeeping.module';
     StudyMaterialsModule,
     ReportsModule,
     TimekeepingModule,
+    StudentEvaluationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
