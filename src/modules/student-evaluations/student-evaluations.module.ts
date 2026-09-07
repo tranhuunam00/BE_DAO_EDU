@@ -13,10 +13,14 @@ import { IAiEvaluationGeneratorPort } from './application/ports/ai-evaluation-ge
 import { ILlmRateLimiterPort } from './application/ports/llm-rate-limiter.port';
 import { ILlmEvaluationCachePort } from './application/ports/llm-evaluation-cache.port';
 import { IStudentWeeklyDataQueryPort } from './application/ports/student-weekly-data-query.port';
+import { PARENT_AI_CHAT_PORT } from './application/ports/parent-ai-chat.port';
+import { STUDENT_PROFILE_CONTEXT_QUERY_PORT } from './application/ports/student-profile-context-query.port';
 
 import { TypeOrmStudentSessionEvaluationAdapter } from './infrastructure/persistence/typeorm-student-session-evaluation.adapter';
 import { TypeOrmStudentWeeklyDataQueryAdapter } from './infrastructure/persistence/typeorm-student-weekly-data-query.adapter';
+import { TypeOrmStudentProfileContextAdapter } from './infrastructure/persistence/typeorm-student-profile-context.adapter';
 import { GeminiAiEvaluationGeneratorAdapter } from './infrastructure/ai/gemini-ai-evaluation-generator.adapter';
+import { GeminiParentAiChatAdapter } from './infrastructure/ai/gemini-parent-ai-chat.adapter';
 import { InMemoryLlmRateLimiterAdapter } from './infrastructure/security/in-memory-llm-rate-limiter.adapter';
 import { InMemoryLlmEvaluationCacheAdapter } from './infrastructure/cache/in-memory-llm-evaluation-cache.adapter';
 
@@ -25,9 +29,11 @@ import { SaveSessionEvaluationsUseCase } from './application/use-cases/save-sess
 import { GenerateAiEvaluationCommentUseCase } from './application/use-cases/generate-ai-evaluation-comment.use-case';
 import { GetWeeklyStudentReportUseCase } from './application/use-cases/get-weekly-student-report.use-case';
 import { GetClassWeeklyReportsUseCase } from './application/use-cases/get-class-weekly-reports.use-case';
+import { AskParentAiChatbotUseCase } from './application/use-cases/ask-parent-ai-chatbot.use-case';
 
 import { StudentEvaluationController } from './presentation/controllers/student-evaluation.controller';
 import { WeeklyStudentReportController } from './presentation/controllers/weekly-student-report.controller';
+import { ParentAiChatController } from './presentation/controllers/parent-ai-chat.controller';
 
 @Module({
   imports: [
@@ -41,7 +47,11 @@ import { WeeklyStudentReportController } from './presentation/controllers/weekly
       ClassStudentOrmEntity,
     ]),
   ],
-  controllers: [StudentEvaluationController, WeeklyStudentReportController],
+  controllers: [
+    StudentEvaluationController,
+    WeeklyStudentReportController,
+    ParentAiChatController,
+  ],
   providers: [
     {
       provide: IStudentSessionEvaluationRepositoryPort,
@@ -50,6 +60,14 @@ import { WeeklyStudentReportController } from './presentation/controllers/weekly
     {
       provide: IStudentWeeklyDataQueryPort,
       useClass: TypeOrmStudentWeeklyDataQueryAdapter,
+    },
+    {
+      provide: STUDENT_PROFILE_CONTEXT_QUERY_PORT,
+      useClass: TypeOrmStudentProfileContextAdapter,
+    },
+    {
+      provide: PARENT_AI_CHAT_PORT,
+      useClass: GeminiParentAiChatAdapter,
     },
     {
       provide: IAiEvaluationGeneratorPort,
@@ -100,12 +118,23 @@ import { WeeklyStudentReportController } from './presentation/controllers/weekly
         new GetClassWeeklyReportsUseCase(queryPort),
       inject: [IStudentWeeklyDataQueryPort],
     },
+    {
+      provide: AskParentAiChatbotUseCase,
+      useFactory: (chatPort: any, contextPort: any, rateLimiter: any) =>
+        new AskParentAiChatbotUseCase(chatPort, contextPort, rateLimiter),
+      inject: [
+        PARENT_AI_CHAT_PORT,
+        STUDENT_PROFILE_CONTEXT_QUERY_PORT,
+        ILlmRateLimiterPort,
+      ],
+    },
   ],
   exports: [
     GetSessionEvaluationsUseCase,
     SaveSessionEvaluationsUseCase,
     GetWeeklyStudentReportUseCase,
     GetClassWeeklyReportsUseCase,
+    AskParentAiChatbotUseCase,
   ],
 })
 export class StudentEvaluationsModule {}
