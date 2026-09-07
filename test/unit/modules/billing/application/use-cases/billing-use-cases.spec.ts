@@ -49,6 +49,8 @@ function makePersistence() {
     saveAudit: jest.fn().mockResolvedValue(undefined),
     resetPaymentRequest: jest.fn().mockResolvedValue(undefined),
     deleteOrder: jest.fn().mockResolvedValue(undefined),
+    getPreviousMonthTuitionRevenue: jest.fn().mockResolvedValue(0),
+    findCommissionTeachers: jest.fn().mockResolvedValue([]),
   };
   const persistence: jest.Mocked<BillingPersistencePort> = {
     transaction: jest.fn().mockImplementation(async (work) => work(context)),
@@ -57,6 +59,8 @@ function makePersistence() {
     findSalarySources: context.findSalarySources,
     listPeriods: jest.fn(),
     findPeriodDetails: jest.fn(),
+    getPreviousMonthTuitionRevenue: jest.fn().mockResolvedValue(0),
+    findCommissionTeachers: jest.fn().mockResolvedValue([]),
   };
   return { persistence, context };
 }
@@ -102,7 +106,65 @@ describe('Billing use cases', () => {
     expect(context.findSalarySources).toHaveBeenCalledWith('2026-06-30', [
       'teacher-1',
     ]);
-    expect(result.grandTotal).toBe(60000);
+    expect(result.grandTotal).toBe(54000);
+  });
+
+  it('previews salary using target month if provided', async () => {
+    const { persistence, context } = makePersistence();
+    context.findSalarySources.mockResolvedValue([]);
+    await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+      undefined,
+      '2026-06',
+    );
+    expect(persistence.getPreviousMonthTuitionRevenue).toHaveBeenCalledWith('2026-06');
+  });
+
+  it('previews salary using month derived from endDate if target month is not provided', async () => {
+    const { persistence, context } = makePersistence();
+    context.findSalarySources.mockResolvedValue([]);
+    await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+    );
+    expect(persistence.getPreviousMonthTuitionRevenue).toHaveBeenCalledWith('2026-06');
+  });
+
+  it('previews salary for commission-based teachers correctly', async () => {
+    const { persistence, context } = makePersistence();
+    persistence.findCommissionTeachers.mockResolvedValue([
+      {
+        id: 'teacher-commission-1',
+        teacherId: 'TCH-COMM-1',
+        firstName: 'Dung',
+        lastName: 'Vu',
+        mobile: '0987654321',
+        status: 'Active',
+      },
+    ]);
+    persistence.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
+    persistence.findSalarySources.mockResolvedValue([
+      {
+        id: 'session-1',
+        ownerId: 'teacher-commission-1',
+        ownerCode: 'TCH-COMM-1',
+        ownerName: 'Vu Dung',
+        ownerMobile: '0987654321',
+        ownerStatus: 'Active',
+        classId: 'class-1',
+        className: 'Math Class',
+        courseName: 'Math',
+        levelName: 'Grade 1',
+        courseLevelId: 'level-1',
+        date: '2026-06-10',
+      },
+    ]);
+    const result = await new PreviewSalaryUseCase(persistence).execute(
+      '2026-06-30',
+    );
+    expect(result.grandTotal).toBe(34425000);
+    expect(result.teachers[0].teacherId).toBe('teacher-commission-1');
+    expect(result.teachers[0].totalAmount).toBe(34425000);
+    expect(result.teachers[0].totalSessions).toBe(1);
   });
 
   it('creates the period and all orders in one transaction callback', async () => {
@@ -121,6 +183,60 @@ describe('Billing use cases', () => {
       'tuition',
       expect.objectContaining({ id: 'period-1' }),
       [expect.objectContaining({ totalAmount: 100000 })],
+    );
+    expect(result.data.id).toBe('period-1');
+  });
+
+  it('creates a salary period for commission-based teachers successfully', async () => {
+    const { persistence, context } = makePersistence();
+    context.findCommissionTeachers.mockResolvedValue([
+      {
+        id: 'teacher-commission-1',
+        teacherId: 'TCH-COMM-1',
+        firstName: 'Dung',
+        lastName: 'Vu',
+        mobile: '0987654321',
+        status: 'Active',
+      },
+    ]);
+    context.getPreviousMonthTuitionRevenue.mockResolvedValue(153000000);
+    context.findSalarySources.mockResolvedValue([
+      {
+        id: 'session-1',
+        ownerId: 'teacher-commission-1',
+        ownerCode: 'TCH-COMM-1',
+        ownerName: 'Vu Dung',
+        ownerMobile: '0987654321',
+        ownerStatus: 'Active',
+        classId: 'class-1',
+        className: 'Math Class',
+        courseName: 'Math',
+        levelName: 'Grade 1',
+        courseLevelId: 'level-1',
+        date: '2026-06-10',
+      },
+    ]);
+
+    const result = await new CreatePaymentPeriodUseCase(persistence).execute({
+      name: 'Lương tháng 6',
+      type: 'salary',
+      month: '2026-06',
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      teacherIds: ['teacher-commission-1'],
+    });
+
+    expect(persistence.transaction).toHaveBeenCalledTimes(1);
+    expect(context.saveOrders).toHaveBeenCalledWith(
+      'salary',
+      expect.objectContaining({ id: 'period-1' }),
+      [
+        expect.objectContaining({
+          ownerId: 'teacher-commission-1',
+          totalAmount: 34425000,
+          totalSessions: 1,
+        }),
+      ],
     );
     expect(result.data.id).toBe('period-1');
   });

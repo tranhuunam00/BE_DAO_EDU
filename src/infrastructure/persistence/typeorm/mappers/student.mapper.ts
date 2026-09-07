@@ -33,6 +33,7 @@ export class StudentMapper {
       orm.userId || undefined,
       orm.avatar || undefined,
       orm.user ? orm.user.email : undefined,
+      orm.isSyncedToDevice || false,
       orm.createdAt,
       orm.updatedAt,
     );
@@ -68,6 +69,7 @@ export class StudentMapper {
     orm.status = domain.status;
     orm.userId = domain.userId ?? null;
     orm.avatar = domain.avatar ?? null;
+    orm.isSyncedToDevice = domain.isSyncedToDevice;
     orm.createdAt = domain.createdAt;
     orm.updatedAt = domain.updatedAt;
     return orm;

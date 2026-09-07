@@ -5,6 +5,7 @@ import {
 } from '../../domain/entities/payment-period';
 import { BillingCalculator } from '../../domain/services/billing-calculator';
 import { BillingError } from '../../domain/errors/billing.error';
+import { CommissionSalaryCalculator } from '../../domain/services/commission-salary-calculator';
 import { SendTuitionPaymentRequestUseCase } from '../../../payments/application/use-cases/send-tuition-payment-request.use-case';
 
 export interface BillingAdjustmentInput {
@@ -31,21 +32,106 @@ export class CreatePaymentPeriodUseCase {
     private readonly sendTuitionPaymentRequest?: SendTuitionPaymentRequestUseCase,
   ) {}
 
+  // =========================================================================
+  // NGUYÊN TẮC AN TOÀN TÀI CHÍNH & CHỐT PHIẾU THU / PHIẾU LƯƠNG (PERIOD CREATION RULE):
+  // 1. Khi chạy tạo chu kỳ tính toán học phí ('tuition') hoặc lương ('salary'):
+  //    - Phiếu thu học sinh (Phiếu thu): Chỉ quét từ các ca học đã chốt và đã
+  //      được học sinh điểm danh (thông qua context.findTuitionSources).
+  //    - Phiếu lương giáo viên/trợ giảng (Phiếu lương): Chỉ quét từ các ca học đã chốt
+  //      và bắt buộc phải có ít nhất 1 dòng điểm danh (thông qua context.findSalarySources).
+  // 2. Việc này đảm bảo tính nhất quán tuyệt đối, tránh tính hóa đơn hoặc phiếu lương
+  //    cho các buổi học trống hoặc các buổi học chưa được giáo viên thực tế bấm chốt.
+  // =========================================================================
   async execute(input: CreatePaymentPeriodInput) {
     const period = PaymentPeriod.create(input);
     const result = await this.persistence.transaction(async (context) => {
-      const [pricings, sources] = await Promise.all([
-        context.loadPricings(),
-        period.type === 'tuition'
-          ? context.findTuitionSources(input.endDate, input.studentIds)
-          : context.findSalarySources(input.endDate, input.teacherIds),
-      ]);
-      const calculatedOrders = BillingCalculator.calculate(
-        sources,
-        pricings,
-        period.type === 'tuition' ? 'pricePerSession' : 'teacherWagePerSession',
-      );
-      const orders = applyAdjustments(calculatedOrders, input.adjustments);
+      let orders: any[];
+      if (period.type === 'tuition') {
+        const [pricings, sources] = await Promise.all([
+          context.loadPricings(),
+          context.findTuitionSources(input.endDate, input.studentIds),
+        ]);
+        const calculatedOrders = BillingCalculator.calculate(
+          sources,
+          pricings,
+          'pricePerSession',
+        );
+        orders = applyAdjustments(calculatedOrders, input.adjustments);
+      } else {
+        const [pricings, sources, commissionTeachers, prevMonthRevenue] = await Promise.all([
+          context.loadPricings(),
+          context.findSalarySources(input.endDate, input.teacherIds),
+          context.findCommissionTeachers(input.teacherIds),
+          context.getPreviousMonthTuitionRevenue(input.month),
+        ]);
+        const calculatedOrders = BillingCalculator.calculate(
+          sources,
+          pricings,
+          'teacherWagePerSession',
+        );
+
+        const commissionTeacherIds = new Set(commissionTeachers.map(t => t.id));
+        const normalOrders = calculatedOrders.filter(o => !commissionTeacherIds.has(o.ownerId)).map(o => ({
+          ...o,
+          totalAmount: Math.round(o.totalAmount * 0.9),
+          lines: o.lines.map(l => ({
+            ...l,
+            rate: Math.round(l.rate * 0.9),
+            totalAmount: Math.round(l.totalAmount * 0.9),
+          }))
+        }));
+
+        const commissionOrders = commissionTeachers.map((teacher) => {
+          const commission = CommissionSalaryCalculator.calculateCommission(prevMonthRevenue);
+          const gross = 5000000 + commission;
+          const net = Math.round(gross * 0.9);
+          const matchingOrder = calculatedOrders.find(o => o.ownerId === teacher.id);
+          const totalSessions = matchingOrder ? matchingOrder.totalSessions : 0;
+          const sessionLines = matchingOrder
+            ? matchingOrder.lines.map((l: any) => ({
+                ...l,
+                rate: 0,
+                totalAmount: 0,
+              }))
+            : [];
+
+          return {
+            ownerId: teacher.id,
+            ownerCode: teacher.teacherId,
+            ownerName: `${teacher.lastName || ''} ${teacher.firstName || ''}`.trim(),
+            ownerMobile: teacher.mobile || '',
+            ownerStatus: teacher.status || '',
+            totalSessions,
+            totalAmount: net,
+            lines: [
+              {
+                sourceIds: [`base-${teacher.id}`],
+                classId: null,
+                className: 'Lương cơ bản',
+                courseName: '',
+                levelName: '',
+                sessionsCount: 0,
+                rate: 4500000,
+                totalAmount: 4500000,
+              },
+              {
+                sourceIds: [`commission-${teacher.id}`],
+                classId: null,
+                className: `Thưởng doanh thu học viện (Doanh thu tháng trước: ${prevMonthRevenue.toLocaleString('vi-VN')} ₫)`,
+                courseName: '',
+                levelName: '',
+                sessionsCount: 0,
+                rate: Math.round(commission * 0.9),
+                totalAmount: Math.round(commission * 0.9),
+              },
+              ...sessionLines,
+            ]
+          };
+        });
+
+        const finalCalculatedOrders = [...normalOrders, ...commissionOrders];
+        orders = applyAdjustments(finalCalculatedOrders, input.adjustments);
+      }
       const savedPeriod = await context.savePeriod(period.toPrimitives());
       const billIds = await context.saveOrders(period.type, savedPeriod, orders);
       await context.saveAudit({

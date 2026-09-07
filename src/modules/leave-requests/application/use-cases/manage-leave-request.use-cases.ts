@@ -9,10 +9,13 @@ import { SessionStatus } from '../../../../domain/value-objects/session-status.e
 export class ListMyLeaveRequestsUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
 
-  async execute(input: { studentUserId: string; status?: LeaveRequestStatus }) {
-    const studentId = await this.persistence.findStudentIdByUserId(
-      input.studentUserId,
-    );
+  async execute(input: { studentUserId: string; studentId?: string; status?: LeaveRequestStatus }) {
+    let studentId = input.studentId;
+    if (!studentId) {
+      studentId = (await this.persistence.findStudentIdByUserId(
+        input.studentUserId,
+      )) || undefined;
+    }
     if (!studentId) {
       throw new LeaveRequestError(
         'STUDENT_NOT_FOUND',
@@ -101,10 +104,13 @@ export class ReviewLeaveRequestUseCase {
 export class CancelLeaveRequestUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
 
-  async execute(input: { requestId: string; studentUserId: string }) {
-    const studentId = await this.persistence.findStudentIdByUserId(
-      input.studentUserId,
-    );
+  async execute(input: { requestId: string; studentUserId: string; studentId?: string }) {
+    let studentId = input.studentId;
+    if (!studentId) {
+      studentId = (await this.persistence.findStudentIdByUserId(
+        input.studentUserId,
+      )) || undefined;
+    }
     if (!studentId) {
       throw new LeaveRequestError(
         'STUDENT_NOT_FOUND',

@@ -32,6 +32,7 @@ import {
 } from '../../modules/billing/application/use-cases/preview-billing.use-case';
 import { BillingError } from '../../modules/billing/domain/errors/billing.error';
 
+
 @ApiTags('Quản lý Đợt Thanh Toán (Payment Periods)')
 @ApiBearerAuth()
 @Controller('payment-periods')
@@ -66,8 +67,17 @@ export class PaymentPeriodController {
 
   @Get('preview/salary')
   @ApiOperation({ summary: 'Xem trước danh sách giáo viên cần trả lương' })
-  previewSalary(@Query('endDate') endDate: string) {
-    return this.run(() => this.previewSalaryUseCase.execute(endDate));
+  previewSalary(
+    @Query('endDate') endDate: string,
+    @Query('month') month?: string,
+  ) {
+    return this.run(() =>
+      this.previewSalaryUseCase.execute(
+        endDate,
+        undefined,
+        month,
+      ),
+    );
   }
 
   @Get(':id')

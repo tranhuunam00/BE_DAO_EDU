@@ -29,22 +29,26 @@ export class AddStudentUseCase {
       throw new ConflictException('Học sinh với họ tên và số điện thoại này đã tồn tại trên hệ thống');
     }
 
-    // 1. Kiểm tra tài khoản đăng nhập nếu được khai báo
+    // 1. Luôn tự động tạo tài khoản đăng nhập cho học sinh bằng số điện thoại
     let createdUserId: string | undefined = undefined;
-    if (dto.loginEmail) {
-      const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
-      if (existingUser) {
-        throw new ConflictException('Email đăng nhập học sinh đã tồn tại trên hệ thống');
-      }
-
-      // Tạo tài khoản User đăng nhập
+    const username = (dto.mobile || '').trim().toLowerCase();
+    
+    const existingUser = await this.userRepository.findByEmail(username);
+    if (existingUser) {
+      // Dùng chung tài khoản phụ huynh đã tồn tại cho các học sinh chị em
+      createdUserId = existingUser.id;
+      console.log(
+        `[Auto-Account] Số điện thoại ${username} đã có tài khoản. Liên kết học sinh mới với tài khoản có sẵn: userId=${createdUserId}`,
+      );
+    } else {
+      // Tạo tài khoản User đăng nhập mới
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.loginPassword || 'student123', salt);
+      const passwordHash = await bcrypt.hash('123456', salt);
       
       const newUserId = randomUUID();
       const user = new User(
         newUserId,
-        dto.loginEmail.toLowerCase(),
+        username,
         passwordHash,
         `${dto.lastName} ${dto.firstName}`.trim(),
         Role.STUDENT,
@@ -53,11 +57,24 @@ export class AddStudentUseCase {
       
       const savedUser = await this.userRepository.save(user);
       createdUserId = savedUser.id;
+      console.log(
+        `[Auto-Account] Đã tự động sinh tài khoản học sinh: username=${username}, password=123456`,
+      );
     }
 
-    // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...)
-    const count = students.length;
-    const studentId = `STU-${1001 + count}`;
+    // 2. Tạo mã học sinh tuần tự (STU-1001, STU-1002, ...) bằng cách lấy số ID lớn nhất để tránh trùng lặp
+    let maxIdNum = 1000;
+    for (const s of students) {
+      if (s.studentId && s.studentId.startsWith('STU-')) {
+        const num = parseInt(s.studentId.replace('STU-', ''), 10);
+        if (!isNaN(num) && num > maxIdNum) {
+          maxIdNum = num;
+        }
+      }
+    }
+    const studentId = maxIdNum > 1000
+      ? `STU-${maxIdNum + 1}`
+      : `STU-${1001 + students.length}`;
 
     // 3. Upload avatar to MinIO if provided as base64
     let avatarUrl = dto.avatar;

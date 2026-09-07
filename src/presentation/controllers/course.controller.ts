@@ -1,11 +1,28 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ConflictException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, Not } from 'typeorm';
+import dayjs from 'dayjs';
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { CourseLevelOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level.orm-entity';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
-import { CreateCourseDto, UpdateCourseDto, CourseLevelPricingDto, CourseLevelDto, AddCourseLevelDto, UpdateCourseLevelDto } from '../../application/dtos/course.dto';
+import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
+import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
+import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
+import {
+  CreateCourseDto,
+  UpdateCourseDto,
+  CourseLevelPricingDto,
+  CourseLevelDto,
+  AddCourseLevelDto,
+  UpdateCourseLevelDto,
+  UpdateCourseLevelPricingDto,
+} from '../../application/dtos/course.dto';
+import { GetCourseLevelPricingUseCase } from '../../modules/academics/application/use-cases/get-course-level-pricing.use-case';
+import { UpdateCourseLevelPricingUseCase } from '../../modules/academics/application/use-cases/update-course-level-pricing.use-case';
+import { DeleteCourseLevelPricingUseCase } from '../../modules/academics/application/use-cases/delete-course-level-pricing.use-case';
+import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
+import { CoursePricingPersistencePort } from '../../modules/academics/application/ports/course-pricing-persistence.port';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -17,6 +34,10 @@ export class CourseController {
     private readonly levelRepo: Repository<CourseLevelOrmEntity>,
     @InjectRepository(CourseLevelPricingOrmEntity)
     private readonly pricingRepo: Repository<CourseLevelPricingOrmEntity>,
+    private readonly getCourseLevelPricingUseCase: GetCourseLevelPricingUseCase,
+    private readonly updateCourseLevelPricingUseCase: UpdateCourseLevelPricingUseCase,
+    private readonly deleteCourseLevelPricingUseCase: DeleteCourseLevelPricingUseCase,
+    private readonly coursePricingPort: CoursePricingPersistencePort,
   ) {}
 
   @Get()
@@ -40,27 +61,44 @@ export class CourseController {
       qb.andWhere('c.category = :category', { category });
     }
 
-    qb.orderBy('c.created_at', 'DESC');
-    const total = await qb.getCount();
-    const courses = await qb.skip((page - 1) * limit).take(limit).getMany();
+    const [items, total] = await qb
+      .orderBy('c.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
-    return { courses, total, page: Number(page), limit: Number(limit) };
+    return {
+      items,
+      courses: items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Lấy chi tiết Chương trình học' })
+  @ApiOperation({ summary: 'Xem chi tiết Chương trình học' })
   async findOne(@Param('id') id: string) {
     const course = await this.courseRepo.findOneOrFail({ where: { id } });
     const levels = await this.levelRepo.find({ where: { courseId: id }, order: { createdAt: 'ASC' } });
 
-    // Get pricing for each level
+    // Get pricing and counts for each level with full lock info
     const levelsWithPricing = await Promise.all(
       levels.map(async (level) => {
-        const pricing = await this.pricingRepo.find({
+        const pricing = await this.getCourseLevelPricingUseCase.execute(level.id);
+
+        const classCount = await this.pricingRepo.manager.getRepository(ClassOrmEntity).count({
           where: { courseLevelId: level.id },
-          order: { effectiveFrom: 'DESC' },
         });
-        return { ...level, pricing };
+
+        const sessionCount = await this.pricingRepo.manager.getRepository(ClassSessionOrmEntity)
+          .createQueryBuilder('session')
+          .innerJoin('session.classEntity', 'class')
+          .where('class.courseLevelId = :levelId', { levelId: level.id })
+          .getCount();
+
+        return { ...level, pricing, classCount, sessionCount };
       }),
     );
 
@@ -96,20 +134,18 @@ export class CourseController {
 
     const saved = await this.courseRepo.save(course);
 
-    // Create levels if provided
-    if (dto.levels && dto.levels.length > 0) {
-      for (const levelDto of dto.levels) {
-        const level = this.levelRepo.create({
-          courseId: saved.id,
-          levelName: levelDto.levelName,
-          levelCode: levelDto.levelCode,
-          totalHours: levelDto.totalHours,
-          isFixedHour: levelDto.isFixedHour || false,
-          canUpgrade: levelDto.canUpgrade || false,
-          gradebookSetting: levelDto.gradebookSetting || null,
-        });
-        await this.levelRepo.save(level);
-      }
+    // Save levels
+    for (const levelDto of dto.levels) {
+      const level = this.levelRepo.create({
+        courseId: saved.id,
+        levelName: levelDto.levelName,
+        levelCode: levelDto.levelCode,
+        totalHours: levelDto.totalHours,
+        isFixedHour: levelDto.isFixedHour || false,
+        canUpgrade: levelDto.canUpgrade || false,
+        gradebookSetting: levelDto.gradebookSetting || null,
+      });
+      await this.levelRepo.save(level);
     }
 
     return this.findOne(saved.id);
@@ -182,6 +218,7 @@ export class CourseController {
       courseLevelId: savedLevel.id,
       pricePerSession: dto.pricePerSession,
       teacherWagePerSession: dto.teacherWagePerSession,
+      taWagePerSession: dto.taWagePerSession,
       effectiveFrom: dto.effectiveFrom,
       effectiveTo: null,
     });
@@ -222,8 +259,6 @@ export class CourseController {
   async addPricing(@Param('levelId') levelId: string, @Body() dto: CourseLevelPricingDto) {
     const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
 
-    // Validate new dates overlap with any existing records
-    const pricingList = await this.pricingRepo.find({ where: { courseLevelId: level.id } });
     const newFrom = dto.effectiveFrom;
     const newTo = dto.effectiveTo || null;
 
@@ -231,62 +266,214 @@ export class CourseController {
       throw new ConflictException('Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
-    // 1. Auto-cap the current open-ended pricing (where effectiveTo is null)
-    const activePricing = await this.pricingRepo.findOne({
-      where: { courseLevelId: level.id, effectiveTo: IsNull() },
-    });
+    // 1. Guard check: Must start AFTER the last reconciled date for each configured type
+    const [lastStudentBillDate, lastTeacherWageDate, lastAssistantWageDate] = await Promise.all([
+      this.coursePricingPort.getMaxStudentBillDate(level.id),
+      this.coursePricingPort.getMaxTeacherWageDate(level.id),
+      this.coursePricingPort.getMaxAssistantWageDate(level.id),
+    ]);
 
-    if (activePricing) {
-      if (newFrom < activePricing.effectiveFrom) {
-        throw new ConflictException(
-          `Ngày bắt đầu áp dụng mới (${newFrom}) phải từ ngày bắt đầu của giá hiện hành (${activePricing.effectiveFrom}) trở đi.`
-        );
-      }
-
-      // Cap the previous open pricing at 1 day before the new one starts
-      const prevDate = new Date(newFrom);
-      prevDate.setDate(prevDate.getDate() - 1);
-      activePricing.effectiveTo = prevDate.toISOString().split('T')[0];
-      await this.pricingRepo.save(activePricing);
+    if (dto.pricePerSession !== undefined && lastStudentBillDate && newFrom <= lastStudentBillDate) {
+      throw new ConflictException(
+        `Ngày bắt đầu áp dụng học phí (${newFrom}) phải sau ngày chốt học phí gần nhất (${lastStudentBillDate}).`
+      );
+    }
+    if (dto.teacherWagePerSession !== undefined && lastTeacherWageDate && newFrom <= lastTeacherWageDate) {
+      throw new ConflictException(
+        `Ngày bắt đầu áp dụng lương giáo viên (${newFrom}) phải sau ngày chốt lương gần nhất (${lastTeacherWageDate}).`
+      );
+    }
+    if (dto.taWagePerSession !== undefined && lastAssistantWageDate && newFrom <= lastAssistantWageDate) {
+      throw new ConflictException(
+        `Ngày bắt đầu áp dụng lương trợ giảng (${newFrom}) phải sau ngày chốt lương trợ giảng gần nhất (${lastAssistantWageDate}).`
+      );
     }
 
-    // 2. Perform general overlap validation against all OTHER records (now including the capped activePricing)
-    for (const p of pricingList) {
-      if (p.id === activePricing?.id) {
-        // Double check against the updated/capped active pricing just in case
-        const capTo = activePricing.effectiveTo;
-        if (capTo && (newFrom <= capTo) && (newTo === null || activePricing.effectiveFrom <= newTo)) {
-          throw new ConflictException(`Khoảng thời gian này bị trùng lặp với giá hiện hành đã được điều chỉnh.`);
-        }
-        continue;
-      }
-      
-      const pFrom = p.effectiveFrom;
-      const pTo = p.effectiveTo;
+    // 2. Fetch existing pricing list ordered by effectiveFrom ASC
+    const existingList = await this.pricingRepo.find({
+      where: { courseLevelId: level.id },
+      order: { effectiveFrom: 'ASC' },
+    });
 
-      const overlap = (pTo === null || newFrom <= pTo) && (newTo === null || pFrom <= newTo);
-      if (overlap) {
-        throw new ConflictException(`Khoảng thời gian áp dụng trùng lặp với bảng giá đã cấu hình (${pFrom} - ${pTo || 'nay'}).`);
+    // 3. Inherit values from active pricing at newFrom (or closest prior pricing)
+    const activePricing = existingList
+      .filter((p) => p.effectiveFrom <= newFrom && (!p.effectiveTo || p.effectiveTo >= newFrom))
+      .pop() || existingList[existingList.length - 1];
+
+    const finalPrice =
+      dto.pricePerSession !== undefined
+        ? Number(dto.pricePerSession)
+        : activePricing
+        ? Number(activePricing.pricePerSession)
+        : 0;
+    const finalTeacherWage =
+      dto.teacherWagePerSession !== undefined
+        ? Number(dto.teacherWagePerSession)
+        : activePricing
+        ? Number(activePricing.teacherWagePerSession)
+        : 0;
+    const finalTaWage =
+      dto.taWagePerSession !== undefined
+        ? Number(dto.taWagePerSession)
+        : activePricing
+        ? Number(activePricing.taWagePerSession)
+        : 0;
+
+    // 4. Timeline Slicing / Splitting
+    // A. Check if there is an existing record starting on exactly the same day
+    const sameStartPricing = existingList.find((p) => p.effectiveFrom === newFrom);
+    if (sameStartPricing) {
+      sameStartPricing.pricePerSession = finalPrice;
+      sameStartPricing.teacherWagePerSession = finalTeacherWage;
+      sameStartPricing.taWagePerSession = finalTaWage;
+      if (dto.effectiveTo !== undefined) {
+        sameStartPricing.effectiveTo = newTo;
       }
+      return this.pricingRepo.save(sameStartPricing);
+    }
+
+    // B. Check if newFrom splits an existing interval [p.effectiveFrom, p.effectiveTo]
+    const coveringPricing = existingList.find(
+      (p) => p.effectiveFrom < newFrom && (p.effectiveTo === null || p.effectiveTo >= newFrom),
+    );
+
+    if (coveringPricing) {
+      const oldEffectiveTo = coveringPricing.effectiveTo;
+      // Truncate covering record
+      coveringPricing.effectiveTo = dayjs(newFrom).subtract(1, 'day').format('YYYY-MM-DD');
+      await this.pricingRepo.save(coveringPricing);
+
+      const nextPricing = existingList.find((p) => p.effectiveFrom > newFrom);
+      let resolvedNewTo = newTo;
+      if (nextPricing && (!resolvedNewTo || resolvedNewTo >= nextPricing.effectiveFrom)) {
+        resolvedNewTo = dayjs(nextPricing.effectiveFrom).subtract(1, 'day').format('YYYY-MM-DD');
+      }
+
+      // Create new middle / forward record
+      const newPricing = this.pricingRepo.create({
+        courseLevelId: level.id,
+        pricePerSession: finalPrice,
+        teacherWagePerSession: finalTeacherWage,
+        taWagePerSession: finalTaWage,
+        effectiveFrom: newFrom,
+        effectiveTo: resolvedNewTo,
+      });
+      const savedNew = await this.pricingRepo.save(newPricing);
+
+      // If new record has a closed end date (resolvedNewTo != null) and old record extended beyond resolvedNewTo:
+      if (
+        resolvedNewTo !== null &&
+        (oldEffectiveTo === null || oldEffectiveTo > resolvedNewTo) &&
+        (!nextPricing || nextPricing.effectiveFrom > dayjs(resolvedNewTo).add(1, 'day').format('YYYY-MM-DD'))
+      ) {
+        const suffixPricing = this.pricingRepo.create({
+          courseLevelId: level.id,
+          pricePerSession: coveringPricing.pricePerSession,
+          teacherWagePerSession: coveringPricing.teacherWagePerSession,
+          taWagePerSession: coveringPricing.taWagePerSession,
+          effectiveFrom: dayjs(resolvedNewTo).add(1, 'day').format('YYYY-MM-DD'),
+          effectiveTo: oldEffectiveTo,
+        });
+        await this.pricingRepo.save(suffixPricing);
+      }
+
+      return savedNew;
+    }
+
+    // C. Inserting in past (newFrom < next records)
+    const nextPricing = existingList.find((p) => p.effectiveFrom > newFrom);
+    let resolvedNewTo = newTo;
+    if (nextPricing && (!resolvedNewTo || resolvedNewTo >= nextPricing.effectiveFrom)) {
+      resolvedNewTo = dayjs(nextPricing.effectiveFrom).subtract(1, 'day').format('YYYY-MM-DD');
     }
 
     const pricing = this.pricingRepo.create({
       courseLevelId: level.id,
-      pricePerSession: dto.pricePerSession,
-      teacherWagePerSession: dto.teacherWagePerSession,
+      pricePerSession: finalPrice,
+      teacherWagePerSession: finalTeacherWage,
+      taWagePerSession: finalTaWage,
       effectiveFrom: newFrom,
-      effectiveTo: newTo,
+      effectiveTo: resolvedNewTo,
     });
 
     return this.pricingRepo.save(pricing);
   }
 
-  @Get('levels/:levelId/pricing')
-  @ApiOperation({ summary: 'Lấy lịch sử giá của Level' })
-  async getPricing(@Param('levelId') levelId: string) {
-    return this.pricingRepo.find({
+  @Put('pricing/:id')
+  @ApiOperation({ summary: 'Cập nhật bản ghi đơn giá' })
+  async updatePricing(@Param('id') id: string, @Body() dto: UpdateCourseLevelPricingDto) {
+    return this.runAcademic(() => this.updateCourseLevelPricingUseCase.execute(id, dto));
+  }
+
+  @Delete('pricing/:id')
+  @ApiOperation({ summary: 'Xóa bản ghi đơn giá' })
+  async deletePricing(@Param('id') id: string) {
+    return this.runAcademic(() => this.deleteCourseLevelPricingUseCase.execute(id));
+  }
+
+  @Delete('levels/:levelId')
+  @ApiOperation({ summary: 'Xóa Level nếu chưa có lớp học hay buổi học nào sử dụng' })
+  async deleteLevel(@Param('levelId') levelId: string) {
+    const level = await this.levelRepo.findOneOrFail({ where: { id: levelId } });
+
+    // 1. Check if any classes reference this level
+    const classCount = await this.pricingRepo.manager.getRepository(ClassOrmEntity).count({
       where: { courseLevelId: levelId },
-      order: { effectiveFrom: 'DESC' },
     });
+
+    if (classCount > 0) {
+      throw new ConflictException('Không thể xóa Level vì đã có lớp học sử dụng.');
+    }
+
+    // 2. Check if any class sessions are associated with this level
+    const sessionCount = await this.pricingRepo.manager
+      .getRepository(ClassSessionOrmEntity)
+      .createQueryBuilder('session')
+      .innerJoin('session.classEntity', 'class')
+      .where('class.courseLevelId = :levelId', { levelId })
+      .getCount();
+
+    if (sessionCount > 0) {
+      throw new ConflictException('Không thể xóa Level vì có buổi học/điểm danh liên quan.');
+    }
+
+    // 3. Delete pricing rules then delete level
+    await this.pricingRepo.delete({ courseLevelId: levelId });
+    await this.levelRepo.delete(levelId);
+
+    return { message: 'Xóa Level thành công' };
+  }
+
+  @Get('levels/:levelId/active-classes')
+  @ApiOperation({ summary: 'Lấy danh sách các lớp đang hoạt động của Level' })
+  async getActiveClasses(@Param('levelId') levelId: string) {
+    return this.pricingRepo.manager.getRepository(ClassOrmEntity).find({
+      where: { courseLevelId: levelId, status: 'Active' },
+      select: {
+        id: true,
+        className: true,
+        classCode: true,
+      },
+    });
+  }
+
+  @Get('levels/:levelId/pricing')
+  @ApiOperation({ summary: 'Lấy lịch sử giá của Level kèm trạng thái khóa đối soát' })
+  async getPricing(@Param('levelId') levelId: string) {
+    return this.getCourseLevelPricingUseCase.execute(levelId);
+  }
+
+  private async runAcademic<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof AcademicError) {
+        if (error.code === 'PRICING_NOT_FOUND') {
+          throw new NotFoundException(error.message);
+        }
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 }

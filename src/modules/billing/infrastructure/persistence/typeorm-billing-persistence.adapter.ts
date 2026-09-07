@@ -18,6 +18,7 @@ import {
   PaymentPeriodType,
 } from '../../domain/entities/payment-period';
 import {
+  BillingCalculator,
   BillingOrderDraft,
   BillingSource,
   PricingRule,
@@ -34,6 +35,8 @@ import { TeacherMonthlyWageOrmEntity } from '../../../../infrastructure/persiste
 import { TuitionPaymentRequestOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/tuition-payment-request.orm-entity';
 import { BillingAuditLogOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/billing-audit-log.orm-entity';
 import { ClassStudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
+import { TeacherOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
@@ -67,6 +70,34 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       endDate,
       ownerIds,
     );
+  }
+
+  async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
+    const prevPeriods = await this.dataSource.getRepository(PaymentPeriodOrmEntity).find({
+      where: {
+        type: 'tuition',
+        month,
+      },
+    });
+    if (prevPeriods.length === 0) return 0;
+    const periodIds = prevPeriods.map((p) => p.id);
+    const billsSum = await this.dataSource.getRepository(StudentMonthlyBillOrmEntity)
+      .createQueryBuilder('bill')
+      .select('SUM(bill.totalAmount)', 'sum')
+      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .getRawOne();
+    return Number(billsSum?.sum || 0);
+  }
+
+  async findCommissionTeachers(teacherIds?: string[]): Promise<any[]> {
+    const qb = this.dataSource.getRepository(TeacherOrmEntity)
+      .createQueryBuilder('teacher')
+      .where('teacher.has_commission_salary = true')
+      .andWhere('teacher.status = :status', { status: 'Active' });
+    if (teacherIds && teacherIds.length > 0) {
+      qb.andWhere('teacher.id IN (:...teacherIds)', { teacherIds });
+    }
+    return qb.getMany();
   }
 
   async getStudentTuitionReportData(
@@ -151,12 +182,14 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     });
 
     const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      id: pricing.id,
       courseLevelId: pricing.courseLevelId,
       pricePerSession: Number(pricing.pricePerSession),
       teacherWagePerSession: Number(pricing.teacherWagePerSession),
       taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
+      createdAt: pricing.createdAt,
     }));
 
     return {
@@ -286,12 +319,14 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     });
 
     const pricingListMapped: PricingRule[] = pricingList.map((pricing) => ({
+      id: pricing.id,
       courseLevelId: pricing.courseLevelId,
       pricePerSession: Number(pricing.pricePerSession),
       teacherWagePerSession: Number(pricing.teacherWagePerSession),
       taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
+      createdAt: pricing.createdAt,
     }));
 
     const billingItemsMapped = billingItems.map((item) => ({
@@ -355,6 +390,35 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           },
           order: { student: { lastName: 'ASC', firstName: 'ASC' } },
         });
+
+      const billIds = bills.map((bill) => bill.id);
+      const attendances = billIds.length
+        ? await this.dataSource.getRepository(StudentAttendanceOrmEntity).find({
+            where: { billId: In(billIds) },
+            relations: {
+              classSession: { classEntity: { courseLevel: true } },
+            },
+            order: { classSession: { date: 'ASC', startTime: 'ASC' } },
+          })
+        : [];
+      const attendancesByBill = groupItems(attendances, 'billId');
+
+      const levelIds = Array.from(
+        new Set(
+          attendances
+            .map((a) => a.classSession?.classEntity?.courseLevelId)
+            .filter(Boolean),
+        ),
+      );
+      let pricings: CourseLevelPricingOrmEntity[] = [];
+      if (levelIds.length > 0) {
+        pricings = await this.dataSource
+          .getRepository(CourseLevelPricingOrmEntity)
+          .find({
+            where: { courseLevelId: In(levelIds) },
+          });
+      }
+
       const items = bills.length
         ? await this.dataSource
             .getRepository(StudentMonthlyBillItemOrmEntity)
@@ -371,30 +435,66 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       const logsByOrder = groupItems(auditLogs, 'orderId');
       return {
         period: periodView,
-        orders: bills.map((bill) => ({
-          id: bill.id,
-          studentId: bill.studentId,
-          code: bill.student?.studentId || '',
-          name: `${bill.student?.lastName || ''} ${bill.student?.firstName || ''}`.trim(),
-          nickName: bill.student?.nickName || '',
-          mobile: bill.student?.mobile || '',
-          totalAmount: Number(bill.totalAmount),
-          paidAmount: Number(bill.paidAmount),
-          status: bill.status,
-          paymentDate: bill.paymentDate,
-          note: bill.note,
-          paymentMethod: bill.paymentMethod,
-          processedBy: bill.processedBy
-            ? { id: bill.processedBy.id, name: bill.processedBy.name }
-            : null,
-          receiptCode: bill.receiptCode,
-          auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
-          paymentRequest: bill.paymentRequest ? {
-            ...bill.paymentRequest,
-            qrUrl: bill.paymentRequest.qrUrl?.replace('/970418-', '/BIDV-')
-          } : null,
-          items: (byBill.get(bill.id) ?? []).map(mapItem),
-        })),
+        orders: bills.map((bill) => {
+          const billSessions = attendancesByBill.get(bill.id) ?? [];
+          return {
+            id: bill.id,
+            studentId: bill.studentId,
+            code: bill.student?.studentId || '',
+            name: `${bill.student?.lastName || ''} ${bill.student?.firstName || ''}`.trim(),
+            nickName: bill.student?.nickName || '',
+            mobile: bill.student?.mobile || '',
+            totalAmount: Number(bill.totalAmount),
+            paidAmount: Number(bill.paidAmount),
+            status: bill.status,
+            paymentDate: bill.paymentDate,
+            note: bill.note,
+            paymentMethod: bill.paymentMethod,
+            processedBy: bill.processedBy
+              ? { id: bill.processedBy.id, name: bill.processedBy.name }
+              : null,
+            receiptCode: bill.receiptCode,
+            auditLogs: (logsByOrder.get(bill.id) ?? []).map(mapAuditLog),
+            paymentRequest: bill.paymentRequest ? {
+              ...bill.paymentRequest,
+              qrUrl: bill.paymentRequest.qrUrl?.replace('/970418-', '/BIDV-')
+            } : null,
+            items: (byBill.get(bill.id) ?? []).map(mapItem),
+            sessions: billSessions.map((att) => {
+              const levelId = att.classSession?.classEntity?.courseLevelId;
+              const sessionDate = att.classSession?.date;
+              const matchedPricing = BillingCalculator.getActivePricing(
+                pricings.map((p) => ({
+                  courseLevelId: p.courseLevelId,
+                  pricePerSession: Number(p.pricePerSession),
+                  teacherWagePerSession: Number(p.teacherWagePerSession),
+                  taWagePerSession: Number(p.taWagePerSession),
+                  effectiveFrom: p.effectiveFrom,
+                  effectiveTo: p.effectiveTo,
+                  createdAt: p.createdAt,
+                  id: p.id,
+                })),
+                sessionDate,
+                'pricePerSession',
+                levelId,
+              );
+              const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+              const amount = att.isPresent ? rate : 0;
+              return {
+                id: att.id,
+                date: sessionDate,
+                startTime: att.classSession?.startTime,
+                endTime: att.classSession?.endTime,
+                classId: att.classSession?.classId,
+                className: att.classSession?.classEntity?.className || '',
+                isPresent: att.isPresent,
+                reason: att.reason,
+                rate,
+                amount,
+              };
+            }),
+          };
+        }),
       };
     }
 
@@ -405,6 +505,36 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         relations: { teacher: true, processedBy: true },
         order: { teacher: { lastName: 'ASC', firstName: 'ASC' } },
       });
+
+    const wageIds = wages.map((wage) => wage.id);
+    const sessions = wageIds.length
+      ? await this.dataSource.getRepository(ClassSessionOrmEntity).find({
+          where: [
+            { wageId: In(wageIds) },
+            { assistantWageId: In(wageIds) },
+          ],
+          relations: {
+            classEntity: { courseLevel: true },
+            teacher: true,
+            assistant: true,
+          },
+          order: { date: 'ASC', startTime: 'ASC' },
+        })
+      : [];
+    const levelIds = Array.from(
+      new Set(
+        sessions.map((s) => s.classEntity?.courseLevelId).filter(Boolean),
+      ),
+    );
+    let pricings: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricings = await this.dataSource
+        .getRepository(CourseLevelPricingOrmEntity)
+        .find({
+          where: { courseLevelId: In(levelIds) },
+        });
+    }
+
     const items = wages.length
       ? await this.dataSource
           .getRepository(TeacherMonthlyWageItemOrmEntity)
@@ -421,25 +551,63 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     const logsByOrder = groupItems(auditLogs, 'orderId');
     return {
       period: periodView,
-      orders: wages.map((wage) => ({
-        id: wage.id,
-        teacherId: wage.teacherId,
-        code: wage.teacher?.teacherId || '',
-        name: `${wage.teacher?.lastName || ''} ${wage.teacher?.firstName || ''}`.trim(),
-        mobile: wage.teacher?.mobile || '',
-        type: wage.teacher?.type || '',
-        totalAmount: Number(wage.totalAmount),
-        paidAmount: Number(wage.paidAmount),
-        status: wage.status,
-        paymentDate: wage.paymentDate,
-        note: wage.note,
-        paymentMethod: wage.paymentMethod,
-        processedBy: wage.processedBy
-          ? { id: wage.processedBy.id, name: wage.processedBy.name }
-          : null,
-        auditLogs: (logsByOrder.get(wage.id) ?? []).map(mapAuditLog),
-        items: (byWage.get(wage.id) ?? []).map(mapItem),
-      })),
+      orders: wages.map((wage) => {
+        const wageSessions = sessions.filter(
+          (s) => s.wageId === wage.id || s.assistantWageId === wage.id,
+        );
+        return {
+          id: wage.id,
+          teacherId: wage.teacherId,
+          code: wage.teacher?.teacherId || '',
+          name: `${wage.teacher?.lastName || ''} ${wage.teacher?.firstName || ''}`.trim(),
+          mobile: wage.teacher?.mobile || '',
+          type: wage.teacher?.type || '',
+          totalAmount: Number(wage.totalAmount),
+          paidAmount: Number(wage.paidAmount),
+          status: wage.status,
+          paymentDate: wage.paymentDate,
+          note: wage.note,
+          paymentMethod: wage.paymentMethod,
+          processedBy: wage.processedBy
+            ? { id: wage.processedBy.id, name: wage.processedBy.name }
+            : null,
+          auditLogs: (logsByOrder.get(wage.id) ?? []).map(mapAuditLog),
+          items: (byWage.get(wage.id) ?? []).map(mapItem),
+          sessions: wageSessions.map((s) => {
+            const role = s.wageId === wage.id ? 'teacher' : 'assistant';
+            const rateField = role === 'teacher' ? 'teacherWagePerSession' : 'taWagePerSession';
+            const levelId = s.classEntity?.courseLevelId;
+            const sessionDate = s.date;
+            const matchedPricing = BillingCalculator.getActivePricing(
+              pricings.map((p) => ({
+                courseLevelId: p.courseLevelId,
+                pricePerSession: Number(p.pricePerSession),
+                teacherWagePerSession: Number(p.teacherWagePerSession),
+                taWagePerSession: Number(p.taWagePerSession),
+                effectiveFrom: p.effectiveFrom,
+                effectiveTo: p.effectiveTo,
+                createdAt: p.createdAt,
+                id: p.id,
+              })),
+              sessionDate,
+              rateField,
+              levelId,
+            );
+            const rate = matchedPricing ? Number(matchedPricing[rateField]) : 0;
+            return {
+              id: s.id,
+              date: sessionDate,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              classId: s.classId,
+              className: s.classEntity?.className || '',
+              role,
+              rate,
+              amount: rate,
+            };
+          }),
+        };
+      }),
     };
   }
 
@@ -480,6 +648,15 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         '(session.status = :completedStatus OR session.attendance_locked = :locked)',
         { completedStatus: SessionStatus.COMPLETED, locked: true },
       );
+      query.andWhere(qb => {
+        const subQuery = qb
+          .subQuery()
+          .select('1')
+          .from('student_attendance', 'att')
+          .where('att.class_session_id = session.id')
+          .getQuery();
+        return 'EXISTS ' + subQuery;
+      });
     }
 
     const sessions = await query
@@ -535,6 +712,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         taWagePerSession: Number(p.taWagePerSession),
         effectiveFrom: p.effectiveFrom,
         effectiveTo: p.effectiveTo,
+        createdAt: p.createdAt,
       })),
       wageItems: wageItems.map((item) => ({
         classId: item.classId,
@@ -569,6 +747,34 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       endDate,
       ownerIds,
     );
+  }
+
+  async getPreviousMonthTuitionRevenue(month: string): Promise<number> {
+    const prevPeriods = await this.manager.getRepository(PaymentPeriodOrmEntity).find({
+      where: {
+        type: 'tuition',
+        month,
+      },
+    });
+    if (prevPeriods.length === 0) return 0;
+    const periodIds = prevPeriods.map((p) => p.id);
+    const billsSum = await this.manager.getRepository(StudentMonthlyBillOrmEntity)
+      .createQueryBuilder('bill')
+      .select('SUM(bill.totalAmount)', 'sum')
+      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .getRawOne();
+    return Number(billsSum?.sum || 0);
+  }
+
+  async findCommissionTeachers(teacherIds?: string[]): Promise<any[]> {
+    const qb = this.manager.getRepository(TeacherOrmEntity)
+      .createQueryBuilder('teacher')
+      .where('teacher.has_commission_salary = true')
+      .andWhere('teacher.status = :status', { status: 'Active' });
+    if (teacherIds && teacherIds.length > 0) {
+      qb.andWhere('teacher.id IN (:...teacherIds)', { teacherIds });
+    }
+    return qb.getMany();
   }
 
   async savePeriod(
@@ -906,10 +1112,6 @@ async function findTuitionSources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    )
-    .andWhere(
-      '(attendance.isPresent = :present OR (attendance.isPresent = :absent AND (attendance.reason IS NULL OR TRIM(attendance.reason) = :empty)))',
-      { present: true, absent: false, empty: '' },
     );
   if (ownerIds?.length) {
     query.andWhere('attendance.studentId IN (:...ownerIds)', { ownerIds });
@@ -930,6 +1132,8 @@ async function findTuitionSources(
     levelName: row.classSession.classEntity?.courseLevel?.levelName || '',
     courseLevelId: row.classSession.classEntity?.courseLevelId,
     date: row.classSession.date,
+    isPresent: row.isPresent,
+    reason: row.reason,
   }));
 }
 
@@ -955,7 +1159,16 @@ async function findSalarySources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    );
+    )
+    .andWhere(qb => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from('student_attendance', 'att')
+        .where('att.class_session_id = session.id')
+        .getQuery();
+      return 'EXISTS ' + subQuery;
+    });
   if (ownerIds?.length) {
     q1.andWhere('session.teacherId IN (:...ownerIds)', { ownerIds });
   }
@@ -994,7 +1207,16 @@ async function findSalarySources(
         completed: SessionStatus.COMPLETED,
         locked: true,
       },
-    );
+    )
+    .andWhere(qb => {
+      const subQuery = qb
+        .subQuery()
+        .select('1')
+        .from('student_attendance', 'att')
+        .where('att.class_session_id = session.id')
+        .getQuery();
+      return 'EXISTS ' + subQuery;
+    });
   if (ownerIds?.length) {
     q2.andWhere('session.assistantId IN (:...ownerIds)', { ownerIds });
   }

@@ -21,7 +21,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Not } from 'typeorm';
 import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
@@ -34,6 +34,7 @@ import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-b
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
 import { GetStudentTuitionReportUseCase } from '../../modules/billing/application/use-cases/get-student-tuition-report.use-case';
 import { CalculateStudentTuitionUseCase } from '../../modules/billing/application/use-cases/calculate-student-tuition.use-case';
+import { BillingCalculator } from '../../modules/billing/domain/services/billing-calculator';
 import {
   CreateStudentDto,
   UpdateStudentDto,
@@ -141,7 +142,7 @@ export class StudentController {
     @Query('province') province?: string,
     @Query('noClass') noClass?: string,
   ) {
-    return this.getStudentsUseCase.execute({
+    const result = await this.getStudentsUseCase.execute({
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search,
@@ -149,6 +150,39 @@ export class StudentController {
       province,
       noClass: noClass === 'true' || noClass === '1',
     });
+
+    const userIds = result.students.map((s) => s.userId).filter((id): id is string => !!id);
+    const siblingMap: Record<string, string[]> = {};
+
+    if (userIds.length > 0) {
+      const allShared = await this.studentRepo.find({
+        where: { userId: In(userIds) },
+      });
+      
+      for (const s of allShared) {
+        if (s.userId) {
+          if (!siblingMap[s.userId]) {
+            siblingMap[s.userId] = [];
+          }
+          siblingMap[s.userId].push(`${s.lastName} ${s.firstName}`);
+        }
+      }
+    }
+
+    const mappedStudents = result.students.map((s) => {
+      const allNames = s.userId ? siblingMap[s.userId] || [] : [];
+      const currentName = `${s.lastName} ${s.firstName}`;
+      const siblings = allNames.filter((name) => name !== currentName);
+      return {
+        ...s,
+        siblings,
+      };
+    });
+
+    return {
+      ...result,
+      students: mappedStudents,
+    };
   }
 
   @Get('tuition-bulk')
@@ -197,17 +231,98 @@ export class StudentController {
     return { students: results, grandTotal, startDate, endDate };
   }
 
+  @Get('check-mobile')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Kiểm tra trùng số điện thoại và danh sách học sinh đang sử dụng' })
+  async checkMobile(
+    @Query('mobile') mobile: string,
+    @Query('excludeStudentId') excludeStudentId?: string,
+  ) {
+    if (!mobile) {
+      throw new BadRequestException('Số điện thoại không được để trống.');
+    }
+    const cleanMobile = mobile.trim();
+    const query = this.studentRepo.createQueryBuilder('student')
+      .where('student.mobile = :mobile', { mobile: cleanMobile });
+    if (excludeStudentId) {
+      query.andWhere('student.id != :excludeStudentId', { excludeStudentId });
+    }
+    const students = await query.getMany();
+
+    const user = await this.userRepo.findOne({
+      where: { email: cleanMobile.toLowerCase() },
+    });
+
+    const studentList = students.map(s => {
+      let age: number | null = null;
+      if (s.birthdate) {
+        const birthDate = new Date(s.birthdate);
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+      return {
+        id: s.id,
+        studentId: s.studentId,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        age,
+      };
+    });
+
+    if (studentList.length === 0 && user) {
+      studentList.push({
+        id: user.id,
+        studentId: 'Tài khoản người dùng',
+        firstName: '',
+        lastName: user.name,
+        age: null,
+      });
+    }
+
+    return {
+      exists: studentList.length > 0,
+      students: studentList,
+    };
+  }
+
+  @Get('me/profiles')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Lấy danh sách hồ sơ học sinh (chị em) cùng tài khoản' })
+  async getMyProfiles(@Request() req: any) {
+    const students = await this.studentRepo.find({
+      where: { userId: req.user.sub },
+    });
+    return students;
+  }
+
+  private async getActiveStudent(req: any): Promise<StudentOrmEntity> {
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      const student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+      });
+      if (student) return student;
+    }
+    
+    const student = await this.studentRepo.findOne({
+      where: { userId },
+    });
+    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    return student;
+  }
+
   @Get('me')
   @Roles(Role.STUDENT)
   @ApiOperation({
     summary: 'Lấy thông tin cá nhân của học sinh đang đăng nhập',
   })
   async getMyProfile(@Request() req: any) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
-    return student;
+    return this.getActiveStudent(req);
   }
 
   @Put('me')
@@ -216,14 +331,11 @@ export class StudentController {
     summary: 'Cập nhật thông tin cá nhân của học sinh đang đăng nhập',
   })
   async updateMyProfile(@Request() req: any, @Body() dto: UpdateStudentDto) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    const student = await this.getActiveStudent(req);
 
     // Only allow updating certain fields for student role to prevent privilege escalation
     const allowedDto: UpdateStudentDto = {
-      mobile: dto.mobile,
+      birthdate: dto.birthdate,
       email: dto.email,
       primaryAddress: dto.primaryAddress,
       avatar: dto.avatar,
@@ -244,16 +356,40 @@ export class StudentController {
     summary: 'Lấy danh sách hóa đơn học phí của học sinh đang đăng nhập',
   })
   async getMyTuition(@Request() req: any) {
-    const student = await this.studentRepo.findOne({
-      where: { userId: req.user.sub },
-    });
-    if (!student) throw new NotFoundException('Không tìm thấy hồ sơ học sinh');
+    const student = await this.getActiveStudent(req);
 
     const bills = await this.monthlyBillRepo.find({
       where: { studentId: student.id },
       relations: { period: true, paymentRequest: { logs: true } },
       order: { month: 'DESC' },
     });
+
+    const billIds = bills.map((b) => b.id);
+    const attendances = billIds.length
+      ? await this.attendanceRepo.find({
+          where: { billId: In(billIds) },
+          relations: {
+            classSession: { classEntity: { courseLevel: true } },
+          },
+          order: { classSession: { date: 'ASC', startTime: 'ASC' } },
+        })
+      : [];
+
+    const levelIds = Array.from(
+      new Set(
+        attendances
+          .map((a) => a.classSession?.classEntity?.courseLevelId)
+          .filter(Boolean),
+      ),
+    );
+    let pricings: CourseLevelPricingOrmEntity[] = [];
+    if (levelIds.length > 0) {
+      pricings = await this.monthlyBillRepo.manager
+        .getRepository(CourseLevelPricingOrmEntity)
+        .find({
+          where: { courseLevelId: In(levelIds) },
+        });
+    }
 
     const results = await Promise.all(
       bills.map(async (bill) => {
@@ -263,7 +399,43 @@ export class StudentController {
         if (bill.paymentRequest?.qrUrl) {
           bill.paymentRequest.qrUrl = bill.paymentRequest.qrUrl.replace('/970418-', '/BIDV-');
         }
-        return { ...bill, items };
+
+        const billAttendances = attendances.filter((att) => att.billId === bill.id);
+        const sessions = billAttendances.map((att) => {
+          const levelId = att.classSession?.classEntity?.courseLevelId;
+          const sessionDate = att.classSession?.date;
+          const matchedPricing = BillingCalculator.getActivePricing(
+            pricings.map((p) => ({
+              courseLevelId: p.courseLevelId,
+              pricePerSession: Number(p.pricePerSession),
+              teacherWagePerSession: Number(p.teacherWagePerSession),
+              taWagePerSession: Number(p.taWagePerSession),
+              effectiveFrom: p.effectiveFrom,
+              effectiveTo: p.effectiveTo,
+              createdAt: p.createdAt,
+              id: p.id,
+            })),
+            sessionDate,
+            'pricePerSession',
+            levelId,
+          );
+          const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+          const amount = att.isPresent ? rate : 0;
+          return {
+            id: att.id,
+            date: sessionDate,
+            startTime: att.classSession?.startTime,
+            endTime: att.classSession?.endTime,
+            classId: att.classSession?.classId,
+            className: att.classSession?.classEntity?.className || '',
+            isPresent: att.isPresent,
+            reason: att.reason,
+            rate,
+            amount,
+          };
+        });
+
+        return { ...bill, items, sessions };
       }),
     );
 
@@ -681,10 +853,12 @@ export class StudentController {
         return session.date >= joinedDate;
       }
       if (enrollment.status === 'Dropped') {
+        if ((session as any).attendance) return true;
+
         const droppedDate = enrollment.updatedAt
           ? new Date(enrollment.updatedAt).toISOString().split('T')[0]
           : enrollment.joinedDate;
-        return session.date >= joinedDate && session.date <= droppedDate;
+        return session.date >= joinedDate && session.date < droppedDate;
       }
       return false;
     });
@@ -717,7 +891,7 @@ export class StudentController {
   @ApiResponse({ status: 200, description: 'Xóa học sinh thành công' })
   @ApiResponse({
     status: 400,
-    description: 'Học sinh đã vào lớp hoặc đã điểm danh, không thể xóa',
+    description: 'Học sinh đã điểm danh, không thể xóa',
   })
   @ApiResponse({ status: 404, description: 'Không tìm thấy học sinh' })
   async remove(@Param('id') id: string) {
@@ -726,17 +900,7 @@ export class StudentController {
       throw new NotFoundException('Không tìm thấy học sinh');
     }
 
-    // 1. Kiểm tra xem học sinh đã bao giờ vào lớp nào chưa
-    const classCount = await this.classStudentRepo.count({
-      where: { studentId: id },
-    });
-    if (classCount > 0) {
-      throw new BadRequestException(
-        'Học sinh đã được xếp vào lớp học, không thể xóa.',
-      );
-    }
-
-    // 2. Kiểm tra xem học sinh đã từng điểm danh buổi nào chưa
+    // 1. Kiểm tra xem học sinh đã từng điểm danh buổi nào chưa
     const attendanceCount = await this.attendanceRepo.count({
       where: { studentId: id },
     });
@@ -746,12 +910,20 @@ export class StudentController {
       );
     }
 
+    // 2. Xóa các liên kết lớp học của học sinh này (cho dù là Active hay Dropped) để tránh lỗi khoá ngoại
+    await this.classStudentRepo.delete({ studentId: id });
+
     // 3. Thực hiện xóa học sinh
     await this.studentRepo.delete(id);
 
-    // 4. Nếu học sinh có tài khoản đăng nhập, thực hiện xóa tài khoản đăng nhập
+    // 4. Nếu học sinh có tài khoản đăng nhập, thực hiện xóa tài khoản đăng nhập nếu không còn ai dùng chung
     if (student.userId) {
-      await this.userRepo.delete(student.userId);
+      const otherStudentsCount = await this.studentRepo.count({
+        where: { userId: student.userId, id: Not(id) },
+      });
+      if (otherStudentsCount === 0) {
+        await this.userRepo.delete(student.userId);
+      }
     }
 
     return { success: true, message: 'Đã xóa học sinh thành công.' };

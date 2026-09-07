@@ -37,6 +37,8 @@ import { LeadOrmEntity } from './entities/lead.orm-entity';
 import { LeadDemandOrmEntity } from './entities/lead-demand.orm-entity';
 import { LeadInteractionOrmEntity } from './entities/lead-interaction.orm-entity';
 import { StudyMaterialOrmEntity } from './entities/study-material.orm-entity';
+import { TimekeepingDeviceOrmEntity } from './entities/timekeeping-device.orm-entity';
+import { TimekeepingLogOrmEntity } from './entities/timekeeping-log.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -78,4 +80,6 @@ export const TYPEORM_ENTITIES = [
   LeadDemandOrmEntity,
   LeadInteractionOrmEntity,
   StudyMaterialOrmEntity,
+  TimekeepingDeviceOrmEntity,
+  TimekeepingLogOrmEntity,
 ];

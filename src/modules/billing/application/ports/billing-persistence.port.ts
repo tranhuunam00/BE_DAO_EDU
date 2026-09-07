@@ -64,6 +64,8 @@ export interface BillingTransactionContext {
   saveAudit(input: BillingAuditInput): Promise<void>;
   resetPaymentRequest(billId: string): Promise<void>;
   deleteOrder(type: BillingOrderType, id: string): Promise<void>;
+  getPreviousMonthTuitionRevenue(month: string): Promise<number>;
+  findCommissionTeachers(teacherIds?: string[]): Promise<any[]>;
 }
 
 export interface StudentTuitionReportSession {
@@ -97,6 +99,8 @@ export abstract class BillingPersistencePort {
   ): Promise<BillingSource[]>;
   abstract listPeriods(): Promise<PeriodSummary[]>;
   abstract findPeriodDetails(id: string): Promise<PaymentPeriodDetails | null>;
+  abstract getPreviousMonthTuitionRevenue(month: string): Promise<number>;
+  abstract findCommissionTeachers(teacherIds?: string[]): Promise<any[]>;
   abstract getStudentTuitionReportData(
     studentId: string,
     startDate: string,

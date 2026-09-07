@@ -23,9 +23,12 @@ describe('AddTeacherUseCase', () => {
     } as any;
 
     userRepository = {
-      save: jest.fn(),
+      save: jest.fn().mockImplementation(async (user) => {
+        user.id = 'new-user-id';
+        return user as any;
+      }),
       findById: jest.fn(),
-      findByEmail: jest.fn(),
+      findByEmail: jest.fn().mockResolvedValue(null),
       findAll: jest.fn(),
       delete: jest.fn(),
     } as any;
@@ -41,57 +44,18 @@ describe('AddTeacherUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('should successfully add a teacher without login account', async () => {
+  it('should successfully add a teacher and always create a user account using email/mobile and password educare123', async () => {
     const dto: CreateTeacherDto = {
       firstName: 'John',
       lastName: 'Doe',
       email: 'john@example.com',
       mobile: '0987654321',
       gender: 'Nam',
-      birthdate: new Date('1990-01-01'),
+      birthdate: '1990-01-01',
       status: 'Active',
       type: 'Full-time'
-    };
-
-    teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
-
-    const result = await useCase.execute(dto);
-
-    expect(userRepository.findByEmail).not.toHaveBeenCalled();
-    expect(teacherRepository.save).toHaveBeenCalled();
-    expect(result.firstName).toBe('John');
-    expect(result.userId).toBeUndefined();
-    expect(result.teacherId).toBe('TCH-1001');
-  });
-
-  it('should throw ConflictException if loginEmail already exists', async () => {
-    const dto: CreateTeacherDto = {
-      firstName: 'Jane',
-      lastName: 'Doe',
-      loginEmail: 'jane@example.com',
-      loginPassword: 'password123',
     } as any;
 
-    userRepository.findByEmail.mockResolvedValue({ id: 'user-id-123' } as any);
-
-    await expect(useCase.execute(dto)).rejects.toThrow(ConflictException);
-    await expect(useCase.execute(dto)).rejects.toThrow('Email đăng nhập giáo viên đã tồn tại trên hệ thống');
-    expect(userRepository.save).not.toHaveBeenCalled();
-  });
-
-  it('should successfully add a teacher and create a user account', async () => {
-    const dto: CreateTeacherDto = {
-      firstName: 'Alice',
-      lastName: 'Smith',
-      loginEmail: 'alice@example.com',
-      loginPassword: 'password123',
-    } as any;
-
-    userRepository.findByEmail.mockResolvedValue(null);
-    userRepository.save.mockImplementation(async (user) => {
-      user.id = 'new-user-id';
-      return user as any;
-    });
     teacherRepository.save.mockImplementation(async (teacher) => teacher as any);
 
     (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
@@ -99,15 +63,32 @@ describe('AddTeacherUseCase', () => {
 
     const result = await useCase.execute(dto);
 
-    expect(userRepository.findByEmail).toHaveBeenCalledWith('alice@example.com');
-    expect(bcrypt.hash).toHaveBeenCalledWith('password123', 'salt');
+    expect(userRepository.findByEmail).toHaveBeenCalledWith('john@example.com');
+    expect(bcrypt.hash).toHaveBeenCalledWith('educare123', 'salt');
     expect(userRepository.save).toHaveBeenCalled();
     expect(teacherRepository.save).toHaveBeenCalled();
+    expect(result.firstName).toBe('John');
     expect(result.userId).toBe('new-user-id');
+    expect(result.teacherId).toBe('TCH-1001');
+  });
+
+  it('should throw ConflictException if user with teacher email already exists', async () => {
+    const dto: CreateTeacherDto = {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      mobile: '0987654321',
+    } as any;
+
+    userRepository.findByEmail.mockResolvedValue({ id: 'user-id-123' } as any);
+
+    await expect(useCase.execute(dto)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(dto)).rejects.toThrow('Tài khoản đăng nhập (Email/SĐT) giáo viên đã tồn tại trên hệ thống');
+    expect(userRepository.save).not.toHaveBeenCalled();
   });
 
   it('should generate sequential teacherIds correctly based on existing records', async () => {
-    const dto: CreateTeacherDto = { firstName: 'Bob', lastName: 'Marley' } as any;
+    const dto: CreateTeacherDto = { firstName: 'Bob', lastName: 'Marley', email: 'bob@example.com' } as any;
 
     // Mock that there are already 2 teachers
     teacherRepository.findAll.mockResolvedValue([{}, {}] as any);
@@ -123,6 +104,7 @@ describe('AddTeacherUseCase', () => {
     const dto: CreateTeacherDto = { 
       firstName: 'Charlie', 
       lastName: 'Puth',
+      email: 'charlie@example.com',
       avatar: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAE'
     } as any;
 

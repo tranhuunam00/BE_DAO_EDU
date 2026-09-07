@@ -124,9 +124,19 @@ export class StudyMaterialController {
     }
 
     if (req.user.role === Role.STUDENT) {
-      const student = await this.studentRepo.findOne({
-        where: { userId: req.user.sub },
-      });
+      const userId = req.user.sub;
+      const headerStudentId = req?.headers?.['x-student-id'];
+      let student = null;
+      if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+        student = await this.studentRepo.findOne({
+          where: { id: headerStudentId, userId },
+        });
+      }
+      if (!student && userId) {
+        student = await this.studentRepo.findOne({
+          where: { userId },
+        });
+      }
       if (!student) return [];
 
       const classStudents = await this.classStudentRepo.find({
@@ -154,7 +164,7 @@ export class StudyMaterialController {
     if (!body.title) throw new BadRequestException('title là bắt buộc');
     if (!file) throw new BadRequestException('Chưa tải file lên');
 
-    await this.assertCanAccessClass(req.user, body.classId);
+    await this.assertCanAccessClass(req, body.classId);
 
     const objectKey = await this.minioService.uploadFile(
       file,
@@ -181,7 +191,7 @@ export class StudyMaterialController {
     @Request() req: any,
     @Param('classId') classId: string,
   ) {
-    await this.assertCanAccessClass(req.user, classId);
+    await this.assertCanAccessClass(req, classId);
 
     const materials = await this.materialRepo.find({
       where: { classId },
@@ -219,7 +229,8 @@ export class StudyMaterialController {
     return { success: true };
   }
 
-  private async assertCanAccessClass(user: any, classId: string) {
+  private async assertCanAccessClass(req: any, classId: string) {
+    const user = req.user;
     if (user.role === Role.ADMIN) return;
     if (user.role === Role.TEACHER) {
       const teacher = await this.teacherRepo.findOne({
@@ -241,9 +252,19 @@ export class StudyMaterialController {
     }
 
     if (user.role === Role.STUDENT) {
-      const student = await this.studentRepo.findOne({
-        where: { userId: user.sub },
-      });
+      const userId = user.sub;
+      const headerStudentId = req?.headers?.['x-student-id'];
+      let student = null;
+      if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+        student = await this.studentRepo.findOne({
+          where: { id: headerStudentId, userId },
+        });
+      }
+      if (!student && userId) {
+        student = await this.studentRepo.findOne({
+          where: { userId },
+        });
+      }
       if (!student) throw new ForbiddenException('Không tìm thấy thông tin học sinh');
 
       const isEnrolled = await this.classStudentRepo.findOne({

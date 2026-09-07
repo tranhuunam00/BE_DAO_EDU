@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { UserOrmEntity } from './user.orm-entity';
 
 @Entity('students')
@@ -81,10 +81,13 @@ export class StudentOrmEntity {
   @Column({ type: 'text', nullable: true })
   avatar!: string | null;
 
+  @Column({ type: 'boolean', name: 'is_synced_to_device', default: false })
+  isSyncedToDevice!: boolean;
+
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId!: string | null;
 
-  @OneToOne(() => UserOrmEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => UserOrmEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'user_id' })
   user!: UserOrmEntity | null;
 

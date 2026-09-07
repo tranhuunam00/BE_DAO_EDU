@@ -121,12 +121,14 @@ describe('TypeOrmReportsQueryAdapter getAttendanceByClass', () => {
       rate: 150000,
       evaluationScore: null,
       evaluationComment: undefined,
+      paymentStatus: 'Paid',
     });
     expect(studentReport.attendance['sess-july']).toEqual({
       isPresent: true,
       rate: 180000,
       evaluationScore: null,
       evaluationComment: undefined,
+      paymentStatus: 'Unpaid',
     });
   });
 });

@@ -12,6 +12,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   LeaveRequestFilterDto,
@@ -48,18 +51,35 @@ export class LeaveRequestController {
     private readonly listManagedLeaveRequests: ListManagedLeaveRequestsUseCase,
     private readonly reviewLeaveRequest: ReviewLeaveRequestUseCase,
     private readonly cancelLeaveRequest: CancelLeaveRequestUseCase,
+    @InjectRepository(StudentOrmEntity)
+    private readonly studentRepo: Repository<StudentOrmEntity>,
   ) {}
+
+  private async getActiveStudentId(req: any): Promise<string | undefined> {
+    const userId = req?.user?.sub;
+    const headerStudentId = req?.headers?.['x-student-id'];
+    if (headerStudentId && typeof headerStudentId === 'string' && userId) {
+      const student = await this.studentRepo.findOne({
+        where: { id: headerStudentId, userId },
+        select: { id: true },
+      });
+      if (student) return student.id;
+    }
+    return undefined;
+  }
 
   @Post()
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Học sinh gửi đơn xin nghỉ học' })
-  submit(
-    @Request() req: AuthenticatedRequest,
+  async submit(
+    @Request() req: any,
     @Body() dto: SubmitLeaveRequestDto,
   ) {
+    const studentId = await this.getActiveStudentId(req);
     return this.run(() =>
       this.submitLeaveRequest.execute({
         studentUserId: req.user.sub,
+        studentId,
         classSessionId: dto.classSessionId,
         reason: dto.reason,
       }),
@@ -69,13 +89,15 @@ export class LeaveRequestController {
   @Get('mine')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Học sinh xem các đơn xin nghỉ của mình' })
-  listMine(
-    @Request() req: AuthenticatedRequest,
+  async listMine(
+    @Request() req: any,
     @Query() filter: LeaveRequestFilterDto,
   ) {
+    const studentId = await this.getActiveStudentId(req);
     return this.run(() =>
       this.listMyLeaveRequests.execute({
         studentUserId: req.user.sub,
+        studentId,
         status: filter.status,
       }),
     );
@@ -119,11 +141,13 @@ export class LeaveRequestController {
   @Patch(':id/cancel')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: 'Học sinh hủy đơn xin nghỉ đang chờ duyệt' })
-  cancel(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+  async cancel(@Request() req: any, @Param('id') id: string) {
+    const studentId = await this.getActiveStudentId(req);
     return this.run(() =>
       this.cancelLeaveRequest.execute({
         requestId: id,
         studentUserId: req.user.sub,
+        studentId,
       }),
     );
   }

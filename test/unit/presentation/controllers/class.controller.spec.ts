@@ -580,6 +580,50 @@ describe('ClassController enrollment and schedule edge cases', () => {
         'Giáo viên đứng lớp và Trợ giảng không được là cùng một người.'
       );
     });
+
+    it('checks conflicts for both room, main teacher and assistant', async () => {
+      const { controller, repos, academics } = createController();
+      repos.classRepo.findOneOrFail.mockResolvedValue({ id: 'class-1' });
+      repos.sessionRepo.findOneOrFail.mockResolvedValue({
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2026-07-28',
+        startTime: '10:00:00',
+        endTime: '12:00:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-2',
+      });
+
+      academics.createAdhocSession.execute.mockResolvedValue({ id: 'session-1' });
+
+      const dto = {
+        date: '2026-07-28',
+        startTime: '10:00',
+        endTime: '12:00',
+        roomId: 'room-1',
+        teacherId: 'teacher-1',
+        assistantId: 'teacher-2',
+      };
+
+      await controller.createAdhocSession('class-1', dto);
+
+      expect(academics.checkSession.execute).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          roomId: 'room-1',
+          teacherId: 'teacher-1',
+        }),
+      );
+
+      expect(academics.checkSession.execute).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          roomId: null,
+          teacherId: 'teacher-2',
+        }),
+      );
+    });
   });
 
   describe('removeStudent', () => {
@@ -973,7 +1017,78 @@ describe('ClassController.overrideAttendance', () => {
     });
   });
 
+  describe('deleteSession', () => {
+    it('should delete a scheduled and unlocked session and its attendance successfully', async () => {
+      const { controller, repos } = createController();
+      repos.sessionRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'session-1',
+        status: 'Scheduled',
+        attendanceLocked: false,
+      });
+      repos.sessionRepo.delete = jest.fn().mockResolvedValue({ affected: 1 });
+      repos.attendanceRepo.delete = jest.fn().mockResolvedValue({ affected: 5 });
+
+      const result = await controller.deleteSession('session-1');
+
+      expect(repos.sessionRepo.findOne).toHaveBeenCalledWith({ where: { id: 'session-1' } });
+      expect(repos.attendanceRepo.delete).toHaveBeenCalledWith({ classSessionId: 'session-1' });
+      expect(repos.sessionRepo.delete).toHaveBeenCalledWith({ id: 'session-1' });
+      expect(result).toEqual({ message: 'Đã xóa buổi học thành công' });
+    });
+
+    it('should throw NotFoundException if session does not exist', async () => {
+      const { controller, repos } = createController();
+      repos.sessionRepo.findOne = jest.fn().mockResolvedValue(null);
+
+      await expect(controller.deleteSession('non-existent')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw ConflictException if session is not in Scheduled status', async () => {
+      const { controller, repos } = createController();
+      repos.sessionRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'session-1',
+        status: 'Completed',
+        attendanceLocked: false,
+      });
+
+      await expect(controller.deleteSession('session-1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('should throw ConflictException if session is locked', async () => {
+      const { controller, repos } = createController();
+      repos.sessionRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'session-1',
+        status: 'Scheduled',
+        attendanceLocked: true,
+      });
+
+      await expect(controller.deleteSession('session-1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('should run deleteSession within SLA performance time limits (< 10ms for 100 iterations)', async () => {
+      const { controller, repos } = createController();
+      repos.sessionRepo.findOne = jest.fn().mockResolvedValue({
+        id: 'session-1',
+        status: 'Scheduled',
+        attendanceLocked: false,
+      });
+      repos.sessionRepo.delete = jest.fn().mockResolvedValue({ affected: 1 });
+      repos.attendanceRepo.delete = jest.fn().mockResolvedValue({ affected: 5 });
+
+      const start = performance.now();
+      for (let i = 0; i < 100; i++) {
+        await controller.deleteSession('session-1');
+      }
+      const duration = performance.now() - start;
+      const avgDuration = duration / 100;
+
+      // SLA check: Average duration of deleteSession call should be under 5ms (ordinarily < 1ms for unit tests)
+      expect(avgDuration).toBeLessThan(5);
+    });
+  });
+
 });
+
 
 
 

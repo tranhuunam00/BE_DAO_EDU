@@ -40,19 +40,19 @@ describe('GetDashboardRevenueUseCase', () => {
 
     expect(result.revenue).toHaveLength(6);
     
-    // 2026-02 (index 0)
-    expect(result.revenue[0].month).toBe('2026-02');
-    expect(result.revenue[0].expected).toBe(25000); // 20000 + 5000
-    expect(result.revenue[0].actual).toBe(25000);   // Both are paid
+    // 2026-02 (index 4)
+    expect(result.revenue[4].month).toBe('2026-02');
+    expect(result.revenue[4].expected).toBe(25000); // 20000 + 5000
+    expect(result.revenue[4].actual).toBe(25000);   // Both are paid
     
-    // 2026-03 (index 1)
-    expect(result.revenue[1].month).toBe('2026-03');
-    expect(result.revenue[1].expected).toBe(15000); // 10000 + 5000
-    expect(result.revenue[1].actual).toBe(10000);   // Only 10000 is paid
+    // 2026-03 (index 5)
+    expect(result.revenue[5].month).toBe('2026-03');
+    expect(result.revenue[5].expected).toBe(15000); // 10000 + 5000
+    expect(result.revenue[5].actual).toBe(10000);   // Only 10000 is paid
     
     // Other months should be 0
-    expect(result.revenue[2].month).toBe('2026-04');
-    expect(result.revenue[2].expected).toBe(0);
+    expect(result.revenue[3].month).toBe('2026-01');
+    expect(result.revenue[3].expected).toBe(0);
   });
 
   it('should skip bills without month or parse string amounts correctly', async () => {

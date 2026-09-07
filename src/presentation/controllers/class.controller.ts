@@ -31,7 +31,7 @@ import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typ
 import { CourseOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course.orm-entity';
 import { StudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
-import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto } from '../../application/dtos/class.dto';
+import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionDto, GenerateSessionsDto } from '../../application/dtos/class.dto';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
@@ -46,6 +46,8 @@ import {
   RemoveStudentFromClassUseCase,
 } from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
 import { CreateAdhocSessionUseCase } from '../../modules/academics/application/use-cases/create-adhoc-session.use-case';
+import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
+import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../modules/timekeeping/domain/services/timekeeping-matcher';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -719,7 +721,22 @@ export class ClassController {
     }
 
     qb.orderBy('s.date', 'ASC').addOrderBy('s.start_time', 'ASC');
-    return qb.getMany();
+    const sessions = await qb.getMany();
+    if (sessions.length === 0) return [];
+
+    const sessionIds = sessions.map((s) => s.id);
+    const attendanceRecords = await this.attendanceRepo
+      .createQueryBuilder('att')
+      .select('att.classSessionId', 'classSessionId')
+      .where('att.classSessionId IN (:...sessionIds) AND att.billId IS NOT NULL', { sessionIds })
+      .getRawMany();
+
+    const billedSessionIds = new Set(attendanceRecords.map((r) => r.classSessionId));
+
+    return sessions.map((s) => ({
+      ...s,
+      isBilled: billedSessionIds.has(s.id),
+    }));
   }
 
   @Post(':id/sessions')
@@ -731,10 +748,10 @@ export class ClassController {
   ) {
     await this.classRepo.findOneOrFail({ where: { id: classId } });
 
-    const checkTeacher = body.teacherId || null;
-    const checkAssistant = body.assistantId || null;
+    const checkTeacher = body.teacherId;
+    const checkAssistant = body.assistantId;
 
-    if (checkTeacher && checkAssistant && checkTeacher === checkAssistant) {
+    if (checkAssistant && checkTeacher === checkAssistant) {
       throw new ConflictException('Giáo viên đứng lớp và Trợ giảng không được là cùng một người.');
     }
 
@@ -746,17 +763,15 @@ export class ClassController {
       },
     ]);
 
-    if (checkTeacher) {
-      await this.runAcademic(() =>
-        this.checkSessionScheduleConflict.execute({
-          date: body.date,
-          startTime: body.startTime,
-          endTime: body.endTime,
-          roomId: body.roomId || null,
-          teacherId: checkTeacher,
-        })
-      );
-    }
+    await this.runAcademic(() =>
+      this.checkSessionScheduleConflict.execute({
+        date: body.date,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        roomId: body.roomId,
+        teacherId: checkTeacher,
+      })
+    );
 
     if (checkAssistant) {
       await this.runAcademic(() =>
@@ -775,9 +790,9 @@ export class ClassController {
       body.date,
       body.startTime,
       body.endTime,
-      body.roomId || null,
-      body.teacherId || null,
-      body.assistantId || null,
+      body.roomId,
+      body.teacherId,
+      body.assistantId ?? null,
     );
 
     return this.sessionRepo.findOneOrFail({
@@ -791,8 +806,9 @@ export class ClassController {
   async generateSessionsEndpoint(
     @Param('id') classId: string,
     @Query('fromStartDate') fromStartDateQuery?: string,
+    @Body() dto?: GenerateSessionsDto,
+    @Query('fromDate') queryFromDate?: string,
   ) {
-    const fromStartDate = fromStartDateQuery === 'true';
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     if (classEntity.status !== 'Active') {
       throw new ConflictException(
@@ -809,7 +825,22 @@ export class ClassController {
       throw new ConflictException('Lớp học chưa cấu hình ngày khai giảng.');
     }
 
-    await this.regenerateFutureSessions(classId, fromStartDate);
+    let targetFromDate: string | boolean = false;
+    if (dto?.fromDate) {
+      targetFromDate = dto.fromDate;
+    } else if (queryFromDate) {
+      targetFromDate = queryFromDate;
+    } else if (dto?.fromStartDate === true || dto?.fromStartDate === 'true' || fromStartDateQuery === 'true') {
+      targetFromDate = true;
+    }
+
+    if (typeof targetFromDate === 'string') {
+      if (classEntity.finishDate && targetFromDate > classEntity.finishDate) {
+        throw new ConflictException('Ngày bắt đầu sinh lịch không được sau ngày kết thúc lớp học.');
+      }
+    }
+
+    await this.regenerateFutureSessions(classId, targetFromDate);
     return { message: 'Đã sinh buổi học thành công' };
   }
 
@@ -822,6 +853,31 @@ export class ClassController {
       order: { id: 'ASC' }
     });
     return attendance;
+  }
+
+  @Delete('sessions/:sessionId')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Xóa một buổi học chưa diễn ra' })
+  async deleteSession(@Param('sessionId') sessionId: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+    });
+    if (!session) {
+      throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+    }
+    if (session.status !== SessionStatus.SCHEDULED || session.attendanceLocked) {
+      throw new ConflictException(
+        'Chỉ có thể xóa các buổi học ở trạng thái chưa diễn ra và chưa khóa điểm danh.',
+      );
+    }
+
+    // Delete attendance records manually to prevent FK constraint violations
+    await this.attendanceRepo.delete({ classSessionId: sessionId });
+
+    // Delete the session
+    await this.sessionRepo.delete({ id: sessionId });
+
+    return { message: 'Đã xóa buổi học thành công' };
   }
 
   @Post('sessions/:sessionId/start-attendance')
@@ -853,6 +909,13 @@ export class ClassController {
 
     session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
+
+    try {
+      await this.reconcileSessionAttendanceOnStart(session);
+    } catch (err: any) {
+      console.error(`Lỗi đối soát tự động khi bắt đầu điểm danh: ${err.message || err}`);
+    }
+
     return session;
   }
 
@@ -931,6 +994,7 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+      record.attendanceType = 'manual';
 
       if (item.evaluationScore !== undefined) {
         if (item.evaluationScore !== null && item.evaluationScore !== '') {
@@ -990,6 +1054,7 @@ export class ClassController {
       record.isPresent = item.isPresent;
       record.reason = item.reason || null;
       record.note = item.note || null;
+      record.attendanceType = 'manual';
 
       if (item.evaluationScore !== undefined) {
         if (item.evaluationScore !== null && item.evaluationScore !== '') {
@@ -1305,7 +1370,7 @@ export class ClassController {
 
   // ── Session generation ───────────────────────────────────────────────────────
 
-  private async generateSessions(classId: string, fromStartDate = false) {
+  private async generateSessions(classId: string, fromDateOrStart: string | boolean = false) {
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
     const schedules = await this.scheduleRepo.find({ where: { classId } });
 
@@ -1319,7 +1384,15 @@ export class ClassController {
     }
 
     const todayStr = this.formatUtcDate(new Date());
-    const startFromStr = fromStartDate ? classEntity.startDate : (classEntity.startDate > todayStr ? classEntity.startDate : todayStr);
+    let startFromStr: string;
+    if (typeof fromDateOrStart === 'string' && fromDateOrStart) {
+      startFromStr = fromDateOrStart;
+    } else if (fromDateOrStart === true) {
+      startFromStr = classEntity.startDate;
+    } else {
+      startFromStr = classEntity.startDate > todayStr ? classEntity.startDate : todayStr;
+    }
+
     const endDateStr = classEntity.finishDate
       ? classEntity.finishDate
       : this.formatUtcDate(
@@ -1431,10 +1504,18 @@ export class ClassController {
     });
   }
 
-  private async regenerateFutureSessions(classId: string, fromStartDate = false) {
+  private async regenerateFutureSessions(classId: string, fromDateOrStart: string | boolean = false) {
     const today = this.formatUtcDate(new Date());
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    const deleteFrom = (fromStartDate && classEntity.startDate) ? classEntity.startDate : today;
+    
+    let deleteFrom: string;
+    if (typeof fromDateOrStart === 'string' && fromDateOrStart) {
+      deleteFrom = fromDateOrStart;
+    } else if (fromDateOrStart === true && classEntity?.startDate) {
+      deleteFrom = classEntity.startDate;
+    } else {
+      deleteFrom = (classEntity?.startDate && classEntity.startDate > today) ? classEntity.startDate : today;
+    }
 
     // Find the sessions to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
     const sessionsToDelete = await this.sessionRepo.find({
@@ -1467,7 +1548,7 @@ export class ClassController {
       .execute();
 
     // Regenerate
-    await this.generateSessions(classId, fromStartDate);
+    await this.generateSessions(classId, fromDateOrStart);
 
     const logRepo = this.notificationRepo?.manager?.getRepository
       ? this.notificationRepo.manager.getRepository(NotificationLogOrmEntity)
@@ -1482,7 +1563,7 @@ export class ClassController {
         title: `Tự động tái tạo danh sách buổi học tương lai cho lớp ${classEntity.classCode}`,
         metadata: {
           classId,
-          fromStartDate,
+          fromDateOrStart,
           deletedSessionsCount: deleteResult.affected || 0,
           source: 'auto_regenerate_future_sessions',
         },
@@ -1555,6 +1636,91 @@ export class ClassController {
       throw new ForbiddenException(
         'Bạn không phải giáo viên được phân công giảng dạy cho buổi học này.',
       );
+    }
+  }
+
+  private async reconcileSessionAttendanceOnStart(session: ClassSessionOrmEntity) {
+    const enrollments = await this.classStudentRepo.find({
+      where: { classId: session.classId, status: 'Active' },
+      relations: { student: true }
+    });
+    if (enrollments.length === 0) return;
+
+    const students = enrollments.map(e => e.student).filter(Boolean);
+    const studentIds = students.map(s => s.id);
+    if (studentIds.length === 0) return;
+
+    const dateStr = session.date;
+    const dateString = typeof dateStr === 'string' ? dateStr : new Date(dateStr).toISOString().substring(0, 10);
+
+    const startOfDay = new Date(`${dateString}T00:00:00+07:00`);
+    const endOfDay = new Date(`${dateString}T23:59:59+07:00`);
+
+    const dbLogs = await this.dataSource.getRepository(TimekeepingLogOrmEntity).find({
+      where: {
+        studentId: In(studentIds),
+        eventTime: Between(startOfDay, endOfDay)
+      }
+    });
+
+    if (dbLogs.length === 0) return;
+
+    const logsByStudent = new Map<string, TimekeepingLogOrmEntity[]>();
+    for (const log of dbLogs) {
+      if (log.studentId) {
+        if (!logsByStudent.has(log.studentId)) {
+          logsByStudent.set(log.studentId, []);
+        }
+        logsByStudent.get(log.studentId)!.push(log);
+      }
+    }
+
+    const domainSession: DomainClassSession = {
+      id: session.id,
+      className: session.classEntity?.className || '',
+      startTime: session.startTime ? session.startTime.substring(0, 5) : '',
+      endTime: session.endTime ? session.endTime.substring(0, 5) : '',
+      date: dateString,
+    };
+
+    for (const student of students) {
+      const studentLogs = logsByStudent.get(student.id) || [];
+      if (studentLogs.length === 0) continue;
+
+      const domainLogs: TimekeepingLog[] = studentLogs.map(log => ({
+        studentId: log.studentId,
+        employeeNo: log.employeeNo,
+        eventTime: log.eventTime,
+        verifyMethod: log.verifyMethod,
+      }));
+
+      const matchResults = TimekeepingMatcher.match(student.id, [domainSession], domainLogs);
+
+      for (const res of matchResults) {
+        let attendance = await this.attendanceRepo.findOne({
+          where: { studentId: student.id, classSessionId: res.classSessionId }
+        });
+
+        if (attendance && attendance.attendanceType === 'manual') {
+          continue;
+        }
+
+        if (!attendance) {
+          attendance = this.attendanceRepo.create({
+            studentId: student.id,
+            classSessionId: res.classSessionId,
+          });
+        }
+
+        attendance.isPresent = res.isPresent;
+        attendance.attendanceType = res.attendanceType;
+        attendance.verifyMethod = res.verifyMethod;
+        attendance.isLate = res.isLate;
+        attendance.lateMinutes = res.lateMinutes;
+        attendance.note = res.note;
+
+        await this.attendanceRepo.save(attendance);
+      }
     }
   }
 }

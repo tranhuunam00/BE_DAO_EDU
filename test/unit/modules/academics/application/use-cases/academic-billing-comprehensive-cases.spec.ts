@@ -79,14 +79,14 @@ describe('Comprehensive Academic & Billing System Test Suite', () => {
       expect(s1.isBilled).toBe(true);
       expect(s1.amount).toBe(150000);
 
-      expect(s2.isBilled).toBe(true);
-      expect(s2.amount).toBe(150000);
+      expect(s2.isBilled).toBe(false);
+      expect(s2.amount).toBe(0);
 
       expect(s3.isBilled).toBe(false);
       expect(s3.amount).toBe(0);
 
-      // Total tuition: 150k + 150k + 0 = 300k
-      expect(summary.totalTuitionAmount).toBe(300000);
+      // Total tuition: 150k + 0 + 0 = 150k
+      expect(summary.totalTuitionAmount).toBe(150000);
     });
 
     it('1.2 Áp dụng đúng đơn giá Level khi có thay đổi tiền trong level theo khoảng thời gian effectiveFrom / effectiveTo', async () => {

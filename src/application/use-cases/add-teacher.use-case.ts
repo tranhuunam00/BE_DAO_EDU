@@ -18,33 +18,53 @@ export class AddTeacherUseCase {
   ) {}
 
   async execute(dto: CreateTeacherDto): Promise<Teacher> {
+    // Tự động tạo tài khoản đăng nhập cho giáo viên (ưu tiên email, fallback sang mobile)
     let createdUserId: string | undefined = undefined;
-    if (dto.loginEmail) {
-      const existingUser = await this.userRepository.findByEmail(dto.loginEmail);
-      if (existingUser) {
-        throw new ConflictException('Email đăng nhập giáo viên đã tồn tại trên hệ thống');
-      }
+    const emailRaw = (dto.email || '').trim().toLowerCase();
+    const mobileRaw = (dto.mobile || '').trim().toLowerCase();
+    const username = emailRaw || mobileRaw;
 
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.loginPassword || 'teacher123', salt);
-      
-      const newUserId = randomUUID();
-      const user = new User(
-        newUserId,
-        dto.loginEmail.toLowerCase(),
-        passwordHash,
-        `${dto.lastName} ${dto.firstName}`.trim(),
-        Role.TEACHER,
-        true
-      );
-      
-      const savedUser = await this.userRepository.save(user);
-      createdUserId = savedUser.id;
+    if (!username) {
+      throw new ConflictException('Giáo viên phải có email hoặc số điện thoại để tự động tạo tài khoản');
     }
 
+    const existingUser = await this.userRepository.findByEmail(username);
+    if (existingUser) {
+      throw new ConflictException('Tài khoản đăng nhập (Email/SĐT) giáo viên đã tồn tại trên hệ thống');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash('educare123', salt);
+    
+    const newUserId = randomUUID();
+    const user = new User(
+      newUserId,
+      username,
+      passwordHash,
+      `${dto.lastName} ${dto.firstName}`.trim(),
+      Role.TEACHER,
+      true
+    );
+    
+    const savedUser = await this.userRepository.save(user);
+    createdUserId = savedUser.id;
+    console.log(
+      `[Auto-Account] Đã tự động sinh tài khoản giáo viên/TA: username=${username}, password=educare123`,
+    );
+
     const teachers = await this.teacherRepository.findAll();
-    const count = teachers.length;
-    const teacherId = `TCH-${1001 + count}`;
+    let maxIdNum = 1000;
+    for (const t of teachers) {
+      if (t.teacherId && t.teacherId.startsWith('TCH-')) {
+        const num = parseInt(t.teacherId.replace('TCH-', ''), 10);
+        if (!isNaN(num) && num > maxIdNum) {
+          maxIdNum = num;
+        }
+      }
+    }
+    const teacherId = maxIdNum > 1000
+      ? `TCH-${maxIdNum + 1}`
+      : `TCH-${1001 + teachers.length}`;
 
     let avatarUrl: string | undefined = undefined;
     if (dto.avatar && dto.avatar.startsWith('data:image')) {
@@ -69,7 +89,10 @@ export class AddTeacherUseCase {
       dto.status,
       createdUserId,
       avatarUrl,
-      dto.loginEmail
+      dto.loginEmail,
+      undefined,
+      undefined,
+      dto.hasCommissionSalary ?? false
     );
 
     return this.teacherRepository.save(teacher);

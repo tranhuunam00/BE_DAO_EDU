@@ -31,15 +31,20 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueSummary(filters: ReportFilters): Promise<RevenueSummary> {
     const { where, params } = this.billWhereClause(filters);
+    const subWhere = where.replace(/b\./g, 'sub_b.');
     const rows = await this.ds.query(
       `SELECT
          COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
          COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
        FROM student_monthly_bills b
-       JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
-       ${where}`,
+       WHERE b.id IN (
+         SELECT sub_b.id
+         FROM student_monthly_bills sub_b
+         JOIN students s ON s.id = sub_b.student_id
+         LEFT JOIN class_students cs ON cs.student_id = s.id
+         LEFT JOIN classes cl ON cl.id = cs.class_id
+         ${subWhere}
+       )`,
       params,
     );
     const expected = Number(rows[0]?.expected ?? 0);
@@ -54,16 +59,21 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueByMonth(filters: ReportFilters): Promise<RevenueByMonth[]> {
     const { where, params } = this.billWhereClause(filters, true);
+    const subWhere = where.replace(/b\./g, 'sub_b.');
     const rows = await this.ds.query(
       `SELECT
          b.month,
          COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
          COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
        FROM student_monthly_bills b
-       JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
-       ${where}
+       WHERE b.id IN (
+         SELECT sub_b.id
+         FROM student_monthly_bills sub_b
+         JOIN students s ON s.id = sub_b.student_id
+         LEFT JOIN class_students cs ON cs.student_id = s.id
+         LEFT JOIN classes cl ON cl.id = cs.class_id
+         ${subWhere}
+       )
        GROUP BY b.month
        ORDER BY b.month DESC
        LIMIT 12`,
@@ -78,18 +88,19 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
   async getRevenueByCenter(filters: ReportFilters): Promise<RevenueByCenterRow[]> {
     const { where, params } = this.billWhereClause(filters);
+    const cleanWhere = where.replace(/cs\./g, 'bi.');
     const rows = await this.ds.query(
       `SELECT
          ct.id AS "centerId",
          ct.name AS "centerName",
-         COALESCE(SUM(b.total_amount), 0)::numeric AS expected,
-         COALESCE(SUM(b.paid_amount), 0)::numeric  AS paid
-       FROM student_monthly_bills b
+         COALESCE(SUM(bi.total_amount), 0)::numeric AS expected,
+         COALESCE(SUM(bi.total_amount * (CASE WHEN b.total_amount > 0 THEN b.paid_amount / b.total_amount ELSE 0 END)), 0)::numeric AS paid
+       FROM student_monthly_bill_items bi
+       JOIN student_monthly_bills b ON b.id = bi.bill_id
        JOIN students s ON s.id = b.student_id
-       LEFT JOIN class_students cs ON cs.student_id = s.id
-       LEFT JOIN classes cl ON cl.id = cs.class_id
+       LEFT JOIN classes cl ON cl.id = bi.class_id
        LEFT JOIN centers ct ON ct.id = cl.center_id
-       ${where}
+       ${cleanWhere}
        GROUP BY ct.id, ct.name
        ORDER BY expected DESC`,
       params,
@@ -264,7 +275,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       `SELECT
          cs.id AS "sessionId",
          cs.class_id AS "classId",
-         cs.date AS "date"
+         TO_CHAR(cs.date::date, 'YYYY-MM-DD') AS "date"
        FROM class_sessions cs
        LEFT JOIN classes cl ON cl.id = cs.class_id
        ${where}
@@ -284,11 +295,13 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          sa.evaluation_score AS "evaluationScore",
          sa.evaluation_comment AS "evaluationComment",
          cs.class_id AS "classId",
-         TO_CHAR(cs.date::date, 'YYYY-MM') AS "month"
+         TO_CHAR(cs.date::date, 'YYYY-MM') AS "month",
+         b_direct.status AS "directBillStatus"
        FROM student_attendance sa
        JOIN class_sessions cs ON cs.id = sa.class_session_id
        JOIN students s ON s.id = sa.student_id
        LEFT JOIN classes cl ON cl.id = cs.class_id
+       LEFT JOIN student_monthly_bills b_direct ON b_direct.id = sa.bill_id
        ${where}
        ORDER BY s.last_name ASC`,
       params,
@@ -327,21 +340,46 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       billParams,
     );
 
-    // Fetch default pricing for fallback
+    // Fetch pricing rules for each class
     const defaultPricing = await this.ds.query(
       `SELECT
          cl.id AS "classId",
+         p.effective_from AS "effectiveFrom",
+         p.effective_to AS "effectiveTo",
          COALESCE(p.price_per_session, 0)::numeric AS "rate"
        FROM classes cl
-       LEFT JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id`
+       JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id
+       WHERE p.price_per_session > 0
+       ORDER BY p.effective_from DESC`
     );
-    const pricingMap = new Map<string, number>();
+    const pricingRulesByClass = new Map<string, Array<{ effectiveFrom: string; effectiveTo: string | null; rate: number }>>();
     for (const p of defaultPricing) {
-      pricingMap.set(p.classId, Number(p.rate));
+      if (!pricingRulesByClass.has(p.classId)) {
+        pricingRulesByClass.set(p.classId, []);
+      }
+      pricingRulesByClass.get(p.classId)!.push({
+        effectiveFrom: p.effectiveFrom,
+        effectiveTo: p.effectiveTo,
+        rate: Number(p.rate),
+      });
     }
 
-    // Map sessions to class
+    const getEffectiveRate = (classId: string, date?: string): number => {
+      const rules = pricingRulesByClass.get(classId) || [];
+      if (!date) return rules[0]?.rate || 0;
+      const targetDate = String(date).slice(0, 10);
+      const matched = rules.find((r) => {
+        const from = String(r.effectiveFrom).slice(0, 10);
+        const to = r.effectiveTo ? String(r.effectiveTo).slice(0, 10) : null;
+        return from <= targetDate && (!to || to >= targetDate);
+      });
+      if (matched) return matched.rate;
+      return rules[0]?.rate || 0;
+    };
+
+    // Map sessions to class & map session dates
     const sessionsByClass = new Map<string, any[]>();
+    const sessionDateMap = new Map<string, string>();
     for (const sess of sessions) {
       if (!sessionsByClass.has(sess.classId)) {
         sessionsByClass.set(sess.classId, []);
@@ -350,13 +388,16 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         sessionId: sess.sessionId,
         date: sess.date,
       });
+      sessionDateMap.set(sess.sessionId, sess.date);
     }
 
-    // Map student monthly rates: key = `${studentId}_${classId}_${month}` -> rate
+    // Map student monthly rates & payment status: key = `${studentId}_${classId}_${month}`
     const rateMap = new Map<string, number>();
+    const billStatusMap = new Map<string, string>();
     for (const item of billingItems) {
       const key = `${item.studentId}_${item.classId}_${item.month}`;
       rateMap.set(key, Number(item.rate));
+      billStatusMap.set(key, item.paymentStatus);
     }
 
     // Initialize and map students and attendance
@@ -383,13 +424,16 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
 
       const student = classMap.get(record.studentId)!;
       const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
-      const sessionRate = rateMap.get(rateKey) ?? pricingMap.get(record.classId) ?? 0;
+      const sessionDate = sessionDateMap.get(record.sessionId);
+      const sessionRate = rateMap.get(rateKey) ?? getEffectiveRate(record.classId, sessionDate);
+      const sessionBillStatus = record.directBillStatus || billStatusMap.get(rateKey) || 'Unpaid';
 
       student.attendance[record.sessionId] = {
         isPresent: record.isPresent,
         rate: sessionRate,
         evaluationScore: record.evaluationScore !== null && record.evaluationScore !== undefined ? String(record.evaluationScore) : null,
         evaluationComment: record.evaluationComment,
+        paymentStatus: sessionBillStatus,
       };
 
       if (record.isPresent) {
@@ -419,7 +463,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     }
 
     for (const [classId, classMap] of studentsByClass.entries()) {
-      const defaultRate = pricingMap.get(classId) || 0;
+      const defaultRate = getEffectiveRate(classId);
       for (const student of classMap.values()) {
         if (student.pricePerSession === 0) {
           student.pricePerSession = defaultRate;
@@ -605,7 +649,16 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       params,
     );
 
-    const monthVal = filters.month || new Date().toISOString().slice(0, 7);
+    let monthVal = filters.month;
+    if (!monthVal) {
+      const maxStudentRes = await this.ds.query(
+        `SELECT MAX(created_at) AS max FROM students`
+      );
+      monthVal = maxStudentRes[0]?.max 
+        ? new Date(maxStudentRes[0].max).toISOString().slice(0, 7)
+        : new Date().toISOString().slice(0, 7);
+    }
+
     const newStudentsRows = await this.ds.query(
       `SELECT COUNT(DISTINCT s.id)::int AS count
        FROM students s
@@ -754,7 +807,9 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   private attendanceWhereClause(filters: ReportFilters, skipMonth = false) {
-    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
+    const conditions: string[] = [
+      `(cs.status = '${SessionStatus.COMPLETED}' OR cs.attendance_locked = true OR (cs.status = '${SessionStatus.SCHEDULED}' AND cs.date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date))`
+    ];
     const params: any[] = [];
     const idx = { value: 1 };
 
@@ -1026,7 +1081,9 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   }
 
   async getStudentAttendanceReport(filters: ReportFilters): Promise<any[]> {
-    const conditions: string[] = [`cs.status = '${SessionStatus.COMPLETED}'`];
+    const conditions: string[] = [
+      `(cs.status = '${SessionStatus.COMPLETED}' OR cs.attendance_locked = true OR (cs.status = '${SessionStatus.SCHEDULED}' AND cs.date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh')::date))`
+    ];
     const params: any[] = [];
     const idx = { value: 1 };
 

@@ -11,16 +11,23 @@ export class GetDashboardRevenueUseCase {
   ) { }
 
   async execute() {
+    const bills = await this.billRepo.find();
+
+    let maxDate = new Date();
+    const validMonths = bills.map(b => b.month).filter(Boolean);
+    if (validMonths.length > 0) {
+      const maxMonthStr = validMonths.reduce((a, b) => a > b ? a : b);
+      const [year, month] = maxMonthStr.split('-');
+      maxDate = new Date(Number(year), Number(month) - 1, 1);
+    }
+
     const months: string[] = [];
-    const now = new Date();
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(maxDate.getFullYear(), maxDate.getMonth() - i, 1);
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       months.push(`${year}-${month}`);
     }
-
-    const bills = await this.billRepo.find();
 
     // Group by month (format: YYYY-MM)
     const map = new Map<string, { expected: number; actual: number }>();
@@ -44,7 +51,6 @@ export class GetDashboardRevenueUseCase {
       month: m,
       expected: map.get(m)!.expected,
       actual: map.get(m)!.actual,
-
     }));
 
     return {

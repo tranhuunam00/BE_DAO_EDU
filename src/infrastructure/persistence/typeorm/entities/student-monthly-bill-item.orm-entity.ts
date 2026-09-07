@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { StudentMonthlyBillOrmEntity } from './student-monthly-bill.orm-entity';
 import { ClassOrmEntity } from './class.orm-entity';
 
@@ -7,9 +7,11 @@ export class StudentMonthlyBillItemOrmEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Index('idx_student_monthly_bill_items_bill_id')
   @Column({ type: 'uuid', name: 'bill_id' })
   billId!: string;
 
+  @Index('idx_student_monthly_bill_items_class_id')
   @Column({ type: 'uuid', name: 'class_id', nullable: true })
   classId!: string | null;
 

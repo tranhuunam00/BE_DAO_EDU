@@ -1,12 +1,15 @@
+import dayjs from 'dayjs';
 import { Money } from '../value-objects/money';
 
 export interface PricingRule {
+  id?: string;
   courseLevelId: string;
   pricePerSession: number;
   teacherWagePerSession: number;
   taWagePerSession: number;
   effectiveFrom: string;
   effectiveTo: string | null;
+  createdAt?: Date;
 }
 
 export interface BillingSource {
@@ -24,6 +27,8 @@ export interface BillingSource {
   courseLevelId: string;
   date: string;
   roleInSession?: 'teacher' | 'assistant';
+  isPresent?: boolean;
+  reason?: string | null;
 }
 
 export interface BillingLine {
@@ -51,25 +56,77 @@ export interface BillingOrderDraft {
 }
 
 export class BillingCalculator {
+  static sortPricings(pricings: PricingRule[]): PricingRule[] {
+    return [...pricings].sort((a, b) => {
+      if (a.createdAt && b.createdAt) {
+        const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+      }
+      if (a.id && b.id) {
+        const idDiff = b.id.localeCompare(a.id);
+        if (idDiff !== 0) return idDiff;
+      }
+      return dayjs(b.effectiveFrom).diff(dayjs(a.effectiveFrom));
+    });
+  }
+
+  private static normalizeDate(d: string | Date | undefined | null): string {
+    if (!d) return '';
+    if (typeof d === 'string') return d.slice(0, 10);
+    return d.toISOString().slice(0, 10);
+  }
+
+  static getActivePricing(
+    pricings: PricingRule[],
+    date: string,
+    rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession',
+    levelId: string,
+  ): PricingRule | undefined {
+    const targetDate = this.normalizeDate(date);
+    const sorted = this.sortPricings(pricings);
+    return sorted.find((rule) => {
+      const from = this.normalizeDate(rule.effectiveFrom);
+      const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
+      return (
+        rule.courseLevelId === levelId &&
+        Number(rule[rateField]) > 0 &&
+        from <= targetDate &&
+        (to === null || to >= targetDate)
+      );
+    });
+  }
+
   static calculate(
     sources: BillingSource[],
     pricings: PricingRule[],
     amountField: 'pricePerSession' | 'teacherWagePerSession',
   ): BillingOrderDraft[] {
     const orders = new Map<string, BillingOrderDraft>();
+
+    const sortedPricings = this.sortPricings(pricings);
+
     for (const source of sources) {
-      const pricing = pricings.find(
-        (rule) =>
-          rule.courseLevelId === source.courseLevelId &&
-          rule.effectiveFrom <= source.date &&
-          (rule.effectiveTo === null || rule.effectiveTo >= source.date),
-      );
-      
       let rateField = amountField;
       if (amountField === 'teacherWagePerSession' && source.roleInSession === 'assistant') {
         rateField = 'taWagePerSession' as any;
       }
-      const rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
+
+      const targetDate = this.normalizeDate(source.date);
+      const pricing = sortedPricings.find((rule) => {
+        const from = this.normalizeDate(rule.effectiveFrom);
+        const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
+        return (
+          rule.courseLevelId === source.courseLevelId &&
+          Number(rule[rateField]) > 0 &&
+          from <= targetDate &&
+          (to === null || to >= targetDate)
+        );
+      });
+      
+      let rate = Money.vnd(pricing ? pricing[rateField] : 0).value;
+      if (amountField === 'pricePerSession' && source.isPresent === false) {
+        rate = 0;
+      }
 
       const order = orders.get(source.ownerId) ?? {
         ownerId: source.ownerId,
@@ -108,7 +165,9 @@ export class BillingCalculator {
         });
       }
 
-      order.totalSessions += 1;
+      if (amountField === 'teacherWagePerSession' || source.isPresent !== false) {
+        order.totalSessions += 1;
+      }
       order.totalAmount = Money.vnd(order.totalAmount).plus(
         Money.vnd(rate),
       ).value;

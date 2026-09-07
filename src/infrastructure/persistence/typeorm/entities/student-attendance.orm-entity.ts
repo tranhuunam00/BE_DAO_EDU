@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { ClassSessionOrmEntity } from './class-session.orm-entity';
 import { StudentOrmEntity } from './student.orm-entity';
 import { StudentMonthlyBillOrmEntity } from './student-monthly-bill.orm-entity';
@@ -8,17 +8,32 @@ export class StudentAttendanceOrmEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Index('idx_student_attendance_class_session_id')
   @Column({ type: 'uuid', name: 'class_session_id' })
   classSessionId!: string;
 
+  @Index('idx_student_attendance_student_id')
   @Column({ type: 'uuid', name: 'student_id' })
   studentId!: string;
 
+  @Index('idx_student_attendance_bill_id')
   @Column({ type: 'uuid', name: 'bill_id', nullable: true })
   billId!: string | null;
 
   @Column({ type: 'boolean', name: 'is_present', default: false })
   isPresent!: boolean;
+
+  @Column({ type: 'varchar', name: 'attendance_type', default: 'machine' })
+  attendanceType!: string; // 'manual' | 'machine'
+
+  @Column({ type: 'varchar', name: 'verify_method', nullable: true })
+  verifyMethod!: string | null; // 'face' | 'fingerprint' | 'card' | 'pin'
+
+  @Column({ type: 'boolean', name: 'is_late', default: false })
+  isLate!: boolean;
+
+  @Column({ type: 'int', name: 'late_minutes', default: 0 })
+  lateMinutes!: number;
 
   @Column({ type: 'varchar', nullable: true })
   reason!: string | null;

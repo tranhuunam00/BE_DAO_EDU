@@ -28,6 +28,7 @@ export class Student {
     public userId: string | undefined,
     public avatar: string | undefined = undefined,
     public loginEmail: string | undefined = undefined,
+    public isSyncedToDevice: boolean = false,
     public createdAt: Date = new Date(),
     public updatedAt: Date = new Date(),
   ) {}

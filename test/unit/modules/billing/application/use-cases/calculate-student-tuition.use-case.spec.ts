@@ -116,8 +116,8 @@ describe('CalculateStudentTuitionUseCase', () => {
     expect(mathSummary!.presentSessionsCount).toBe(2);
     expect(mathSummary!.absentSessionsCount).toBe(2);
 
-    // Total Math tuition = 140k (present) + 140k (absent unauthorized) + 0 (absent authorized) + 180k (july present) = 460k
-    expect(mathSummary!.totalTuitionAmount).toBe(460000);
+    // Total Math tuition = 140k (present) + 0 (absent unauthorized) + 0 (absent authorized) + 180k (july present) = 320k
+    expect(mathSummary!.totalTuitionAmount).toBe(320000);
 
     const junePresentSess = mathSummary!.sessions.find((s) => s.sessionId === 'sess-june-present');
     expect(junePresentSess!.rate).toBe(140000);
@@ -125,8 +125,8 @@ describe('CalculateStudentTuitionUseCase', () => {
     expect(junePresentSess!.amount).toBe(140000);
 
     const juneAbsentUnauth = mathSummary!.sessions.find((s) => s.sessionId === 'sess-june-absent-unauthorized');
-    expect(juneAbsentUnauth!.isBilled).toBe(true);
-    expect(juneAbsentUnauth!.amount).toBe(140000);
+    expect(juneAbsentUnauth!.isBilled).toBe(false);
+    expect(juneAbsentUnauth!.amount).toBe(0);
 
     const juneAbsentAuth = mathSummary!.sessions.find((s) => s.sessionId === 'sess-june-absent-authorized');
     expect(juneAbsentAuth!.isBilled).toBe(false);
@@ -372,12 +372,12 @@ describe('CalculateStudentTuitionUseCase', () => {
 
     expect(result).toHaveLength(1);
     const summary = result[0];
-    expect(summary.totalTuitionAmount).toBe(300000); // 150k + 150k = 300k
+    expect(summary.totalTuitionAmount).toBe(0); // Both absent -> 0
 
     const emptyReasonSess = summary.sessions.find(s => s.sessionId === 'sess-empty-reason');
     const spacesReasonSess = summary.sessions.find(s => s.sessionId === 'sess-spaces-reason');
 
-    expect(emptyReasonSess!.isBilled).toBe(true);
-    expect(spacesReasonSess!.isBilled).toBe(true);
+    expect(emptyReasonSess!.isBilled).toBe(false);
+    expect(spacesReasonSess!.isBilled).toBe(false);
   });
 });

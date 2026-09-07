@@ -129,18 +129,30 @@ export class CreateAdhocSessionDto {
   @IsNotEmpty()
   endTime!: string;
 
-  @ApiProperty({ required: false, description: 'ID Phòng học' })
+  @ApiProperty({ required: true, description: 'ID Phòng học' })
   @IsString()
-  @IsOptional()
-  roomId?: string;
+  @IsNotEmpty()
+  roomId!: string;
 
-  @ApiProperty({ required: false, description: 'ID Giáo viên' })
+  @ApiProperty({ required: true, description: 'ID Giáo viên' })
   @IsString()
-  @IsOptional()
-  teacherId?: string;
+  @IsNotEmpty()
+  teacherId!: string;
 
   @ApiProperty({ required: false, description: 'ID Trợ giảng' })
   @IsString()
   @IsOptional()
-  assistantId?: string;
+  assistantId?: string | null;
 }
+
+export class GenerateSessionsDto {
+  @ApiProperty({ required: false, example: '2026-09-01', description: 'Ngày bắt đầu sinh lịch (YYYY-MM-DD)' })
+  @IsDateString()
+  @IsOptional()
+  fromDate?: string;
+
+  @ApiProperty({ required: false, description: 'Tùy chọn sinh từ ngày khai giảng của lớp học' })
+  @IsOptional()
+  fromStartDate?: boolean | string;
+}
+

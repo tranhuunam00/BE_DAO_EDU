@@ -178,4 +178,337 @@ describe('BillingCalculator', () => {
     );
     expect(result.totalAmount).toBe(35000);
   });
+
+  it('calculates absent sessions at 0 rate and groups them in a separate line with 0 totalAmount, and totalSessions only counts present ones', () => {
+    const tuitionPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 150000,
+        teacherWagePerSession: 90000,
+        taWagePerSession: 45000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10'), isPresent: true }, // Present -> 150k
+      { ...source('att-2', 'student-1', '2026-06-12'), isPresent: false }, // Absent -> 0
+      { ...source('att-3', 'student-1', '2026-06-14'), isPresent: true }, // Present -> 150k
+      { ...source('att-4', 'student-1', '2026-06-16'), isPresent: false }, // Absent -> 0
+    ];
+
+    const result = BillingCalculator.calculate(
+      sources,
+      tuitionPricing,
+      'pricePerSession',
+    );
+
+    expect(result).toHaveLength(1);
+    const order = result[0];
+    // Total tuition = 150k * 2 = 300k
+    expect(order.totalAmount).toBe(300000);
+    // Only 2 present sessions are counted in totalSessions
+    expect(order.totalSessions).toBe(2);
+
+    expect(order.lines).toHaveLength(2);
+    const presentLine = order.lines.find((l) => l.rate === 150000);
+    const absentLine = order.lines.find((l) => l.rate === 0);
+
+    expect(presentLine).toBeDefined();
+    expect(presentLine!.sessionsCount).toBe(2);
+    expect(presentLine!.totalAmount).toBe(300000);
+    expect(presentLine!.sourceIds).toEqual(expect.arrayContaining(['att-1', 'att-3']));
+
+    expect(absentLine).toBeDefined();
+    expect(absentLine!.sessionsCount).toBe(2);
+    expect(absentLine!.totalAmount).toBe(0);
+    expect(absentLine!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-4']));
+  });
+
+  it('handles mid-month price changes with absences: correctly bills present sessions at their respective active rates, bills absent sessions at 0 rate, and groups them', () => {
+    const midMonthPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 100000,
+        teacherWagePerSession: 60000,
+        taWagePerSession: 30000,
+        effectiveFrom: '2026-06-01',
+        effectiveTo: '2026-06-15',
+      },
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 150000,
+        teacherWagePerSession: 90000,
+        taWagePerSession: 45000,
+        effectiveFrom: '2026-06-16',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10'), isPresent: true }, // Present before change -> 100k
+      { ...source('att-2', 'student-1', '2026-06-12'), isPresent: false }, // Absent before change -> 0đ (normally 100k)
+      { ...source('att-3', 'student-1', '2026-06-17'), isPresent: true }, // Present after change -> 150k
+      { ...source('att-4', 'student-1', '2026-06-20'), isPresent: false }, // Absent after change -> 0đ (normally 150k)
+    ];
+
+    const [order] = BillingCalculator.calculate(
+      sources,
+      midMonthPricing,
+      'pricePerSession',
+    );
+
+    // Total tuition = 100k + 150k = 250k
+    expect(order.totalAmount).toBe(250000);
+    // Only 2 present sessions counted
+    expect(order.totalSessions).toBe(2);
+
+    // Lines: 100k line (count 1), 150k line (count 1), 0đ line (count 2)
+    expect(order.lines).toHaveLength(3);
+    const line100k = order.lines.find((l) => l.rate === 100000);
+    const line150k = order.lines.find((l) => l.rate === 150000);
+    const line0 = order.lines.find((l) => l.rate === 0);
+
+    expect(line100k).toBeDefined();
+    expect(line100k!.sessionsCount).toBe(1);
+    expect(line100k!.totalAmount).toBe(100000);
+    expect(line100k!.sourceIds).toEqual(['att-1']);
+
+    expect(line150k).toBeDefined();
+    expect(line150k!.sessionsCount).toBe(1);
+    expect(line150k!.totalAmount).toBe(150000);
+    expect(line150k!.sourceIds).toEqual(['att-3']);
+
+    expect(line0).toBeDefined();
+    expect(line0!.sessionsCount).toBe(2);
+    expect(line0!.totalAmount).toBe(0);
+    expect(line0!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-4']));
+  });
+
+  it('handles missing pricing rules: bills missing level present sessions at 0 rate (but counts in totalSessions) and absent ones at 0 rate (does not count)', () => {
+    const tuitionPricing: PricingRule[] = [
+      {
+        courseLevelId: 'level-1',
+        pricePerSession: 100000,
+        teacherWagePerSession: 60000,
+        taWagePerSession: 30000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      },
+    ];
+
+    const sources = [
+      { ...source('att-1', 'student-1', '2026-06-10', 'level-1'), isPresent: true }, // Present, has price -> 100k
+      { ...source('att-2', 'student-1', '2026-06-12', 'missing-level'), isPresent: true }, // Present, no price -> 0đ
+      { ...source('att-3', 'student-1', '2026-06-14', 'level-1'), isPresent: false }, // Absent, has price -> 0đ
+      { ...source('att-4', 'student-1', '2026-06-16', 'missing-level'), isPresent: false }, // Absent, no price -> 0đ
+    ];
+
+    const [order] = BillingCalculator.calculate(
+      sources,
+      tuitionPricing,
+      'pricePerSession',
+    );
+
+    // Total tuition = 100k + 0 + 0 + 0 = 100k
+    expect(order.totalAmount).toBe(100000);
+    // 2 present sessions counted (att-1 and att-2)
+    expect(order.totalSessions).toBe(2);
+
+    // Grouping: 1 line at 100k (count 1), 1 line at 0đ (count 3: att-2, att-3, att-4)
+    expect(order.lines).toHaveLength(2);
+    const line100k = order.lines.find((l) => l.rate === 100000);
+    const line0 = order.lines.find((l) => l.rate === 0);
+
+    expect(line100k).toBeDefined();
+    expect(line100k!.sessionsCount).toBe(1);
+    expect(line100k!.totalAmount).toBe(100000);
+    expect(line100k!.sourceIds).toEqual(['att-1']);
+
+    expect(line0).toBeDefined();
+    expect(line0!.sessionsCount).toBe(3);
+    expect(line0!.totalAmount).toBe(0);
+    expect(line0!.sourceIds).toEqual(expect.arrayContaining(['att-2', 'att-3', 'att-4']));
+  });
+
+  describe('Pricing priority: newest configured rule wins when ranges overlap', () => {
+    it('selects higher-priority pricing (latest effectiveFrom) when two rules overlap on same date', () => {
+      // Two overlapping rules: first configured 2026-01-01→null, then a newer rule 2026-06-01→null
+      // Session on 2026-07-01 → should use the newer rule (effectiveFrom: 2026-06-01, price: 150000)
+      const overlappingPricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      const [result] = BillingCalculator.calculate(
+        [source('att-1', 'student-1', '2026-07-01')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+
+      // Must use 150000 (newer/later effectiveFrom rule)
+      expect(result.totalAmount).toBe(150000);
+      expect(result.lines[0].rate).toBe(150000);
+    });
+
+    it('selects the rule with matching effectiveFrom when date exactly matches boundary', () => {
+      const overlappingPricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      // Exactly on 2026-06-01 → should use 150000
+      const [resultOnBoundary] = BillingCalculator.calculate(
+        [source('att-boundary', 'student-1', '2026-06-01')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+      expect(resultOnBoundary.totalAmount).toBe(150000);
+
+      // One day before 2026-06-01 → must use old rule 100000
+      const [resultBefore] = BillingCalculator.calculate(
+        [source('att-before', 'student-1', '2026-05-31')],
+        overlappingPricing,
+        'pricePerSession',
+      );
+      expect(resultBefore.totalAmount).toBe(100000);
+    });
+
+    it('uses createdAt to break ties when effectiveFrom is the same', () => {
+      // Two rules with identical effectiveFrom → newer createdAt wins
+      const sameDatePricing: PricingRule[] = [
+        {
+          id: 'old-config',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-05-01T08:00:00Z'), // older configuration
+        },
+        {
+          id: 'new-config',
+          courseLevelId: 'level-1',
+          pricePerSession: 175000,
+          teacherWagePerSession: 100000,
+          taWagePerSession: 50000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T12:00:00Z'), // newer configuration
+        },
+      ];
+
+      const [result] = BillingCalculator.calculate(
+        [source('att-1', 'student-1', '2026-07-01')],
+        sameDatePricing,
+        'pricePerSession',
+      );
+
+      // Must use 175000 (newer createdAt)
+      expect(result.totalAmount).toBe(175000);
+      expect(result.lines[0].rate).toBe(175000);
+    });
+
+    it('applies newest-wins priority independently per rate field (student vs teacher vs TA)', () => {
+      // Student pricing: old 100k (2026-01-01→null), new 150k (2026-06-01→null)
+      // Teacher pricing: old 60k (2026-01-01→null), new 90k (2026-06-01→null)
+      // TA pricing: old 30k (2026-01-01→null), new 45k (2026-06-01→null)
+      const multiRatePricing: PricingRule[] = [
+        {
+          id: 'old-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 100000,
+          teacherWagePerSession: 60000,
+          taWagePerSession: 30000,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+        {
+          id: 'new-rule',
+          courseLevelId: 'level-1',
+          pricePerSession: 150000,
+          teacherWagePerSession: 90000,
+          taWagePerSession: 45000,
+          effectiveFrom: '2026-06-01',
+          effectiveTo: null,
+          createdAt: new Date('2026-06-01T00:00:00Z'),
+        },
+      ];
+
+      const sessionOnJuly = source('att-1', 'person-1', '2026-07-10');
+
+      const [studentResult] = BillingCalculator.calculate([sessionOnJuly], multiRatePricing, 'pricePerSession');
+      expect(studentResult.totalAmount).toBe(150000);
+
+      const [teacherResult] = BillingCalculator.calculate([sessionOnJuly], multiRatePricing, 'teacherWagePerSession');
+      expect(teacherResult.totalAmount).toBe(90000);
+
+      const assistantSource = { ...sessionOnJuly, roleInSession: 'assistant' as const };
+      const [taResult] = BillingCalculator.calculate([assistantSource], multiRatePricing, 'teacherWagePerSession');
+      expect(taResult.totalAmount).toBe(45000);
+    });
+
+    it('performance: pricing priority sort should run within 20ms for 5000 sessions and 50 overlapping rules', () => {
+      const bigPricingList: PricingRule[] = Array.from({ length: 50 }, (_, i) => ({
+        id: `rule-${i}`,
+        courseLevelId: 'level-1',
+        pricePerSession: 100000 + i * 1000,
+        teacherWagePerSession: 60000 + i * 500,
+        taWagePerSession: 30000 + i * 200,
+        effectiveFrom: `2026-0${Math.floor(i / 10) + 1}-01`.replace('0-', '-'), // spread across months
+        effectiveTo: null,
+        createdAt: new Date(2026, 0, i + 1),
+      }));
+
+      const bigSources = Array.from({ length: 5000 }, (_, i) =>
+        source(`att-${i}`, `student-${i % 100}`, '2026-07-15'),
+      );
+
+      const start = performance.now();
+      BillingCalculator.calculate(bigSources, bigPricingList, 'pricePerSession');
+      const elapsed = performance.now() - start;
+
+      console.log(`Pricing priority sort performance (5000 sessions, 50 rules): ${elapsed.toFixed(2)}ms`);
+      expect(elapsed).toBeLessThan(100);
+    });
+  });
 });
