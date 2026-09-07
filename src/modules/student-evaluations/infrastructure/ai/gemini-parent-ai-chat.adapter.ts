@@ -110,8 +110,9 @@ export class GeminiParentAiChatAdapter implements IParentAiChatPort {
 NGUYÊN TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
 1. Anti-Hallucination: Chỉ đưa ra kết luận và lời khuyên dựa trên DỮ LIỆU THẬT được cung cấp dưới đây. TUYỆT ĐỐI KHÔNG BỊA ĐẶT số liệu, bài thi hay thông tin không có trong hồ sơ.
 2. Quy trình suy luận sư phạm: Data → Evidence (Bằng chứng) → Interpretation (Giải thích lý do) → Recommendation (Khuyến nghị hành động cụ thể cho phụ huynh).
-3. Phong cách: Thân thiện, tôn trọng, đồng cảm, chuyên nghiệp và truyền cảm hứng. Tránh dùng từ ngữ tiêu cực gây hoang mang, hãy tập trung vào giải pháp.
-4. Trình bày: Rõ ràng, gạch đầu dòng ngắn gọn, dễ đọc trên điện thoại (khoảng 2-4 đoạn văn ngắn).
+3. Bảo mật quyền riêng tư (Privacy Isolation): Bạn chỉ có dữ liệu và chỉ được phép giải đáp về học sinh ${c.studentName}. Tuyệt đối không cung cấp, suy đoán hay bàn luận về thông tin cá nhân/điểm số của học sinh khác trong lớp. Nếu phụ huynh hỏi về bạn khác, hãy lịch sự từ chối và giải thích quy định bảo mật.
+4. Phong cách: Thân thiện, tôn trọng, đồng cảm, chuyên nghiệp và truyền cảm hứng. Tránh dùng từ ngữ tiêu cực gây hoang mang, hãy tập trung vào giải pháp.
+5. Trình bày: Rõ ràng, gạch đầu dòng ngắn gọn, dễ đọc trên điện thoại (khoảng 2-4 đoạn văn ngắn).
 
 DỮ LIỆU THỰC TẾ CỦA HỌC SINH (4 TUẦN GẦN NHẤT):
 - Học sinh: ${c.studentName} (Lớp: ${c.className || '-'})
@@ -142,7 +143,18 @@ ${recentSessionsText || '- Chưa có dữ liệu buổi học diễn ra'}`;
     const qLower = question.toLowerCase();
     let answer = '';
 
-    if (qLower.includes('yếu') || qLower.includes('khó khăn') || qLower.includes('kém')) {
+    // Kiểm tra câu hỏi tò mò về học sinh khác trong lớp
+    const asksAboutOthers =
+      qLower.includes('bạn khác') ||
+      qLower.includes('học sinh khác') ||
+      qLower.includes('bạn cùng lớp') ||
+      qLower.includes('điểm của bạn') ||
+      qLower.includes('bé khác');
+
+    if (asksAboutOthers) {
+      answer = `Dạ thưa phụ huynh, vì lý do bảo mật thông tin và quyền riêng tư của học sinh theo chính sách của Educare, em chỉ có thể cung cấp và phân tích dữ liệu học tập của em **${c.studentName}**.\n\n` +
+        `Em không được phép truy cập hay chia sẻ dữ liệu của các bạn học sinh khác trong lớp. Rất mong quý phụ huynh thông cảm ạ!`;
+    } else if (qLower.includes('yếu') || qLower.includes('khó khăn') || qLower.includes('kém')) {
       const weaknesses = c.weaknesses.length
         ? c.weaknesses.map((w) => `• ${w}`).join('\n')
         : '• Hiện tại dữ liệu chưa ghi nhận con gặp lỗ hổng lớn nào, chủ yếu cần duy trì nề nếp ôn bài.';
