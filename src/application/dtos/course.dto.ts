@@ -53,10 +53,10 @@ export class CourseLevelPricingDto {
   @IsDateString()
   effectiveFrom!: string;
 
-  @ApiProperty({ required: false, example: '2026-12-31', description: 'Ngày kết thúc áp dụng' })
+  @ApiProperty({ required: true, example: '2026-12-31', description: 'Ngày kết thúc áp dụng' })
   @IsDateString()
-  @IsOptional()
-  effectiveTo?: string;
+  @IsNotEmpty({ message: 'Ngày kết thúc không được để trống' })
+  effectiveTo!: string;
 }
 
 export class UpdateCourseLevelPricingDto {
@@ -83,7 +83,7 @@ export class UpdateCourseLevelPricingDto {
   @ApiProperty({ required: false, example: '2026-12-31' })
   @IsDateString()
   @IsOptional()
-  effectiveTo?: string | null;
+  effectiveTo?: string;
 }
 
 export class CreateCourseDto {

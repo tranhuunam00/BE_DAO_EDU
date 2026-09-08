@@ -39,6 +39,7 @@ import { TypeOrmHolidayPersistenceAdapter } from './infrastructure/persistence/t
 import { CoursePricingPersistencePort } from './application/ports/course-pricing-persistence.port';
 import { TypeOrmCoursePricingPersistenceAdapter } from './infrastructure/persistence/typeorm-course-pricing-persistence.adapter';
 import { GetCourseLevelPricingUseCase } from './application/use-cases/get-course-level-pricing.use-case';
+import { CreateCourseLevelPricingUseCase } from './application/use-cases/create-course-level-pricing.use-case';
 import { UpdateCourseLevelPricingUseCase } from './application/use-cases/update-course-level-pricing.use-case';
 import { DeleteCourseLevelPricingUseCase } from './application/use-cases/delete-course-level-pricing.use-case';
 import {
@@ -141,6 +142,12 @@ import {
       provide: GetCourseLevelPricingUseCase,
       useFactory: (persistence: CoursePricingPersistencePort) =>
         new GetCourseLevelPricingUseCase(persistence),
+      inject: [CoursePricingPersistencePort],
+    },
+    {
+      provide: CreateCourseLevelPricingUseCase,
+      useFactory: (persistence: CoursePricingPersistencePort) =>
+        new CreateCourseLevelPricingUseCase(persistence),
       inject: [CoursePricingPersistencePort],
     },
     {

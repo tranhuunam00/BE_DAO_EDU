@@ -16,8 +16,15 @@ export class UpdateCourseLevelPricingUseCase {
     const isTeacherWageChanged = dto.teacherWagePerSession !== undefined && Number(dto.teacherWagePerSession) !== Number(pricing.teacherWagePerSession);
     const isTaWageChanged = dto.taWagePerSession !== undefined && Number(dto.taWagePerSession) !== Number(pricing.taWagePerSession);
     
+    if (dto.effectiveFrom !== undefined && !dto.effectiveFrom) {
+      throw new AcademicError('BAD_REQUEST', 'Ngày bắt đầu không được để trống.');
+    }
+    if (dto.effectiveTo !== undefined && (!dto.effectiveTo || dto.effectiveTo === 'null')) {
+      throw new AcademicError('BAD_REQUEST', 'Ngày kết thúc không được để trống.');
+    }
+
     const newFrom = dto.effectiveFrom !== undefined ? dto.effectiveFrom : pricing.effectiveFrom;
-    const newTo = dto.effectiveTo !== undefined ? (dto.effectiveTo || null) : pricing.effectiveTo;
+    const newTo = dto.effectiveTo !== undefined ? dto.effectiveTo : pricing.effectiveTo;
     
     const isDateChanged = newFrom !== pricing.effectiveFrom || newTo !== pricing.effectiveTo;
     // 1. Guard price/wage value changes independently based on which field values are changing
