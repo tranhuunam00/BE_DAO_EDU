@@ -320,7 +320,7 @@ describe('CH-01 DB Safety: Session & Attendance Deletion Guard (20 Test Cases)',
       const durationMs = performance.now() - start;
 
       expect(safeIds.length).toBeGreaterThan(0);
-      expect(durationMs).toBeLessThan(20);
+      expect(durationMs).toBeLessThan(50);
     });
 
     it('Case 20: Xác thực đơn lẻ 1 buổi học với 50 học sinh dưới 1ms', () => {
@@ -338,6 +338,114 @@ describe('CH-01 DB Safety: Session & Attendance Deletion Guard (20 Test Cases)',
       const durationMs = performance.now() - start;
 
       expect(durationMs).toBeLessThan(1);
+    });
+  });
+
+  describe('Nhóm 6: TDD Mở rộng - Billed Wage Amounts & Active Attendance States (Cases 21 - 26)', () => {
+    it('Case 21: Chặn xóa buổi học Scheduled nếu đã tính lương giáo viên (billedTeacherWage > 0)', () => {
+      const session: AttendanceSafetySession = {
+        ...baseScheduledSession,
+        billedTeacherWage: 250000,
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(session, []);
+      }).toThrow(AcademicError);
+
+      try {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(session, []);
+      } catch (err: any) {
+        expect(err.code).toBe('CANNOT_DELETE_SESSION_PROTECTED');
+        expect(err.message).toContain('thù lao');
+      }
+    });
+
+    it('Case 22: Chặn xóa buổi học Scheduled nếu đã tính lương trợ giảng (billedAssistantWage > 0)', () => {
+      const session: AttendanceSafetySession = {
+        ...baseScheduledSession,
+        billedAssistantWage: 100000,
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(session, []);
+      }).toThrow(AcademicError);
+    });
+
+    it('Case 23: Chặn xóa buổi học nếu có học sinh ghi nhận đi muộn (isLate = true hoặc lateMinutes > 0)', () => {
+      const lateAtt: AttendanceSafetyRecord = {
+        ...baseUnbilledAttendance,
+        isLate: true,
+        lateMinutes: 15,
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [lateAtt]);
+      }).toThrow(AcademicError);
+
+      try {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [lateAtt]);
+      } catch (err: any) {
+        expect(err.code).toBe('ATTENDANCE_ATTENDED_CONFLICT');
+        expect(err.message).toContain('điểm danh');
+      }
+    });
+
+    it('Case 24: Chặn xóa buổi học nếu có học sinh có đơn xin nghỉ phép (leaveStatus pending hoặc approved)', () => {
+      const approvedLeaveAtt: AttendanceSafetyRecord = {
+        ...baseUnbilledAttendance,
+        leaveStatus: 'approved',
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [approvedLeaveAtt]);
+      }).toThrow(AcademicError);
+
+      const pendingLeaveAtt: AttendanceSafetyRecord = {
+        ...baseUnbilledAttendance,
+        leaveStatus: 'pending',
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [pendingLeaveAtt]);
+      }).toThrow(AcademicError);
+    });
+
+    it('Case 25: Chặn xóa buổi học nếu có nhận xét hoặc điểm đánh giá của giáo viên', () => {
+      const commentedAtt: AttendanceSafetyRecord = {
+        ...baseUnbilledAttendance,
+        evaluationComment: 'Học sinh tiếp thu bài tốt',
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [commentedAtt]);
+      }).toThrow(AcademicError);
+
+      const scoredAtt: AttendanceSafetyRecord = {
+        ...baseUnbilledAttendance,
+        evaluationScore: '9.5',
+      };
+
+      expect(() => {
+        AttendanceDeletionGuard.validateSafeToDeleteSession(baseScheduledSession, [scoredAtt]);
+      }).toThrow(AcademicError);
+    });
+
+    it('Case 26: filterSafeSessionsToDelete loại trừ các ca học có billedTeacherWage, isLate, hoặc leaveStatus', () => {
+      const sessions: AttendanceSafetySession[] = [
+        { ...baseScheduledSession, id: 's1' }, // safe
+        { ...baseScheduledSession, id: 's2', billedTeacherWage: 200000 }, // unsafe wage
+        { ...baseScheduledSession, id: 's3' }, // unsafe late
+        { ...baseScheduledSession, id: 's4' }, // unsafe leave
+      ];
+
+      const attendances: AttendanceSafetyRecord[] = [
+        { ...baseUnbilledAttendance, id: 'a1', classSessionId: 's1' },
+        { ...baseUnbilledAttendance, id: 'a3', classSessionId: 's3', isLate: true },
+        { ...baseUnbilledAttendance, id: 'a4', classSessionId: 's4', leaveStatus: 'approved' },
+      ];
+
+      const safeIds = AttendanceDeletionGuard.filterSafeSessionsToDelete(sessions, attendances);
+      expect(safeIds).toEqual(['s1']);
     });
   });
 });

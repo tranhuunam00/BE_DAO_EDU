@@ -642,15 +642,51 @@ export class ClassController {
     const attendanceRecords = await this.attendanceRepo
       .createQueryBuilder('att')
       .select('att.classSessionId', 'classSessionId')
-      .where('att.classSessionId IN (:...sessionIds) AND att.billId IS NOT NULL', { sessionIds })
+      .addSelect('att.billId', 'billId')
+      .addSelect('att.isPresent', 'isPresent')
+      .addSelect('att.verifyMethod', 'verifyMethod')
+      .addSelect('att.isLate', 'isLate')
+      .addSelect('att.lateMinutes', 'lateMinutes')
+      .addSelect('att.leaveStatus', 'leaveStatus')
+      .addSelect('att.evaluationComment', 'evaluationComment')
+      .addSelect('att.evaluationScore', 'evaluationScore')
+      .where(
+        'att.classSessionId IN (:...sessionIds) AND (' +
+          'att.billId IS NOT NULL OR ' +
+          'att.isPresent = true OR ' +
+          'att.verifyMethod IS NOT NULL OR ' +
+          'att.isLate = true OR ' +
+          '(att.lateMinutes IS NOT NULL AND att.lateMinutes > 0) OR ' +
+          'att.leaveStatus IN (:...leaveStatuses) OR ' +
+          '(att.evaluationComment IS NOT NULL AND TRIM(att.evaluationComment) != \'\') OR ' +
+          '(att.evaluationScore IS NOT NULL AND TRIM(att.evaluationScore) != \'\')' +
+        ')',
+        { sessionIds, leaveStatuses: ['approved', 'pending'] },
+      )
       .getRawMany();
 
-    const billedSessionIds = new Set(attendanceRecords.map((r) => r.classSessionId));
+    const billedSessionIds = new Set<string>();
+    const activeAttendanceSessionIds = new Set<string>();
 
-    return sessions.map((s) => ({
-      ...s,
-      isBilled: billedSessionIds.has(s.id),
-    }));
+    for (const r of attendanceRecords) {
+      if (r.billId) billedSessionIds.add(r.classSessionId);
+      activeAttendanceSessionIds.add(r.classSessionId);
+    }
+
+    return sessions.map((s: any) => {
+      const isWageBilled = Boolean(
+        s.wageId ||
+          s.assistantWageId ||
+          Number(s.billedTeacherWage) > 0 ||
+          Number(s.billedAssistantWage) > 0,
+      );
+      return {
+        ...s,
+        isBilled: billedSessionIds.has(s.id),
+        hasAttendance: activeAttendanceSessionIds.has(s.id),
+        isWageBilled,
+      };
+    });
   }
 
   @Post(':id/sessions')

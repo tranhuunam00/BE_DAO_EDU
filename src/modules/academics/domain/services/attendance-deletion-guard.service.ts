@@ -9,6 +9,8 @@ export interface AttendanceSafetySession {
   attendanceLocked: boolean;
   wageId?: string | null;
   assistantWageId?: string | null;
+  billedTeacherWage?: number | null;
+  billedAssistantWage?: number | null;
 }
 
 export interface AttendanceSafetyRecord {
@@ -380,10 +382,19 @@ export class AttendanceDeletionGuard {
       );
     }
 
-    if (session.wageId || session.assistantWageId) {
+    const hasTeacherWage = Boolean(
+      session.wageId ||
+      (session.billedTeacherWage !== undefined && session.billedTeacherWage !== null && Number(session.billedTeacherWage) > 0),
+    );
+    const hasAssistantWage = Boolean(
+      session.assistantWageId ||
+      (session.billedAssistantWage !== undefined && session.billedAssistantWage !== null && Number(session.billedAssistantWage) > 0),
+    );
+
+    if (hasTeacherWage || hasAssistantWage) {
       throw new AcademicError(
         'CANNOT_DELETE_SESSION_PROTECTED',
-        'Không thể xóa buổi học vì buổi học đã được chốt tính thù lao giáo viên.',
+        'Không thể xóa buổi học vì buổi học đã được tính thù lao giáo viên/trợ giảng.',
       );
     }
 
@@ -395,13 +406,21 @@ export class AttendanceDeletionGuard {
       );
     }
 
-    const attendedRecords = attendances.filter(
-      (a) => a.isPresent === true || a.verifyMethod != null,
+    const activeAttendances = attendances.filter(
+      (a) =>
+        a.isPresent === true ||
+        Boolean(a.verifyMethod) ||
+        a.isLate === true ||
+        Boolean(a.lateMinutes && a.lateMinutes > 0) ||
+        a.leaveStatus === 'approved' ||
+        a.leaveStatus === 'pending' ||
+        Boolean(a.evaluationComment?.trim()) ||
+        Boolean(a.evaluationScore?.trim()),
     );
-    if (attendedRecords.length > 0) {
+    if (activeAttendances.length > 0) {
       throw new AcademicError(
         'ATTENDANCE_ATTENDED_CONFLICT',
-        `Không thể xóa buổi học vì có ${attendedRecords.length} học sinh đã được ghi nhận có mặt hoặc chấm công thực tế.`,
+        `Không thể xóa buổi học vì có ${activeAttendances.length} học sinh đã phát sinh dữ liệu điểm danh (có mặt, chấm công, đi muộn, đơn phép hoặc nhận xét).`,
       );
     }
   }
@@ -415,19 +434,40 @@ export class AttendanceDeletionGuard {
   ): string[] {
     const unsafeSessionIds = new Set<string>();
 
-    for (const session of sessions) {
+    for (let i = 0; i < sessions.length; i++) {
+      const session = sessions[i];
+      const hasTeacherWage = Boolean(
+        session.wageId ||
+        (session.billedTeacherWage !== undefined && session.billedTeacherWage !== null && Number(session.billedTeacherWage) > 0),
+      );
+      const hasAssistantWage = Boolean(
+        session.assistantWageId ||
+        (session.billedAssistantWage !== undefined && session.billedAssistantWage !== null && Number(session.billedAssistantWage) > 0),
+      );
       if (
         session.status !== SessionStatus.SCHEDULED ||
         session.attendanceLocked ||
-        session.wageId ||
-        session.assistantWageId
+        hasTeacherWage ||
+        hasAssistantWage
       ) {
         unsafeSessionIds.add(session.id);
       }
     }
 
-    for (const att of attendances) {
-      if (att.billId != null || att.isPresent === true || att.verifyMethod != null) {
+    for (let i = 0; i < attendances.length; i++) {
+      const att = attendances[i];
+      if (unsafeSessionIds.has(att.classSessionId)) continue;
+      if (
+        (att.billId !== null && att.billId !== undefined) ||
+        att.isPresent === true ||
+        Boolean(att.verifyMethod) ||
+        att.isLate === true ||
+        (att.lateMinutes !== undefined && att.lateMinutes !== null && att.lateMinutes > 0) ||
+        att.leaveStatus === 'approved' ||
+        att.leaveStatus === 'pending' ||
+        (att.evaluationComment !== undefined && att.evaluationComment !== null && att.evaluationComment !== '') ||
+        (att.evaluationScore !== undefined && att.evaluationScore !== null && att.evaluationScore !== '')
+      ) {
         unsafeSessionIds.add(att.classSessionId);
       }
     }
