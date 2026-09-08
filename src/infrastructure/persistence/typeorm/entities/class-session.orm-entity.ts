@@ -28,6 +28,12 @@ export class ClassSessionOrmEntity {
   @Column({ type: 'uuid', name: 'assistant_wage_id', nullable: true })
   assistantWageId!: string | null;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'billed_teacher_wage', nullable: true, default: null })
+  billedTeacherWage!: number | null;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'billed_assistant_wage', nullable: true, default: null })
+  billedAssistantWage!: number | null;
+
   @Index('idx_class_sessions_date')
   @Column({ type: 'date' })
   date!: string;

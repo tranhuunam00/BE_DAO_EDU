@@ -20,6 +20,9 @@ export class StudentAttendanceOrmEntity {
   @Column({ type: 'uuid', name: 'bill_id', nullable: true })
   billId!: string | null;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'billed_amount', nullable: true, default: null })
+  billedAmount!: number | null;
+
   @Column({ type: 'boolean', name: 'is_present', default: false })
   isPresent!: boolean;
 

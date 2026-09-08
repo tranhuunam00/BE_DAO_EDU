@@ -403,22 +403,6 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         : [];
       const attendancesByBill = groupItems(attendances, 'billId');
 
-      const levelIds = Array.from(
-        new Set(
-          attendances
-            .map((a) => a.classSession?.classEntity?.courseLevelId)
-            .filter(Boolean),
-        ),
-      );
-      let pricings: CourseLevelPricingOrmEntity[] = [];
-      if (levelIds.length > 0) {
-        pricings = await this.dataSource
-          .getRepository(CourseLevelPricingOrmEntity)
-          .find({
-            where: { courseLevelId: In(levelIds) },
-          });
-      }
-
       const items = bills.length
         ? await this.dataSource
             .getRepository(StudentMonthlyBillItemOrmEntity)
@@ -461,24 +445,10 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
             } : null,
             items: (byBill.get(bill.id) ?? []).map(mapItem),
             sessions: billSessions.map((att) => {
-              const levelId = att.classSession?.classEntity?.courseLevelId;
               const sessionDate = att.classSession?.date;
-              const matchedPricing = BillingCalculator.getActivePricing(
-                pricings.map((p) => ({
-                  courseLevelId: p.courseLevelId,
-                  pricePerSession: Number(p.pricePerSession),
-                  teacherWagePerSession: Number(p.teacherWagePerSession),
-                  taWagePerSession: Number(p.taWagePerSession),
-                  effectiveFrom: p.effectiveFrom,
-                  effectiveTo: p.effectiveTo,
-                  createdAt: p.createdAt,
-                  id: p.id,
-                })),
-                sessionDate,
-                'pricePerSession',
-                levelId,
-              );
-              const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+              const rate = att.billedAmount !== null && att.billedAmount !== undefined
+                ? Number(att.billedAmount)
+                : 0;
               const amount = att.isPresent ? rate : 0;
               return {
                 id: att.id,
@@ -521,20 +491,6 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           order: { date: 'ASC', startTime: 'ASC' },
         })
       : [];
-    const levelIds = Array.from(
-      new Set(
-        sessions.map((s) => s.classEntity?.courseLevelId).filter(Boolean),
-      ),
-    );
-    let pricings: CourseLevelPricingOrmEntity[] = [];
-    if (levelIds.length > 0) {
-      pricings = await this.dataSource
-        .getRepository(CourseLevelPricingOrmEntity)
-        .find({
-          where: { courseLevelId: In(levelIds) },
-        });
-    }
-
     const items = wages.length
       ? await this.dataSource
           .getRepository(TeacherMonthlyWageItemOrmEntity)
@@ -575,28 +531,11 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
           items: (byWage.get(wage.id) ?? []).map(mapItem),
           sessions: wageSessions.map((s) => {
             const role = s.wageId === wage.id ? 'teacher' : 'assistant';
-            const rateField = role === 'teacher' ? 'teacherWagePerSession' : 'taWagePerSession';
-            const levelId = s.classEntity?.courseLevelId;
-            const sessionDate = s.date;
-            const matchedPricing = BillingCalculator.getActivePricing(
-              pricings.map((p) => ({
-                courseLevelId: p.courseLevelId,
-                pricePerSession: Number(p.pricePerSession),
-                teacherWagePerSession: Number(p.teacherWagePerSession),
-                taWagePerSession: Number(p.taWagePerSession),
-                effectiveFrom: p.effectiveFrom,
-                effectiveTo: p.effectiveTo,
-                createdAt: p.createdAt,
-                id: p.id,
-              })),
-              sessionDate,
-              rateField,
-              levelId,
-            );
-            const rate = matchedPricing ? Number(matchedPricing[rateField]) : 0;
+            const billedWage = role === 'teacher' ? s.billedTeacherWage : s.billedAssistantWage;
+            const rate = billedWage !== null && billedWage !== undefined ? Number(billedWage) : 0;
             return {
               id: s.id,
-              date: sessionDate,
+              date: s.date,
               startTime: s.startTime,
               endTime: s.endTime,
               classId: s.classId,
@@ -847,18 +786,16 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
             totalAmount: line.totalAmount,
           })),
         );
-        await this.manager
-          .getRepository(StudentAttendanceOrmEntity)
-          .update(
-            {
-              id: In(
-                order.lines
-                  .filter((line) => line.sessionsCount > 0)
-                  .flatMap((line) => line.sourceIds),
-              ),
-            },
-            { billId: bill.id },
-          );
+        for (const line of order.lines.filter((l) => l.sessionsCount > 0)) {
+          if (line.sourceIds.length > 0) {
+            await this.manager
+              .getRepository(StudentAttendanceOrmEntity)
+              .update(
+                { id: In(line.sourceIds) },
+                { billId: bill.id, billedAmount: Number(line.rate) },
+              );
+          }
+        }
       }
       return ids;
     }
@@ -887,33 +824,28 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
           sessionsCount: line.sessionsCount,
           rate: line.rate,
           totalAmount: line.totalAmount,
+          role: line.roleInSession === 'assistant' ? 'assistant' : 'teacher',
         })),
       );
-      
-      const teacherSessionIds = order.lines
-        .filter((line) => line.sessionsCount > 0 && line.roleInSession !== 'assistant')
-        .flatMap((line) => line.sourceIds);
 
-      const assistantSessionIds = order.lines
-        .filter((line) => line.sessionsCount > 0 && line.roleInSession === 'assistant')
-        .flatMap((line) => line.sourceIds);
-
-      if (teacherSessionIds.length > 0) {
-        await this.manager
-          .getRepository(ClassSessionOrmEntity)
-          .update(
-            { id: In(teacherSessionIds) },
-            { wageId: wage.id },
-          );
-      }
-
-      if (assistantSessionIds.length > 0) {
-        await this.manager
-          .getRepository(ClassSessionOrmEntity)
-          .update(
-            { id: In(assistantSessionIds) },
-            { assistantWageId: wage.id },
-          );
+      for (const line of order.lines.filter((l) => l.sessionsCount > 0)) {
+        if (line.sourceIds.length > 0) {
+          if (line.roleInSession === 'assistant') {
+            await this.manager
+              .getRepository(ClassSessionOrmEntity)
+              .update(
+                { id: In(line.sourceIds) },
+                { assistantWageId: wage.id, billedAssistantWage: Number(line.rate) },
+              );
+          } else {
+            await this.manager
+              .getRepository(ClassSessionOrmEntity)
+              .update(
+                { id: In(line.sourceIds) },
+                { wageId: wage.id, billedTeacherWage: Number(line.rate) },
+              );
+          }
+        }
       }
     }
     return ids;
@@ -956,7 +888,7 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
         const ids = bills.map((bill) => bill.id);
         await this.manager
           .getRepository(StudentAttendanceOrmEntity)
-          .update({ billId: In(ids) }, { billId: null });
+          .update({ billId: In(ids) }, { billId: null, billedAmount: null });
       }
     } else {
       const wages = await this.manager
@@ -966,7 +898,10 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
         const ids = wages.map((wage) => wage.id);
         await this.manager
           .getRepository(ClassSessionOrmEntity)
-          .update({ wageId: In(ids) }, { wageId: null });
+          .update({ wageId: In(ids) }, { wageId: null, billedTeacherWage: null });
+        await this.manager
+          .getRepository(ClassSessionOrmEntity)
+          .update({ assistantWageId: In(ids) }, { assistantWageId: null, billedAssistantWage: null });
       }
     }
     await this.manager.getRepository(PaymentPeriodOrmEntity).delete(id);
@@ -1063,15 +998,15 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
     if (type === 'tuition') {
       await this.manager
         .getRepository(StudentAttendanceOrmEntity)
-        .update({ billId: id }, { billId: null });
+        .update({ billId: id }, { billId: null, billedAmount: null });
       await this.manager.getRepository(StudentMonthlyBillOrmEntity).delete(id);
     } else {
       await this.manager
         .getRepository(ClassSessionOrmEntity)
-        .update({ wageId: id }, { wageId: null });
+        .update({ wageId: id }, { wageId: null, billedTeacherWage: null });
       await this.manager
         .getRepository(ClassSessionOrmEntity)
-        .update({ assistantWageId: id }, { assistantWageId: null });
+        .update({ assistantWageId: id }, { assistantWageId: null, billedAssistantWage: null });
       await this.manager.getRepository(TeacherMonthlyWageOrmEntity).delete(id);
     }
   }

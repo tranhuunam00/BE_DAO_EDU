@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not } from 'typeorm';
-import { CourseLevelPricingOrmEntity } from '../../infrastructure/persistence/typeorm/entities/course-level-pricing.orm-entity';
+
 import { JwtAuthGuard } from '../../infrastructure/security/jwt-auth.guard';
 import { RolesGuard } from '../../infrastructure/security/roles.guard';
 import { Roles } from '../../infrastructure/security/roles.decorator';
@@ -34,7 +34,7 @@ import { GetStudentByIdUseCase } from '../../application/use-cases/get-student-b
 import { UpdateStudentUseCase } from '../../application/use-cases/update-student.use-case';
 import { GetStudentTuitionReportUseCase } from '../../modules/billing/application/use-cases/get-student-tuition-report.use-case';
 import { CalculateStudentTuitionUseCase } from '../../modules/billing/application/use-cases/calculate-student-tuition.use-case';
-import { BillingCalculator } from '../../modules/billing/domain/services/billing-calculator';
+
 import {
   CreateStudentDto,
   UpdateStudentDto,
@@ -375,22 +375,6 @@ export class StudentController {
         })
       : [];
 
-    const levelIds = Array.from(
-      new Set(
-        attendances
-          .map((a) => a.classSession?.classEntity?.courseLevelId)
-          .filter(Boolean),
-      ),
-    );
-    let pricings: CourseLevelPricingOrmEntity[] = [];
-    if (levelIds.length > 0) {
-      pricings = await this.monthlyBillRepo.manager
-        .getRepository(CourseLevelPricingOrmEntity)
-        .find({
-          where: { courseLevelId: In(levelIds) },
-        });
-    }
-
     const results = await Promise.all(
       bills.map(async (bill) => {
         const items = await this.monthlyBillItemRepo.find({
@@ -402,24 +386,10 @@ export class StudentController {
 
         const billAttendances = attendances.filter((att) => att.billId === bill.id);
         const sessions = billAttendances.map((att) => {
-          const levelId = att.classSession?.classEntity?.courseLevelId;
           const sessionDate = att.classSession?.date;
-          const matchedPricing = BillingCalculator.getActivePricing(
-            pricings.map((p) => ({
-              courseLevelId: p.courseLevelId,
-              pricePerSession: Number(p.pricePerSession),
-              teacherWagePerSession: Number(p.teacherWagePerSession),
-              taWagePerSession: Number(p.taWagePerSession),
-              effectiveFrom: p.effectiveFrom,
-              effectiveTo: p.effectiveTo,
-              createdAt: p.createdAt,
-              id: p.id,
-            })),
-            sessionDate,
-            'pricePerSession',
-            levelId,
-          );
-          const rate = matchedPricing ? Number(matchedPricing.pricePerSession) : 0;
+          const rate = att.billedAmount !== null && att.billedAmount !== undefined
+            ? Number(att.billedAmount)
+            : 0;
           const amount = att.isPresent ? rate : 0;
           return {
             id: att.id,

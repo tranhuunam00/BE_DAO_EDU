@@ -119,7 +119,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const { where, params } = this.salaryWhereClause(filters);
     const rows = await this.ds.query(
       `SELECT
-         t.type,
+         COALESCE(wi.role, CASE WHEN t.type = 'Teaching Assistant' THEN 'assistant' ELSE 'teacher' END) AS "effectiveRole",
          COALESCE(SUM(wi.total_amount), 0)::numeric AS total,
          COALESCE(SUM(wi.total_amount * (CASE WHEN w.status = 'Paid' THEN 1 ELSE 0 END)), 0)::numeric AS paid
        FROM teacher_monthly_wages w
@@ -127,7 +127,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
        LEFT JOIN teacher_monthly_wage_items wi ON wi.wage_id = w.id
        LEFT JOIN classes cl ON cl.id = wi.class_id
        ${where}
-       GROUP BY t.type`,
+       GROUP BY "effectiveRole"`,
       params,
     );
 
@@ -139,7 +139,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       const total = Number(r.total);
       const paid = Number(r.paid);
       totalPaid += paid;
-      if (r.type === 'Teaching Assistant') {
+      if (r.effectiveRole === 'assistant') {
         totalTA += total;
       } else {
         totalMainTeacher += total;
@@ -194,14 +194,14 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const rows = await this.ds.query(
       `SELECT
          w.month,
-         t.type,
+         COALESCE(wi.role, CASE WHEN t.type = 'Teaching Assistant' THEN 'assistant' ELSE 'teacher' END) AS "effectiveRole",
          COALESCE(SUM(wi.total_amount), 0)::numeric AS total
        FROM teacher_monthly_wages w
        JOIN teachers t ON t.id = w.teacher_id
        LEFT JOIN teacher_monthly_wage_items wi ON wi.wage_id = w.id
        LEFT JOIN classes cl ON cl.id = wi.class_id
        ${where}
-       GROUP BY w.month, t.type
+       GROUP BY w.month, "effectiveRole"
        ORDER BY w.month DESC
        LIMIT 24`,
       params,
@@ -210,7 +210,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
     const monthMap: Record<string, { mainTeacher: number; ta: number }> = {};
     for (const r of rows) {
       if (!monthMap[r.month]) monthMap[r.month] = { mainTeacher: 0, ta: 0 };
-      if (r.type === 'Teaching Assistant') {
+      if (r.effectiveRole === 'assistant') {
         monthMap[r.month].ta += Number(r.total);
       } else {
         monthMap[r.month].mainTeacher += Number(r.total);
@@ -296,7 +296,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          sa.evaluation_comment AS "evaluationComment",
          cs.class_id AS "classId",
          TO_CHAR(cs.date::date, 'YYYY-MM') AS "month",
-         b_direct.status AS "directBillStatus"
+         b_direct.status AS "directBillStatus",
+         sa.billed_amount AS "billedAmount"
        FROM student_attendance sa
        JOIN class_sessions cs ON cs.id = sa.class_session_id
        JOIN students s ON s.id = sa.student_id
@@ -425,7 +426,9 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
       const student = classMap.get(record.studentId)!;
       const rateKey = `${record.studentId}_${record.classId}_${record.month}`;
       const sessionDate = sessionDateMap.get(record.sessionId);
-      const sessionRate = rateMap.get(rateKey) ?? getEffectiveRate(record.classId, sessionDate);
+      const sessionRate = record.billedAmount !== null && record.billedAmount !== undefined
+        ? Number(record.billedAmount)
+        : (rateMap.get(rateKey) ?? getEffectiveRate(record.classId, sessionDate));
       const sessionBillStatus = record.directBillStatus || billStatusMap.get(rateKey) || 'Unpaid';
 
       student.attendance[record.sessionId] = {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, Not } from 'typeorm';
@@ -23,6 +23,7 @@ import { UpdateCourseLevelPricingUseCase } from '../../modules/academics/applica
 import { DeleteCourseLevelPricingUseCase } from '../../modules/academics/application/use-cases/delete-course-level-pricing.use-case';
 import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 import { CoursePricingPersistencePort } from '../../modules/academics/application/ports/course-pricing-persistence.port';
+import { CoursePricingTimelineGuard } from '../../modules/academics/domain/services/course-pricing-timeline-guard.service';
 
 @ApiTags('Courses')
 @Controller('courses')
@@ -262,11 +263,21 @@ export class CourseController {
     const newFrom = dto.effectiveFrom;
     const newTo = dto.effectiveTo || null;
 
-    if (newTo && newFrom > newTo) {
+    if (newTo && newTo < newFrom) {
       throw new ConflictException('Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
-    // 1. Guard check: Must start AFTER the last reconciled date for each configured type
+    if (dto.pricePerSession !== undefined && Number(dto.pricePerSession) < 0) {
+      throw new BadRequestException('Đơn giá buổi học không được âm.');
+    }
+    if (dto.teacherWagePerSession !== undefined && Number(dto.teacherWagePerSession) < 0) {
+      throw new BadRequestException('Lương giáo viên không được âm.');
+    }
+    if (dto.taWagePerSession !== undefined && Number(dto.taWagePerSession) < 0) {
+      throw new BadRequestException('Lương trợ giảng không được âm.');
+    }
+
+    // 1. Lock check against already billed dates
     const [lastStudentBillDate, lastTeacherWageDate, lastAssistantWageDate] = await Promise.all([
       this.coursePricingPort.getMaxStudentBillDate(level.id),
       this.coursePricingPort.getMaxTeacherWageDate(level.id),
@@ -470,6 +481,13 @@ export class CourseController {
       if (error instanceof AcademicError) {
         if (error.code === 'PRICING_NOT_FOUND') {
           throw new NotFoundException(error.message);
+        }
+        if (
+          error.code === 'BAD_REQUEST' ||
+          error.code === 'INVALID_PRICING_TIMELINE' ||
+          error.code === 'INVALID_PRICING_AMOUNT'
+        ) {
+          throw new BadRequestException(error.message);
         }
         throw new ConflictException(error.message);
       }

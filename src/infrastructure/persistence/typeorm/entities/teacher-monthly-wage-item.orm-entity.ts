@@ -22,6 +22,9 @@ export class TeacherMonthlyWageItemOrmEntity {
   @Column({ type: 'varchar', name: 'level_name' })
   levelName!: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'teacher' })
+  role!: 'teacher' | 'assistant';
+
   @Column({ type: 'integer', name: 'sessions_count', default: 0 })
   sessionsCount!: number;
 
