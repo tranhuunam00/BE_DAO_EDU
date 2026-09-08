@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager, MoreThanOrEqual } from 'typeorm';
+import { DataSource, EntityManager, In, MoreThanOrEqual } from 'typeorm';
 import { ClassOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class.orm-entity';
 import { SessionStatus } from '../../../../domain/value-objects/session-status.enum';
 import { ClassScheduleOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
@@ -15,6 +15,7 @@ import {
 } from '../../application/ports/academics-persistence.port';
 import { AcademicError } from '../../domain/errors/academic.error';
 import { ScheduleAllocation } from '../../domain/services/schedule-conflict.policy';
+import { AttendanceDeletionGuard } from '../../domain/services/attendance-deletion-guard.service';
 
 @Injectable()
 export class TypeOrmAcademicsPersistenceAdapter
@@ -65,33 +66,10 @@ export class TypeOrmAcademicsPersistenceAdapter
     const allocations: ScheduleAllocation[] = [];
     
     for (const s of sessions) {
-      if (s.roomId) {
-        allocations.push({
-          id: s.id,
-          date: s.date,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          roomId: s.roomId,
-        });
-      }
-      if (s.teacherId) {
-        allocations.push({
-          id: s.id,
-          date: s.date,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          teacherId: s.teacherId,
-        });
-      }
-      if (s.assistantId) {
-        allocations.push({
-          id: s.id,
-          date: s.date,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          teacherId: s.assistantId,
-        });
-      }
+      const base = { id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime };
+      if (s.roomId) allocations.push({ ...base, roomId: s.roomId });
+      if (s.teacherId) allocations.push({ ...base, teacherId: s.teacherId });
+      if (s.assistantId) allocations.push({ ...base, teacherId: s.assistantId });
     }
     
     return allocations;
@@ -198,30 +176,41 @@ export class TypeOrmAcademicsPersistenceAdapter
       });
       const futureSessionIds = sessions.map((session) => session.id);
       if (futureSessionIds.length > 0) {
-        const deleteResult = await manager
-          .createQueryBuilder()
-          .delete()
-          .from(StudentAttendanceOrmEntity)
-          .where('student_id = :studentId', { studentId })
-          .andWhere('class_session_id IN (:...sessionIds)', {
-            sessionIds: futureSessionIds,
-          })
-          .execute();
-
-        await manager.getRepository(NotificationLogOrmEntity).save({
-          notificationId: null,
-          userId: null,
-          eventType: 'DELETE',
-          notificationType: 'CLASS',
-          title: `Tự động xóa ${deleteResult.affected || 0} buổi điểm danh tương lai khi học sinh thôi học lớp`,
-          metadata: {
-            classId,
+        const attendances = await manager.find(StudentAttendanceOrmEntity, {
+          where: {
+            classSessionId: In(futureSessionIds),
             studentId,
-            effectiveDate,
-            deletedCount: deleteResult.affected || 0,
-            source: 'auto_remove_future_attendance',
           },
         });
+
+        const safeAttendanceIds =
+          AttendanceDeletionGuard.filterSafeFutureAttendanceToDelete(
+            studentId,
+            effectiveDate,
+            sessions,
+            attendances,
+          );
+
+        if (safeAttendanceIds.length > 0) {
+          const deleteResult = await manager.delete(StudentAttendanceOrmEntity, {
+            id: In(safeAttendanceIds),
+          });
+
+          await manager.getRepository(NotificationLogOrmEntity).save({
+            notificationId: null,
+            userId: null,
+            eventType: 'DELETE',
+            notificationType: 'CLASS',
+            title: `Tự động xóa ${deleteResult.affected || 0} buổi điểm danh tương lai khi học sinh thôi học lớp`,
+            metadata: {
+              classId,
+              studentId,
+              effectiveDate,
+              deletedCount: deleteResult.affected || 0,
+              source: 'auto_remove_future_attendance',
+            },
+          });
+        }
       }
     });
   }
@@ -328,6 +317,151 @@ export class TypeOrmAcademicsPersistenceAdapter
       }
 
       return saved;
+    });
+  }
+
+  updateStudentJoinedDate(
+    classId: string,
+    studentId: string,
+    joinedDate: string,
+  ): Promise<{ message: string; deletedCount: number; createdCount: number }> {
+    return this.runSerializable(async (manager) => {
+      const classStudent = await manager.findOne(ClassStudentOrmEntity, {
+        where: { classId, studentId, status: 'Active' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!classStudent) {
+        throw new AcademicError(
+          'STUDENT_NOT_FOUND',
+          'Học sinh không ở trạng thái hoạt động trong lớp này.',
+        );
+      }
+
+      const sessions = await manager.find(ClassSessionOrmEntity, {
+        where: { classId },
+      });
+      const sessionIds = sessions.map((s) => s.id);
+      let attendances: StudentAttendanceOrmEntity[] = [];
+      if (sessionIds.length > 0) {
+        attendances = await manager.find(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(sessionIds), studentId },
+        });
+      }
+
+      // 1. Kiểm tra an toàn tuyệt đối trước khi thực hiện
+      AttendanceDeletionGuard.validateSafeToUpdateJoinedDate({
+        studentId,
+        newJoinedDate: joinedDate,
+        sessions,
+        attendances,
+      });
+
+      // 2. Tính toán danh sách xóa và tạo mới an toàn
+      const syncResult = AttendanceDeletionGuard.syncAttendanceForStudent({
+        studentId,
+        newJoinedDate: joinedDate,
+        sessions,
+        existingAttendances: attendances,
+      });
+
+      classStudent.joinedDate = joinedDate;
+      await manager.save(classStudent);
+
+      if (syncResult.deletedAttendanceIds.length > 0) {
+        await manager.delete(StudentAttendanceOrmEntity, {
+          id: In(syncResult.deletedAttendanceIds),
+        });
+      }
+
+      if (syncResult.createdAttendanceRecords.length > 0) {
+        const toSave = syncResult.createdAttendanceRecords.map((r) =>
+          manager.create(StudentAttendanceOrmEntity, {
+            classSessionId: r.classSessionId,
+            studentId: r.studentId,
+            isPresent: false,
+          }),
+        );
+        await manager.save(StudentAttendanceOrmEntity, toSave);
+      }
+
+      return {
+        message: 'Cập nhật ngày tham gia lớp và đồng bộ điểm danh thành công!',
+        deletedCount: syncResult.deletedAttendanceIds.length,
+        createdCount: syncResult.createdAttendanceRecords.length,
+      };
+    });
+  }
+
+  updateAllStudentsJoinedDate(
+    classId: string,
+    joinedDate: string,
+  ): Promise<{
+    message: string;
+    affectedStudents: number;
+    deletedCount: number;
+    createdCount: number;
+  }> {
+    return this.runSerializable(async (manager) => {
+      const classStudents = await manager.find(ClassStudentOrmEntity, {
+        where: { classId, status: 'Active' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (classStudents.length === 0) {
+        return {
+          message: 'Không có học sinh nào hoạt động trong lớp này.',
+          affectedStudents: 0,
+          deletedCount: 0,
+          createdCount: 0,
+        };
+      }
+
+      const sessions = await manager.find(ClassSessionOrmEntity, {
+        where: { classId },
+      });
+      const sessionIds = sessions.map((s) => s.id);
+      let attendances: StudentAttendanceOrmEntity[] = [];
+      if (sessionIds.length > 0) {
+        attendances = await manager.find(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(sessionIds) },
+        });
+      }
+
+      // Kiểm tra an toàn và đồng bộ hàng loạt cho toàn bộ học sinh
+      const syncResult = AttendanceDeletionGuard.syncAttendanceForAllStudents({
+        students: classStudents,
+        newJoinedDate: joinedDate,
+        sessions,
+        existingAttendances: attendances,
+      });
+
+      for (const cs of classStudents) {
+        cs.joinedDate = joinedDate;
+      }
+      await manager.save(ClassStudentOrmEntity, classStudents);
+
+      if (syncResult.deletedAttendanceIds.length > 0) {
+        await manager.delete(StudentAttendanceOrmEntity, {
+          id: In(syncResult.deletedAttendanceIds),
+        });
+      }
+
+      if (syncResult.createdAttendanceRecords.length > 0) {
+        const toSave = syncResult.createdAttendanceRecords.map((r) =>
+          manager.create(StudentAttendanceOrmEntity, {
+            classSessionId: r.classSessionId,
+            studentId: r.studentId,
+            isPresent: false,
+          }),
+        );
+        await manager.save(StudentAttendanceOrmEntity, toSave);
+      }
+
+      return {
+        message: 'Cập nhật ngày tham gia lớp cho toàn bộ học sinh thành công!',
+        affectedStudents: classStudents.length,
+        deletedCount: syncResult.deletedAttendanceIds.length,
+        createdCount: syncResult.createdAttendanceRecords.length,
+      };
     });
   }
 

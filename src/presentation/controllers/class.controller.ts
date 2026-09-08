@@ -46,6 +46,11 @@ import {
   RemoveStudentFromClassUseCase,
 } from '../../modules/academics/application/use-cases/manage-enrollment.use-cases';
 import { CreateAdhocSessionUseCase } from '../../modules/academics/application/use-cases/create-adhoc-session.use-case';
+import {
+  UpdateStudentJoinedDateUseCase,
+  UpdateAllStudentsJoinedDateUseCase,
+} from '../../modules/academics/application/use-cases/update-student-joined-date.use-case';
+import { AttendanceDeletionGuard } from '../../modules/academics/domain/services/attendance-deletion-guard.service';
 import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../modules/timekeeping/domain/services/timekeeping-matcher';
 
@@ -144,6 +149,8 @@ export class ClassController {
     private readonly removeStudentUseCase: RemoveStudentFromClassUseCase,
     private readonly createAdhocSessionUseCase: CreateAdhocSessionUseCase,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly updateStudentJoinedDateUseCase?: UpdateStudentJoinedDateUseCase,
+    private readonly updateAllStudentsJoinedDateUseCase?: UpdateAllStudentsJoinedDateUseCase,
   ) { }
 
   @Get()
@@ -578,58 +585,15 @@ export class ClassController {
     @Param('studentId') studentId: string,
     @Body() body: { joinedDate: string }
   ) {
-    if (!body.joinedDate) {
+    if (!body?.joinedDate) {
       throw new BadRequestException('joinedDate is required');
     }
-
-    const classStudent = await this.dataSource.getRepository(ClassStudentOrmEntity).findOne({
-      where: { classId, studentId, status: 'Active' }
-    });
-    if (!classStudent) {
-      throw new BadRequestException('Học sinh không ở trạng thái hoạt động trong lớp này.');
+    if (!this.updateStudentJoinedDateUseCase) {
+      throw new BadRequestException('Tính năng đang được khởi tạo.');
     }
-
-    classStudent.joinedDate = body.joinedDate;
-    await this.dataSource.getRepository(ClassStudentOrmEntity).save(classStudent);
-
-    // Sync attendance records for this student
-    await this.dataSource.transaction(async (manager) => {
-      const sessions = await manager.find(ClassSessionOrmEntity, {
-        where: { classId }
-      });
-
-      const sessionIdsBefore = sessions
-        .filter(s => s.date < body.joinedDate && !s.attendanceLocked)
-        .map(s => s.id);
-
-      if (sessionIdsBefore.length > 0) {
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(StudentAttendanceOrmEntity)
-          .where('student_id = :studentId', { studentId })
-          .andWhere('class_session_id IN (:...sessionIds)', { sessionIds: sessionIdsBefore })
-          .execute();
-      }
-
-      const sessionsAfter = sessions.filter(s => s.date >= body.joinedDate);
-      for (const session of sessionsAfter) {
-        const exists = await manager.findOne(StudentAttendanceOrmEntity, {
-          where: { classSessionId: session.id, studentId }
-        });
-        if (!exists) {
-          await manager.save(
-            manager.create(StudentAttendanceOrmEntity, {
-              classSessionId: session.id,
-              studentId,
-              isPresent: false,
-            })
-          );
-        }
-      }
-    });
-
-    return { message: 'Cập nhật ngày tham gia lớp và đồng bộ điểm danh thành công!' };
+    return this.runAcademic(() =>
+      this.updateStudentJoinedDateUseCase!.execute(classId, studentId, body.joinedDate),
+    );
   }
 
   @Put(':id/students/joined-date')
@@ -638,65 +602,15 @@ export class ClassController {
     @Param('id') classId: string,
     @Body() body: { joinedDate: string }
   ) {
-    if (!body.joinedDate) {
+    if (!body?.joinedDate) {
       throw new BadRequestException('joinedDate is required');
     }
-
-    const classStudents = await this.dataSource.getRepository(ClassStudentOrmEntity).find({
-      where: { classId, status: 'Active' }
-    });
-
-    if (classStudents.length === 0) {
-      return { message: 'Không có học sinh nào hoạt động trong lớp này.' };
+    if (!this.updateAllStudentsJoinedDateUseCase) {
+      throw new BadRequestException('Tính năng đang được khởi tạo.');
     }
-
-    await this.dataSource.transaction(async (manager) => {
-      // 1. Update all student join dates
-      for (const cs of classStudents) {
-        cs.joinedDate = body.joinedDate;
-        await manager.save(ClassStudentOrmEntity, cs);
-      }
-
-      // 2. Sync attendance for all of them
-      const sessions = await manager.find(ClassSessionOrmEntity, {
-        where: { classId }
-      });
-
-      // Clear attendance before new joinedDate
-      const sessionIdsBefore = sessions
-        .filter(s => s.date < body.joinedDate && !s.attendanceLocked)
-        .map(s => s.id);
-
-      if (sessionIdsBefore.length > 0) {
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(StudentAttendanceOrmEntity)
-          .where('class_session_id IN (:...sessionIds)', { sessionIds: sessionIdsBefore })
-          .execute();
-      }
-
-      // Create attendance on or after new joinedDate
-      const sessionsAfter = sessions.filter(s => s.date >= body.joinedDate);
-      for (const cs of classStudents) {
-        for (const session of sessionsAfter) {
-          const exists = await manager.findOne(StudentAttendanceOrmEntity, {
-            where: { classSessionId: session.id, studentId: cs.studentId }
-          });
-          if (!exists) {
-            await manager.save(
-              manager.create(StudentAttendanceOrmEntity, {
-                classSessionId: session.id,
-                studentId: cs.studentId,
-                isPresent: false,
-              })
-            );
-          }
-        }
-      }
-    });
-
-    return { message: 'Cập nhật ngày tham gia lớp cho toàn bộ học sinh thành công!' };
+    return this.runAcademic(() =>
+      this.updateAllStudentsJoinedDateUseCase!.execute(classId, body.joinedDate),
+    );
   }
 
   // ========= Sessions =========
@@ -865,10 +779,18 @@ export class ClassController {
     if (!session) {
       throw new NotFoundException('Không tìm thấy thông tin buổi học.');
     }
-    if (session.status !== SessionStatus.SCHEDULED || session.attendanceLocked) {
-      throw new ConflictException(
-        'Chỉ có thể xóa các buổi học ở trạng thái chưa diễn ra và chưa khóa điểm danh.',
-      );
+
+    const attendances = await this.attendanceRepo.find({
+      where: { classSessionId: sessionId },
+    });
+
+    try {
+      AttendanceDeletionGuard.validateSafeToDeleteSession(session, attendances);
+    } catch (error) {
+      if (error instanceof AcademicError) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
     }
 
     // Delete attendance records manually to prevent FK constraint violations
@@ -1075,6 +997,60 @@ export class ClassController {
     }
 
     return { message: 'Đã cập nhật điểm danh thành công (Admin override)' };
+  }
+
+  @Post('sessions/:sessionId/evaluations')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lưu đánh giá buổi học (Legacy compatibility)' })
+  async saveEvaluations(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+    @Body() body: SaveEvaluationsDto,
+  ) {
+    const session = await this.sessionRepo.findOneOrFail({
+      where: { id: sessionId },
+      relations: { classEntity: true },
+    });
+    await this.validateAttendancePermission(session, req);
+
+    const enrolledStudents = await this.classStudentRepo.find({
+      where: { classId: session.classId, status: 'Active' },
+    });
+    const enrolledIds = new Set(enrolledStudents.map((s) => s.studentId));
+
+    for (const item of body.evaluations) {
+      if (!enrolledIds.has(item.studentId)) {
+        throw new BadRequestException(
+          `Học sinh với ID ${item.studentId} không thuộc lớp học này.`,
+        );
+      }
+      if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
+        const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
+        if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
+          throw new BadRequestException('Điểm đánh giá phải là số từ 0 đến 10.');
+        }
+      }
+    }
+
+    for (const item of body.evaluations) {
+      let record = await this.attendanceRepo.findOne({
+        where: { classSessionId: sessionId, studentId: item.studentId },
+      });
+      if (!record) {
+        record = this.attendanceRepo.create({
+          classSessionId: sessionId,
+          studentId: item.studentId,
+        });
+      }
+      if (item.evaluationScore !== undefined) {
+        record.evaluationScore = item.evaluationScore ? String(item.evaluationScore) : null;
+      }
+      if (item.evaluationComment !== undefined) {
+        record.evaluationComment = item.evaluationComment;
+      }
+      await this.attendanceRepo.save(record);
+    }
+    return { message: 'Đã cập nhật đánh giá học sinh thành công' };
   }
 
 
@@ -1459,35 +1435,68 @@ export class ClassController {
       deleteFrom = (classEntity?.startDate && classEntity.startDate > today) ? classEntity.startDate : today;
     }
 
-    // Find the sessions to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
-    const sessionsToDelete = await this.sessionRepo.find({
+    // Find the sessions candidate to delete first so we can manually delete their attendance records (to prevent FK constraints errors)
+    const sessionsCandidate = await this.sessionRepo.find({
       where: {
         classId,
         date: MoreThanOrEqual(deleteFrom),
         attendanceLocked: false,
         status: SessionStatus.SCHEDULED,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        classId: true,
+        date: true,
+        status: true,
+        attendanceLocked: true,
+        wageId: true,
+        assistantWageId: true,
+      },
     });
 
-    if (sessionsToDelete.length > 0) {
-      const sessionIds = sessionsToDelete.map((s) => s.id);
-
-      // Delete orphaned attendance records manually to prevent FK constraint violations
-      await this.attendanceRepo.delete({
-        classSessionId: In(sessionIds),
+    const unsafeSessionIds = new Set<string>();
+    if (sessionsCandidate.length > 0) {
+      const candidateIds = sessionsCandidate.map((s) => s.id);
+      const attendances = await this.attendanceRepo.find({
+        where: { classSessionId: In(candidateIds) },
       });
+
+      const safeSessionIds = AttendanceDeletionGuard.filterSafeSessionsToDelete(
+        sessionsCandidate,
+        attendances,
+      );
+      const safeIdSet = new Set(safeSessionIds);
+
+      for (const s of sessionsCandidate) {
+        if (!safeIdSet.has(s.id)) {
+          unsafeSessionIds.add(s.id);
+        }
+      }
+
+      if (safeSessionIds.length > 0) {
+        // Delete orphaned attendance records manually to prevent FK constraint violations
+        await this.attendanceRepo.delete({
+          classSessionId: In(safeSessionIds),
+        });
+      }
     }
 
     // Delete future/past unlocked Scheduled sessions (+ their orphaned attendance records cascade via FK)
-    const deleteResult = await this.sessionRepo
+    const deleteQB = this.sessionRepo
       .createQueryBuilder()
       .delete()
       .where('class_id = :classId', { classId })
       .andWhere('date >= :deleteFrom', { deleteFrom })
       .andWhere('attendance_locked = false')
-      .andWhere('status = :status', { status: SessionStatus.SCHEDULED })
-      .execute();
+      .andWhere('status = :status', { status: SessionStatus.SCHEDULED });
+
+    if (unsafeSessionIds.size > 0) {
+      deleteQB.andWhere('id NOT IN (:...unsafeSessionIds)', {
+        unsafeSessionIds: Array.from(unsafeSessionIds),
+      });
+    }
+
+    const deleteResult = await deleteQB.execute();
 
     // Regenerate
     await this.generateSessions(classId, fromDateOrStart);

@@ -40,4 +40,15 @@ export abstract class AcademicsPersistencePort {
     teacherId: string | null,
     assistantId: string | null,
   ): Promise<any>;
+
+  abstract updateStudentJoinedDate(
+    classId: string,
+    studentId: string,
+    joinedDate: string,
+  ): Promise<{ message: string; deletedCount: number; createdCount: number }>;
+
+  abstract updateAllStudentsJoinedDate(
+    classId: string,
+    joinedDate: string,
+  ): Promise<{ message: string; affectedStudents: number; deletedCount: number; createdCount: number }>;
 }

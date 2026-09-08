@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { ClassScheduleOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-schedule.orm-entity';
@@ -41,6 +41,10 @@ import { TypeOrmCoursePricingPersistenceAdapter } from './infrastructure/persist
 import { GetCourseLevelPricingUseCase } from './application/use-cases/get-course-level-pricing.use-case';
 import { UpdateCourseLevelPricingUseCase } from './application/use-cases/update-course-level-pricing.use-case';
 import { DeleteCourseLevelPricingUseCase } from './application/use-cases/delete-course-level-pricing.use-case';
+import {
+  UpdateStudentJoinedDateUseCase,
+  UpdateAllStudentsJoinedDateUseCase,
+} from './application/use-cases/update-student-joined-date.use-case';
 
 @Module({
   imports: [
@@ -151,6 +155,22 @@ import { DeleteCourseLevelPricingUseCase } from './application/use-cases/delete-
         new DeleteCourseLevelPricingUseCase(persistence),
       inject: [CoursePricingPersistencePort],
     },
+    {
+      provide: UpdateStudentJoinedDateUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new UpdateStudentJoinedDateUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
+    {
+      provide: UpdateAllStudentsJoinedDateUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new UpdateAllStudentsJoinedDateUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
+  ],
+  exports: [
+    UpdateStudentJoinedDateUseCase,
+    UpdateAllStudentsJoinedDateUseCase,
   ],
 })
 export class AcademicsModule {}

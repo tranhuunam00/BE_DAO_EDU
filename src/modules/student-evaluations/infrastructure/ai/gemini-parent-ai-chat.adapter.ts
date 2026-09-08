@@ -15,6 +15,18 @@ export class GeminiParentAiChatAdapter implements IParentAiChatPort {
     context: ParentAiChatContext,
     history: ParentChatMessageItem[] = [],
   ): Promise<ParentAiChatResponse> {
+    const qLower = question.toLowerCase();
+    const asksAboutOthers =
+      qLower.includes('bạn khác') ||
+      qLower.includes('học sinh khác') ||
+      qLower.includes('bạn cùng lớp') ||
+      qLower.includes('điểm của bạn') ||
+      qLower.includes('bé khác');
+
+    if (asksAboutOthers) {
+      return this.generateFallbackResponse(question, context);
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {

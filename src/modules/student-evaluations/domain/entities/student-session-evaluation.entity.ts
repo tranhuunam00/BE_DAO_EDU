@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   HomeworkStatus,
   ParticipationStatus,
@@ -57,7 +58,9 @@ export class StudentSessionEvaluationEntity {
     this._homeworkStatus = props.homeworkStatus || HomeworkStatus.COMPLETED;
     this._participation = props.participation || ParticipationStatus.ACTIVE;
     this._understanding = props.understanding || UnderstandingStatus.UNDERSTOOD;
-    this._behaviorTags = props.behaviorTags ? Array.from(new Set(props.behaviorTags)) : [];
+    this._behaviorTags = props.behaviorTags
+      ? (props.behaviorTags.length <= 1 ? props.behaviorTags : Array.from(new Set(props.behaviorTags)))
+      : [];
     this._score = this.validateAndNormalizeScore(props.score);
     this._comment = this.validateComment(props.comment);
     this._isAiGenerated = props.isAiGenerated ?? false;
@@ -158,6 +161,9 @@ export class StudentSessionEvaluationEntity {
   }
 
   private generateUuid(): string {
+    if (typeof randomUUID === 'function') {
+      return randomUUID();
+    }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = (Math.random() * 16) | 0;
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
