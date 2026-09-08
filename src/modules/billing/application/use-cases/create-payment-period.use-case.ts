@@ -166,7 +166,7 @@ export class CreatePaymentPeriodUseCase {
   }
 }
 
-function applyAdjustments(
+export function applyAdjustments(
   orders: ReturnType<typeof BillingCalculator.calculate>,
   adjustments: BillingAdjustmentInput[] = [],
 ) {

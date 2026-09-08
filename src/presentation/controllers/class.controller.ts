@@ -865,6 +865,10 @@ export class ClassController {
       throw new BadRequestException('Buổi học này đã hoàn thành và khóa điểm danh.');
     }
 
+    if (session.wageId || session.assistantWageId) {
+      throw new ConflictException('Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng và không thể điểm danh lại.');
+    }
+
     session.status = SessionStatus.IN_PROGRESS;
     await this.sessionRepo.save(session);
 
@@ -903,6 +907,15 @@ export class ClassController {
       throw new BadRequestException('Không thể hoàn tác: Buổi học này đã hoàn thành và khóa điểm danh.');
     }
 
+    if (session.wageId || session.assistantWageId) {
+      throw new ConflictException('Không thể hoàn tác: Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng.');
+    }
+
+    const existingRecordsForRevert = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecordsForRevert.some((r) => r.billId !== null)) {
+      throw new ConflictException('Không thể hoàn tác: Buổi học này đã có học sinh được tính tiền vào hóa đơn.');
+    }
+
     if (session.status !== SessionStatus.IN_PROGRESS) {
       throw new BadRequestException('Chỉ có thể hoàn tác buổi học đang ở trạng thái "Đang học" (In-Progress).');
     }
@@ -931,6 +944,10 @@ export class ClassController {
     const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
     if (existingRecords.some((r) => r.billId !== null)) {
       throw new ConflictException('Buổi học này đã được tính tiền vào hóa đơn và không thể sửa điểm danh.');
+    }
+
+    if (session.wageId || session.assistantWageId) {
+      throw new ConflictException('Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng và không thể sửa điểm danh.');
     }
 
     if (session.attendanceLocked) {
@@ -985,6 +1002,12 @@ export class ClassController {
     const session = await this.sessionRepo.findOneOrFail({ where: { id: sessionId } });
     if (!session.attendanceLocked) {
       throw new ConflictException('Buổi học này chưa được chốt. Hãy sử dụng endpoint điểm danh thông thường.');
+    }
+
+    if (session.wageId || session.assistantWageId) {
+      throw new ConflictException(
+        'Không thể sửa điểm danh: Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng. Vui lòng liên hệ kế toán để điều chỉnh.',
+      );
     }
 
     // Check that none of the attendance records for this session have been billed
@@ -1143,6 +1166,12 @@ export class ClassController {
       );
     }
 
+    if (session.wageId || session.assistantWageId) {
+      throw new ConflictException(
+        'Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng và không thể chỉnh sửa.',
+      );
+    }
+
     if (session.attendanceLocked) {
       throw new ConflictException(
         'Completed or attendance-locked sessions cannot be changed.',
@@ -1255,6 +1284,7 @@ export class ClassController {
         .where('s.class_id = :classId', { classId: session.classId })
         .andWhere('s.date >= :startDate', { startDate: session.date })
         .andWhere('s.attendance_locked = false')
+        .andWhere('s.wage_id IS NULL AND s.assistant_wage_id IS NULL')
         .getMany();
 
       for (const fs of futureSessions) {

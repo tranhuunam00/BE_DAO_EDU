@@ -1,6 +1,9 @@
 export class CommissionSalaryCalculator {
   static calculateCommission(academyRevenue: number): number {
     const revenue = academyRevenue || 0;
+    if (revenue <= 0) {
+      return 0;
+    }
     if (revenue < 100000000) {
       return Math.round(revenue * 0.2);
     } else if (revenue < 200000000) {

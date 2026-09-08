@@ -228,9 +228,29 @@ describe('CreateCourseLevelPricingUseCase - Mandatory EffectiveTo & Guard Valida
     expect(mockPersistence.createPricing).toHaveBeenCalledWith(expect.objectContaining({
       courseLevelId: levelId,
       pricePerSession: 220000,
-      teacherWagePerSession: 100000, // inherited
-      taWagePerSession: 50000, // inherited
+      teacherWagePerSession: 0, // independent field isolation
+      taWagePerSession: 0,      // independent field isolation
     }));
+  });
+
+  it('Case C12b: should allow overlapping date ranges between different rate types (student vs teacher)', async () => {
+    const studentPricing: CoursePricingRecord = {
+      id: 'existing-p1',
+      courseLevelId: levelId,
+      effectiveFrom: '2026-04-01',
+      effectiveTo: '2026-06-30',
+      pricePerSession: 200000,
+      teacherWagePerSession: 0,
+      taWagePerSession: 0,
+    };
+    mockPersistence.findPricingByLevelId.mockResolvedValue([studentPricing]);
+
+    // Create teacher wage in overlapping date range - should SUCCEED
+    await expect(useCase.execute(levelId, {
+      effectiveFrom: '2026-04-01',
+      effectiveTo: '2026-06-30',
+      teacherWagePerSession: 150000,
+    })).resolves.toBeDefined();
   });
 
   // Case C13: Non-leap year 29/02 and invalid calendar dates

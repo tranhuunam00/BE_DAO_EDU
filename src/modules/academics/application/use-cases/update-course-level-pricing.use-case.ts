@@ -101,31 +101,49 @@ export class UpdateCourseLevelPricingUseCase {
       }
     }
 
-    // 5. Overlap validation with other records
+    // 5. Field-level Overlap validation with other records
     if (newTo && newFrom > newTo) {
       throw new AcademicError('PRICING_CONFLICT', 'Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
+    const targetPrice = dto.pricePerSession !== undefined ? Number(dto.pricePerSession) : Number(pricing.pricePerSession);
+    const targetTeacherWage = dto.teacherWagePerSession !== undefined ? Number(dto.teacherWagePerSession) : Number(pricing.teacherWagePerSession);
+    const targetTaWage = dto.taWagePerSession !== undefined ? Number(dto.taWagePerSession) : Number(pricing.taWagePerSession);
+
     if (isDateChanged) {
       const allPricings = await this.persistence.findPricingByLevelId(levelId);
       const otherPricings = allPricings.filter((p) => p.id !== id);
-      const hasOverlap = otherPricings.some((p) => {
-        const pFrom = p.effectiveFrom;
-        const pTo = p.effectiveTo;
-        if (newTo === null) {
-          return pTo === null || pTo >= newFrom;
-        }
-        if (pTo === null) {
-          return pFrom <= newTo;
-        }
-        return newFrom <= pTo && newTo >= pFrom;
-      });
 
-      if (hasOverlap) {
-        throw new AcademicError(
-          'PRICING_CONFLICT',
-          'Khoảng thời gian áp dụng bị trùng lặp với một bản ghi biểu giá khác.'
-        );
+      const checkFieldOverlap = (rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession', label: string) => {
+        const fieldPricings = otherPricings.filter((p) => Number((p as any)[rateField]) > 0);
+        const hasOverlap = fieldPricings.some((p) => {
+          const pFrom = p.effectiveFrom;
+          const pTo = p.effectiveTo;
+          if (newTo === null) {
+            return pTo === null || pTo >= newFrom;
+          }
+          if (pTo === null) {
+            return pFrom <= newTo;
+          }
+          return newFrom <= pTo && newTo >= pFrom;
+        });
+
+        if (hasOverlap) {
+          throw new AcademicError(
+            'PRICING_CONFLICT',
+            `Khoảng thời gian áp dụng ${label} bị trùng lặp với một bản ghi ${label} khác.`,
+          );
+        }
+      };
+
+      if (targetPrice > 0) {
+        checkFieldOverlap('pricePerSession', 'đơn giá học phí');
+      }
+      if (targetTeacherWage > 0) {
+        checkFieldOverlap('teacherWagePerSession', 'lương giáo viên');
+      }
+      if (targetTaWage > 0) {
+        checkFieldOverlap('taWagePerSession', 'lương trợ giảng');
       }
     }
 

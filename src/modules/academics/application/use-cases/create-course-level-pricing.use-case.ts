@@ -59,49 +59,47 @@ export class CreateCourseLevelPricingUseCase {
       );
     }
 
-    // 4. Overlap collision detection ("Chạm là Chặn")
-    const existingList = await this.persistence.findPricingByLevelId(levelId);
-    const hasOverlap = existingList.some((p) => {
-      const pFrom = p.effectiveFrom;
-      const pTo = p.effectiveTo;
-      if (pTo === null) {
-        return pFrom <= effectiveTo;
-      }
-      return effectiveFrom <= pTo && effectiveTo >= pFrom;
-    });
+    const finalPrice = dto.pricePerSession !== undefined ? Number(dto.pricePerSession) : 0;
+    const finalTeacherWage = dto.teacherWagePerSession !== undefined ? Number(dto.teacherWagePerSession) : 0;
+    const finalTaWage = dto.taWagePerSession !== undefined ? Number(dto.taWagePerSession) : 0;
 
-    if (hasOverlap) {
+    if (finalPrice <= 0 && finalTeacherWage <= 0 && finalTaWage <= 0) {
       throw new AcademicError(
-        'PRICING_CONFLICT',
-        'Khoảng thời gian áp dụng bị trùng lặp với một bản ghi biểu giá khác.',
+        'BAD_REQUEST',
+        'Vui lòng cấu hình ít nhất một loại đơn giá hoặc lương lớn hơn 0.',
       );
     }
 
-    // 5. Rate inheritance from previous pricing if fields are not provided
-    const activePricing = existingList
-      .filter((p) => p.effectiveFrom <= effectiveFrom && (!p.effectiveTo || p.effectiveTo >= effectiveFrom))
-      .pop() || existingList[existingList.length - 1];
+    // 4. Field-level Overlap collision detection ("Trùng dải ngày cùng đối tượng là Chặn")
+    const existingList = await this.persistence.findPricingByLevelId(levelId);
 
-    const finalPrice =
-      dto.pricePerSession !== undefined
-        ? Number(dto.pricePerSession)
-        : activePricing
-        ? Number(activePricing.pricePerSession)
-        : 0;
+    const checkFieldOverlap = (rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession', label: string) => {
+      const fieldPricings = existingList.filter((p) => Number((p as any)[rateField]) > 0);
+      const overlap = fieldPricings.some((p) => {
+        const pFrom = p.effectiveFrom;
+        const pTo = p.effectiveTo;
+        if (pTo === null) {
+          return pFrom <= effectiveTo;
+        }
+        return effectiveFrom <= pTo && effectiveTo >= pFrom;
+      });
+      if (overlap) {
+        throw new AcademicError(
+          'PRICING_CONFLICT',
+          `Khoảng thời gian áp dụng ${label} bị trùng lặp với một bản ghi ${label} khác.`,
+        );
+      }
+    };
 
-    const finalTeacherWage =
-      dto.teacherWagePerSession !== undefined
-        ? Number(dto.teacherWagePerSession)
-        : activePricing
-        ? Number(activePricing.teacherWagePerSession)
-        : 0;
-
-    const finalTaWage =
-      dto.taWagePerSession !== undefined
-        ? Number(dto.taWagePerSession)
-        : activePricing
-        ? Number(activePricing.taWagePerSession)
-        : 0;
+    if (finalPrice > 0) {
+      checkFieldOverlap('pricePerSession', 'đơn giá học phí');
+    }
+    if (finalTeacherWage > 0) {
+      checkFieldOverlap('teacherWagePerSession', 'lương giáo viên');
+    }
+    if (finalTaWage > 0) {
+      checkFieldOverlap('taWagePerSession', 'lương trợ giảng');
+    }
 
     return this.persistence.createPricing({
       courseLevelId: levelId,
