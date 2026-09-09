@@ -58,8 +58,11 @@ describe('GetDashboardSummaryUseCase', () => {
       if (queryStr.includes('FROM teacher_monthly_wages')) {
         return Promise.resolve([{ total: 5000000 }]);
       }
-      if (queryStr.includes('FROM student_monthly_bills')) {
+      if (queryStr.includes("FROM student_monthly_bills WHERE status = 'Paid'")) {
         return Promise.resolve([{ total: 10000000 }]);
+      }
+      if (queryStr.includes("FROM student_monthly_bills WHERE status != 'Paid'")) {
+        return Promise.resolve([{ total: 2000000 }]);
       }
       return Promise.resolve([]);
     });
@@ -74,6 +77,7 @@ describe('GetDashboardSummaryUseCase', () => {
     expect(result.statistics.totalCenters).toBe(2);
     expect(result.statistics.totalPaidSalary).toBe(5000000);
     expect(result.statistics.totalCollectedTuition).toBe(10000000);
+    expect(result.statistics.totalUncollectedTuition).toBe(2000000);
     expect(result.statistics.systemStatus).toBe('Hoạt động ổn định');
     
     expect(studentRepo.count).toHaveBeenCalled();

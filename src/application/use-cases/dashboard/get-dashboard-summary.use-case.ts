@@ -53,6 +53,7 @@ export class GetDashboardSummaryUseCase {
       courseDistribution,
       salaryRes,
       tuitionRes,
+      uncollectedTuitionRes,
     ] = await Promise.all([
       this.studentRepo.count(),
       this.teacherRepo.count(),
@@ -86,6 +87,9 @@ export class GetDashboardSummaryUseCase {
       this.studentRepo.query(
         `SELECT SUM(paid_amount) AS total FROM student_monthly_bills WHERE status = 'Paid'`
       ),
+      this.studentRepo.query(
+        `SELECT SUM(GREATEST(0, total_amount - COALESCE(paid_amount, 0))) AS total FROM student_monthly_bills WHERE status != 'Paid'`
+      ),
     ]);
 
     const monthlyNewCount = new Map<string, number>();
@@ -117,6 +121,7 @@ export class GetDashboardSummaryUseCase {
         totalCenters,
         totalPaidSalary: Number(salaryRes?.[0]?.total || 0),
         totalCollectedTuition: Number(tuitionRes?.[0]?.total || 0),
+        totalUncollectedTuition: Number(uncollectedTuitionRes?.[0]?.total || 0),
         studentGrowth,
         courseDistribution: (courseDistribution || []).map((d: any) => ({
           name: d.name,
