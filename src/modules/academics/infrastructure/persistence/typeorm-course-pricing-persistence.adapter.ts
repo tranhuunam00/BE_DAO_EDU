@@ -37,7 +37,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
   }
 
   async createPricing(pricingData: Partial<CourseLevelPricingOrmEntity>): Promise<CourseLevelPricingOrmEntity> {
-    return this.pricingRepo.create(pricingData);
+    const pricing = this.pricingRepo.create(pricingData);
+    return this.pricingRepo.save(pricing);
   }
 
   async deletePricing(id: string): Promise<void> {
