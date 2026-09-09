@@ -185,13 +185,15 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
             studentId: request.studentId,
           },
         });
-        attendance ??= attendanceRepo.create({
-          classSessionId: request.classSessionId,
-          studentId: request.studentId,
-        });
-        attendance.isPresent = false;
-        attendance.reason = `Nghỉ có phép: ${request.reason}`;
-        await attendanceRepo.save(attendance);
+        if (!attendance?.billId) {
+          attendance ??= attendanceRepo.create({
+            classSessionId: request.classSessionId,
+            studentId: request.studentId,
+          });
+          attendance.isPresent = false;
+          attendance.reason = `Nghỉ có phép: ${request.reason}`;
+          await attendanceRepo.save(attendance);
+        }
 
         await manager.getRepository(NotificationLogOrmEntity).save({
           notificationId: null,
@@ -388,5 +390,60 @@ export class TypeOrmLeaveRequestPersistenceAdapter implements LeaveRequestPersis
         'Chỉ có thể xử lý đơn xin nghỉ đang chờ duyệt.',
       );
     }
+  }
+
+  async isAttendanceBilled(
+    classSessionId: string,
+    studentId: string,
+  ): Promise<boolean> {
+    const att = await this.dataSource
+      .getRepository(StudentAttendanceOrmEntity)
+      .findOne({
+        where: { classSessionId, studentId },
+        select: { id: true, billId: true },
+      });
+    return Boolean(att?.billId);
+  }
+
+  async findStudentsByUserId(
+    userId: string,
+  ): Promise<{ id: string; name?: string; status?: string }[]> {
+    const students = await this.dataSource
+      .getRepository(StudentOrmEntity)
+      .find({
+        where: { userId },
+        select: { id: true, firstName: true, lastName: true, status: true },
+      });
+    return students.map((s) => ({
+      id: s.id,
+      name: `${s.lastName || ''} ${s.firstName || ''}`.trim(),
+      status: s.status,
+    }));
+  }
+
+  async isStudentOwnedByUser(
+    studentId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const count = await this.dataSource
+      .getRepository(StudentOrmEntity)
+      .count({ where: { id: studentId, userId } });
+    return count > 0;
+  }
+
+  async listForUserStudents(
+    userId: string,
+    filter: LeaveRequestListFilter,
+  ): Promise<LeaveRequestView[]> {
+    const students = await this.dataSource
+      .getRepository(StudentOrmEntity)
+      .find({ where: { userId }, select: { id: true } });
+    if (!students.length) return [];
+    const studentIds = students.map((s) => s.id);
+    const qb = this.buildViewQuery()
+      .where('leave.student_id IN (:...studentIds)', { studentIds });
+    this.applyFilter(qb, filter);
+    const entities = await qb.getMany();
+    return entities.map((entity: LeaveRequestOrmEntity) => this.toView(entity));
   }
 }

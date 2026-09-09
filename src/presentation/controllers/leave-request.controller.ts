@@ -75,7 +75,7 @@ export class LeaveRequestController {
     @Request() req: any,
     @Body() dto: SubmitLeaveRequestDto,
   ) {
-    const studentId = await this.getActiveStudentId(req);
+    const studentId = (await this.getActiveStudentId(req)) || dto.studentId;
     return this.run(() =>
       this.submitLeaveRequest.execute({
         studentUserId: req.user.sub,

@@ -7,7 +7,9 @@ export type LeaveRequestErrorCode =
   | 'INVALID_REASON'
   | 'DUPLICATE_LEAVE_REQUEST'
   | 'LEAVE_REQUEST_NOT_PENDING'
-  | 'FORBIDDEN';
+  | 'FORBIDDEN'
+  | 'ATTENDANCE_ALREADY_BILLED'
+  | 'AMBIGUOUS_STUDENT';
 
 export class LeaveRequestError extends Error {
   constructor(

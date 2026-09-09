@@ -632,6 +632,10 @@ export class StudentController {
             'Hóa đơn thuộc đợt thanh toán phải được cập nhật tại màn Kế toán',
           );
         }
+        await this.attendanceRepo.update(
+          { billId: bill.id },
+          { billId: null, billedAmount: null },
+        );
         await this.monthlyBillRepo.remove(bill); // CASCADE will delete items
       }
       return { success: true, message: 'Đã hủy chốt hóa đơn thành công' };

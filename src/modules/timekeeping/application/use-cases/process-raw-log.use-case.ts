@@ -253,6 +253,8 @@ export class ProcessRawLogUseCase {
       .where('cs.student_id = :studentId', { studentId: student.id })
       .andWhere('cs.status = :status', { status: 'Active' })
       .andWhere('session.date = :date', { date: dateString })
+      .andWhere('session.attendance_locked = false')
+      .andWhere("session.status != 'Completed'")
       .select([
         'session.id AS id',
         'c.class_name AS className',
@@ -286,6 +288,12 @@ export class ProcessRawLogUseCase {
         where: { studentId: student.id, classSessionId: res.classSessionId }
       });
 
+      // Nếu đã có bản ghi điểm danh đã chốt hóa đơn (billId) -> Không ghi đè
+      if (attendance && attendance.billId !== null && attendance.billId !== undefined) {
+        savedResults.push(attendance);
+        continue;
+      }
+
       // Nếu đã có bản ghi điểm danh do giáo viên tích thủ công (manual) -> Không ghi đè
       if (attendance && attendance.attendanceType === 'manual') {
         savedResults.push(attendance);
@@ -308,7 +316,7 @@ export class ProcessRawLogUseCase {
 
       console.log(`[ProcessRawLog] Saving attendance: studentId=${student.id}, sessionId=${res.classSessionId}, isPresent=${res.isPresent}, type=${res.attendanceType}, note=${res.note}`);
       const saved = await this.studentAttendanceRepository.save(attendance);
-      console.log(`[ProcessRawLog] Attendance SAVED successfully: ID=${saved.id}, isPresent=${saved.isPresent}`);
+      console.log(`[ProcessRawLog] Attendance SAVED successfully: ID=${saved?.id}, isPresent=${saved?.isPresent}`);
       savedResults.push(saved);
     }
 

@@ -44,6 +44,7 @@ describe('StudyMaterialController', () => {
       ...overrides.teacherRepo,
     },
     studentRepo: {
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
       ...overrides.studentRepo,
     },
@@ -130,6 +131,7 @@ describe('StudyMaterialController', () => {
     it('STUDENT: returns enrolled active classes', async () => {
       const { ctrl, repos } = makeController();
       repos.studentRepo.findOne.mockResolvedValue(mockStudent);
+      repos.studentRepo.find.mockResolvedValue([mockStudent]);
       repos.classStudentRepo.find.mockResolvedValue([
         { studentId: 'student-1', classEntity: mockClass, status: 'Active' },
       ]);

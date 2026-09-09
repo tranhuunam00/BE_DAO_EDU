@@ -77,4 +77,19 @@ export abstract class LeaveRequestPersistencePort {
     session: LeaveSessionDetails,
   ): Promise<LeaveRequest>;
   abstract saveCancellation(request: LeaveRequest): Promise<LeaveRequest>;
+  abstract isAttendanceBilled(
+    classSessionId: string,
+    studentId: string,
+  ): Promise<boolean>;
+  abstract findStudentsByUserId(
+    userId: string,
+  ): Promise<{ id: string; name?: string; status?: string }[]>;
+  abstract isStudentOwnedByUser(
+    studentId: string,
+    userId: string,
+  ): Promise<boolean>;
+  abstract listForUserStudents(
+    userId: string,
+    filter: LeaveRequestListFilter,
+  ): Promise<LeaveRequestView[]>;
 }

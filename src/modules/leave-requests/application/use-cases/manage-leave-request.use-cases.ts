@@ -10,19 +10,23 @@ export class ListMyLeaveRequestsUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
 
   async execute(input: { studentUserId: string; studentId?: string; status?: LeaveRequestStatus }) {
-    let studentId = input.studentId;
-    if (!studentId) {
-      studentId = (await this.persistence.findStudentIdByUserId(
+    if (input.studentId) {
+      const isOwner = await this.persistence.isStudentOwnedByUser(
+        input.studentId,
         input.studentUserId,
-      )) || undefined;
-    }
-    if (!studentId) {
-      throw new LeaveRequestError(
-        'STUDENT_NOT_FOUND',
-        'Không tìm thấy hồ sơ học sinh.',
       );
+      if (!isOwner) {
+        throw new LeaveRequestError(
+          'FORBIDDEN',
+          'Bạn không có quyền xem đơn của học sinh này.',
+        );
+      }
+      return this.persistence.listForStudent(input.studentId, {
+        status: input.status,
+      });
     }
-    return this.persistence.listForStudent(studentId, {
+
+    return this.persistence.listForUserStudents(input.studentUserId, {
       status: input.status,
     });
   }
@@ -90,6 +94,19 @@ export class ReviewLeaveRequestUseCase {
       );
     }
 
+    if (input.decision === 'approved') {
+      const isBilled = await this.persistence.isAttendanceBilled(
+        request.classSessionId,
+        request.studentId,
+      );
+      if (isBilled) {
+        throw new LeaveRequestError(
+          'ATTENDANCE_ALREADY_BILLED',
+          'Không thể duyệt đơn xin nghỉ: Buổi học này của học sinh đã được xuất hóa đơn tính học phí. Vui lòng liên hệ kế toán để điều chỉnh trước.',
+        );
+      }
+    }
+
     const now = new Date();
     if (input.decision === 'approved') {
       request.approve(input.actorUserId, input.reviewNote ?? null, now);
@@ -105,18 +122,6 @@ export class CancelLeaveRequestUseCase {
   constructor(private readonly persistence: LeaveRequestPersistencePort) {}
 
   async execute(input: { requestId: string; studentUserId: string; studentId?: string }) {
-    let studentId = input.studentId;
-    if (!studentId) {
-      studentId = (await this.persistence.findStudentIdByUserId(
-        input.studentUserId,
-      )) || undefined;
-    }
-    if (!studentId) {
-      throw new LeaveRequestError(
-        'STUDENT_NOT_FOUND',
-        'Không tìm thấy hồ sơ học sinh.',
-      );
-    }
     const request = await this.persistence.findById(input.requestId);
     if (!request) {
       throw new LeaveRequestError(
@@ -124,12 +129,23 @@ export class CancelLeaveRequestUseCase {
         'Không tìm thấy đơn xin nghỉ.',
       );
     }
-    if (request.studentId !== studentId) {
-      throw new LeaveRequestError(
-        'FORBIDDEN',
-        'Bạn không có quyền hủy đơn xin nghỉ này.',
-      );
+
+    const isOwner = await this.persistence.isStudentOwnedByUser(
+      request.studentId,
+      input.studentUserId,
+    );
+    if (!isOwner) {
+      const fallbackId = (await this.persistence.findStudentIdByUserId(
+        input.studentUserId,
+      )) || undefined;
+      if (fallbackId !== request.studentId) {
+        throw new LeaveRequestError(
+          'FORBIDDEN',
+          'Bạn không có quyền hủy đơn xin nghỉ này.',
+        );
+      }
     }
+
     request.cancel(new Date());
     const saved = await this.persistence.saveCancellation(request);
     return this.persistence.findViewById(saved.id!);

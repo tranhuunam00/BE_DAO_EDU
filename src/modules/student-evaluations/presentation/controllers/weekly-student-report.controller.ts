@@ -47,9 +47,16 @@ export class WeeklyStudentReportController {
       throw new ForbiddenException('Không xác định được danh tính người dùng');
     }
 
-    // 1. Xác định studentId (Nếu có header x-student-id thì ưu tiên, nếu không lấy bạn đầu tiên)
+    // 1. Xác định studentId (Nếu có header x-student-id thì kiểm tra quyền sở hữu, nếu không lấy con đầu tiên)
     let targetStudentId = headerStudentId;
-    if (!targetStudentId) {
+    if (targetStudentId) {
+      const owned = await this.studentRepo.findOne({
+        where: { id: targetStudentId, userId },
+      });
+      if (!owned) {
+        throw new ForbiddenException('Bạn không có quyền truy cập báo cáo của học sinh này.');
+      }
+    } else {
       const defaultStudent = await this.studentRepo.findOne({
         where: { userId },
       });

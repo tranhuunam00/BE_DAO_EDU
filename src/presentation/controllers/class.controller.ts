@@ -486,6 +486,7 @@ export class ClassController {
         .where('class_id = :classId', { classId: id })
         .andWhere('date >= :today', { today: todayStr })
         .andWhere('attendance_locked = false')
+        .andWhere('wage_id IS NULL')
         .execute();
     }
 
@@ -499,6 +500,7 @@ export class ClassController {
         .where('class_id = :classId', { classId: id })
         .andWhere('date >= :today', { today: todayStr })
         .andWhere('attendance_locked = false')
+        .andWhere('assistant_wage_id IS NULL')
         .execute();
     }
 
@@ -867,6 +869,11 @@ export class ClassController {
 
     if (session.wageId || session.assistantWageId) {
       throw new ConflictException('Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng và không thể điểm danh lại.');
+    }
+
+    const existingRecords = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    if (existingRecords.some((r) => r.billId !== null)) {
+      throw new ConflictException('Buổi học này đã có học sinh được tính tiền vào hóa đơn và không thể bắt đầu điểm danh lại.');
     }
 
     session.status = SessionStatus.IN_PROGRESS;
@@ -1285,6 +1292,15 @@ export class ClassController {
         .andWhere('s.date >= :startDate', { startDate: session.date })
         .andWhere('s.attendance_locked = false')
         .andWhere('s.wage_id IS NULL AND s.assistant_wage_id IS NULL')
+        .andWhere((qb) => {
+          const subQuery = qb
+            .subQuery()
+            .select('1')
+            .from('student_attendance', 'att')
+            .where('att.class_session_id = s.id AND att.bill_id IS NOT NULL')
+            .getQuery();
+          return 'NOT EXISTS ' + subQuery;
+        })
         .getMany();
 
       for (const fs of futureSessions) {
@@ -1717,6 +1733,10 @@ export class ClassController {
         let attendance = await this.attendanceRepo.findOne({
           where: { studentId: student.id, classSessionId: res.classSessionId }
         });
+
+        if (attendance && attendance.billId !== null && attendance.billId !== undefined) {
+          continue;
+        }
 
         if (attendance && attendance.attendanceType === 'manual') {
           continue;

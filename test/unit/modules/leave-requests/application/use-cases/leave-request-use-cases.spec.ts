@@ -107,6 +107,21 @@ class InMemoryLeaveRequestPersistence extends LeaveRequestPersistencePort {
   findStudentIdByUserId(userId: string) {
     return Promise.resolve(userId === 'student-user' ? 'student-1' : null);
   }
+  findStudentsByUserId(userId: string) {
+    return Promise.resolve(userId === 'student-user' ? [{ id: 'student-1', status: 'Active' }] : []);
+  }
+  isStudentOwnedByUser(studentId: string, userId: string) {
+    return Promise.resolve(userId === 'student-user' && studentId === 'student-1');
+  }
+  isAttendanceBilled(sessionId: string, studentId: string) {
+    void sessionId;
+    void studentId;
+    return Promise.resolve(false);
+  }
+  listForUserStudents(userId: string, filter: LeaveRequestListFilter) {
+    void userId;
+    return this.listForStudent('student-1', filter);
+  }
   findSession(sessionId: string) {
     return Promise.resolve(sessionId === this.session.id ? this.session : null);
   }

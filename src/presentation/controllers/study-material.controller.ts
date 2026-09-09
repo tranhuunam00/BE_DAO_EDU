@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StudyMaterialOrmEntity } from '../../infrastructure/persistence/typeorm/entities/study-material.orm-entity';
 import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class.orm-entity';
@@ -126,27 +126,43 @@ export class StudyMaterialController {
     if (req.user.role === Role.STUDENT) {
       const userId = req.user.sub;
       const headerStudentId = req?.headers?.['x-student-id'];
-      let student = null;
+      let studentIds: string[] = [];
       if (headerStudentId && typeof headerStudentId === 'string' && userId) {
-        student = await this.studentRepo.findOne({
+        const student = await this.studentRepo.findOne({
           where: { id: headerStudentId, userId },
         });
+        if (student) studentIds = [student.id];
       }
-      if (!student && userId) {
-        student = await this.studentRepo.findOne({
-          where: { userId },
-        });
+      if (studentIds.length === 0 && userId) {
+        if (typeof this.studentRepo.find === 'function') {
+          const students = await this.studentRepo.find({
+            where: { userId },
+          });
+          studentIds = students.map((s) => s.id);
+        } else if (typeof this.studentRepo.findOne === 'function') {
+          const student = await this.studentRepo.findOne({
+            where: { userId },
+          });
+          if (student) studentIds = [student.id];
+        }
       }
-      if (!student) return [];
+      if (studentIds.length === 0) return [];
 
       const classStudents = await this.classStudentRepo.find({
-        where: { studentId: student.id, status: 'Active' },
+        where: studentIds.length === 1
+          ? { studentId: studentIds[0], status: 'Active' }
+          : { studentId: In(studentIds), status: 'Active' },
         relations: { classEntity: true },
       });
 
-      return classStudents
-        .map((cs) => cs.classEntity)
-        .filter((c) => c !== null && c.status === 'Active');
+      const uniqueClassesMap = new Map<string, ClassOrmEntity>();
+      for (const cs of classStudents) {
+        if (cs.classEntity && cs.classEntity.status === 'Active') {
+          uniqueClassesMap.set(cs.classEntity.id, cs.classEntity);
+        }
+      }
+
+      return Array.from(uniqueClassesMap.values());
     }
 
     return [];

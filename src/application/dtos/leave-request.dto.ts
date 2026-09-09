@@ -10,6 +10,11 @@ import {
 import type { LeaveRequestStatus } from '../../modules/leave-requests/domain/entities/leave-request';
 
 export class SubmitLeaveRequestDto {
+  @ApiPropertyOptional({ description: 'ID học sinh xin nghỉ (khi dùng chung tài khoản)' })
+  @IsOptional()
+  @IsUUID()
+  studentId?: string;
+
   @ApiProperty({ description: 'ID buổi học muốn xin nghỉ' })
   @IsUUID()
   classSessionId!: string;
