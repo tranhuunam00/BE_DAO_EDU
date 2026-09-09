@@ -5,6 +5,8 @@ export interface GetPricingResultDto extends CoursePricingRecord {
   isTeacherWageLocked: boolean;
   isTaWageLocked: boolean;
   isDateRangeLocked: boolean;
+  isEffectiveFromLocked: boolean;
+  isEffectiveToLocked: boolean;
   lastStudentBillDate: string | null;
   lastTeacherWageDate: string | null;
   lastAssistantWageDate: string | null;
@@ -43,6 +45,8 @@ export class GetCourseLevelPricingUseCase {
       this.persistence.getMaxAssistantWageDate(levelId),
     ]);
 
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+
     return Promise.all(
       pricings.map(async (p) => {
         const pFrom = p.effectiveFrom;
@@ -54,7 +58,9 @@ export class GetCourseLevelPricingUseCase {
           this.persistence.checkAssistantWages(levelId, pFrom, pTo),
         ]);
 
-        const isDateRangeLocked = isStudentPriceLocked || isTeacherWageLocked || isTaWageLocked;
+        const isEffectiveFromLocked = pFrom <= todayStr;
+        const isEffectiveToLocked = pTo !== null && pTo <= todayStr;
+        const isDateRangeLocked = isEffectiveFromLocked && isEffectiveToLocked;
 
         return {
           ...p,
@@ -62,6 +68,8 @@ export class GetCourseLevelPricingUseCase {
           isTeacherWageLocked,
           isTaWageLocked,
           isDateRangeLocked,
+          isEffectiveFromLocked,
+          isEffectiveToLocked,
           lastStudentBillDate,
           lastTeacherWageDate,
           lastAssistantWageDate,

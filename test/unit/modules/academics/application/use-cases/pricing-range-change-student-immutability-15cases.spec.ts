@@ -24,7 +24,7 @@ describe('Pricing Range Change Student Immutability Suite (15 Cases)', () => {
       getMaxTeacherWageDate: jest.fn().mockResolvedValue(null),
       getMaxAssistantWageDate: jest.fn().mockResolvedValue(null),
     };
-    updateUseCase = new UpdateCourseLevelPricingUseCase(mockPersistence);
+    updateUseCase = new UpdateCourseLevelPricingUseCase(mockPersistence, () => '2025-12-01');
     createUseCase = new CreateCourseLevelPricingUseCase(mockPersistence);
   });
 

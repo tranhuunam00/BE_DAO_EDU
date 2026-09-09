@@ -3,7 +3,11 @@ import { UpdateCourseLevelPricingDto } from '../../../../application/dtos/course
 import { AcademicError } from '../../domain/errors/academic.error';
 
 export class UpdateCourseLevelPricingUseCase {
-  constructor(private readonly persistence: CoursePricingPersistencePort) {}
+  constructor(
+    private readonly persistence: CoursePricingPersistencePort,
+    private readonly getToday: () => string = () =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
+  ) {}
 
   async execute(id: string, dto: UpdateCourseLevelPricingDto): Promise<CoursePricingRecord> {
     const pricing = await this.persistence.findPricingById(id);
@@ -58,32 +62,47 @@ export class UpdateCourseLevelPricingUseCase {
       }
     }
 
-    // Helper function to check if a date range change violates a chốt sổ date boundary
-    const validateDateLock = async (oldDate: string | null, newDate: string | null) => {
-      // For effectiveFrom, it is never null. For effectiveTo, it can be null.
-      const checkLock = async (dateVal: string | null, maxDate: string | null) => {
-        if (!dateVal || !maxDate) return false;
-        return dateVal <= maxDate;
-      };
+    const todayStr = this.getToday();
 
+    // Helper function to check if a date violates a chốt sổ date boundary
+    const checkLock = (dateVal: string | null, maxDate: string | null) => {
+      if (!dateVal || !maxDate) return false;
+      return dateVal <= maxDate;
+    };
+
+    const validateMaxLock = async (dateVal: string | null) => {
+      if (!dateVal) return false;
       if (Number(pricing.pricePerSession) > 0) {
         const max = await this.persistence.getMaxStudentBillDate(levelId);
-        if (await checkLock(oldDate, max) || await checkLock(newDate, max)) return true;
+        if (checkLock(dateVal, max)) return true;
       }
       if (Number(pricing.teacherWagePerSession) > 0) {
         const max = await this.persistence.getMaxTeacherWageDate(levelId);
-        if (await checkLock(oldDate, max) || await checkLock(newDate, max)) return true;
+        if (checkLock(dateVal, max)) return true;
       }
       if (Number(pricing.taWagePerSession) > 0) {
         const max = await this.persistence.getMaxAssistantWageDate(levelId);
-        if (await checkLock(oldDate, max) || await checkLock(newDate, max)) return true;
+        if (checkLock(dateVal, max)) return true;
       }
       return false;
     };
 
-    // 2. Guard effectiveFrom changes
+    // 2. Guard effectiveFrom changes:
+    // Phải cho sửa nếu ngày bắt đầu > ngày hôm nay. Nếu <= ngày hôm nay: KHÔNG cho sửa.
     if (dto.effectiveFrom !== undefined && dto.effectiveFrom !== pricing.effectiveFrom) {
-      if (await validateDateLock(pricing.effectiveFrom, dto.effectiveFrom)) {
+      if (pricing.effectiveFrom <= todayStr) {
+        throw new AcademicError(
+          'PRICING_CONFLICT',
+          `Không thể thay đổi ngày bắt đầu vì bảng giá đã bắt đầu áp dụng (${pricing.effectiveFrom} <= ngày hôm nay ${todayStr}). Chỉ cho phép sửa nếu ngày bắt đầu lớn hơn ngày hôm nay.`
+        );
+      }
+      if (dto.effectiveFrom <= todayStr) {
+        throw new AcademicError(
+          'PRICING_CONFLICT',
+          `Ngày bắt đầu mới (${dto.effectiveFrom}) phải lớn hơn ngày hôm nay (${todayStr}).`
+        );
+      }
+      if (await validateMaxLock(dto.effectiveFrom)) {
         throw new AcademicError(
           'PRICING_CONFLICT',
           `Không thể thay đổi ngày bắt đầu của bảng giá liên quan đến giai đoạn đã chốt sổ/lương.`
@@ -91,17 +110,40 @@ export class UpdateCourseLevelPricingUseCase {
       }
     }
 
-    // 3. Guard effectiveTo changes
+    // 3. Guard effectiveTo changes:
+    // Phải cho sửa nếu ngày kết thúc > ngày hôm nay hoặc chưa có ngày kết thúc (null).
     if (dto.effectiveTo !== undefined && dto.effectiveTo !== pricing.effectiveTo) {
-      if (await validateDateLock(pricing.effectiveTo, dto.effectiveTo || null)) {
+      if (pricing.effectiveTo !== null && pricing.effectiveTo <= todayStr) {
         throw new AcademicError(
           'PRICING_CONFLICT',
-          `Không thể thay đổi ngày kết thúc của bảng giá liên quan đến giai đoạn đã chốt sổ/lương.`
+          `Không thể thay đổi ngày kết thúc vì bảng giá đã kết thúc trong quá khứ (${pricing.effectiveTo} <= ngày hôm nay ${todayStr}). Chỉ cho phép sửa nếu ngày kết thúc lớn hơn ngày hôm nay.`
         );
+      }
+
+      // Check range cho ngày kết thúc mới
+      if (dto.effectiveTo !== null) {
+        if (dto.effectiveTo < newFrom) {
+          throw new AcademicError(
+            'PRICING_CONFLICT',
+            'Ngày bắt đầu áp dụng không được sau ngày kết thúc.'
+          );
+        }
+        if (dto.effectiveTo < todayStr) {
+          throw new AcademicError(
+            'PRICING_CONFLICT',
+            `Ngày kết thúc mới (${dto.effectiveTo}) không được ở trong quá khứ (trước ngày hôm nay ${todayStr}).`
+          );
+        }
+        if (await validateMaxLock(dto.effectiveTo)) {
+          throw new AcademicError(
+            'PRICING_CONFLICT',
+            `Không thể thay đổi ngày kết thúc của bảng giá liên quan đến giai đoạn đã chốt sổ/lương.`
+          );
+        }
       }
     }
 
-    // 5. Field-level Overlap validation with other records
+    // 4. Validate overall range
     if (newTo && newFrom > newTo) {
       throw new AcademicError('PRICING_CONFLICT', 'Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }

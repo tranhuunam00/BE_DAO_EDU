@@ -22,7 +22,7 @@ describe('TA Pricing Update Range Suite (12 Cases)', () => {
       getMaxTeacherWageDate: jest.fn().mockResolvedValue(null),
       getMaxAssistantWageDate: jest.fn().mockResolvedValue(null),
     };
-    useCase = new UpdateCourseLevelPricingUseCase(mockPersistence);
+    useCase = new UpdateCourseLevelPricingUseCase(mockPersistence, () => '2026-01-01');
   });
 
   describe('Nhóm 1: Cập nhật dải ngày lương Trợ giảng thành công (Cases U06 - U10)', () => {
