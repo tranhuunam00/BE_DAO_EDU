@@ -10,13 +10,24 @@ export class DeleteCourseLevelPricingUseCase {
       throw new AcademicError('PRICING_NOT_FOUND', 'Không tìm thấy bảng giá lịch sử này.');
     }
     const levelId = pricing.courseLevelId;
+    const pricingType = pricing.type || (Number(pricing.teacherWagePerSession) > 0 ? 'teacher' : Number(pricing.taWagePerSession) > 0 ? 'ta' : 'student');
 
-    const isLocked = (await this.persistence.checkStudentBills(levelId, pricing.effectiveFrom, pricing.effectiveTo)) ||
-                     (await this.persistence.checkTeacherWages(levelId, pricing.effectiveFrom, pricing.effectiveTo)) ||
-                     (await this.persistence.checkAssistantWages(levelId, pricing.effectiveFrom, pricing.effectiveTo));
+    let isLocked = false;
+    let conflictMessage = '';
+
+    if (pricingType === 'student') {
+      isLocked = await this.persistence.checkStudentBills(levelId, pricing.effectiveFrom, pricing.effectiveTo);
+      conflictMessage = 'Không thể xóa bảng giá học phí này vì đã có dữ liệu thu học phí trong khoảng thời gian áp dụng.';
+    } else if (pricingType === 'teacher') {
+      isLocked = await this.persistence.checkTeacherWages(levelId, pricing.effectiveFrom, pricing.effectiveTo);
+      conflictMessage = 'Không thể xóa bảng giá lương giáo viên này vì đã có dữ liệu tính lương trong khoảng thời gian áp dụng.';
+    } else if (pricingType === 'ta') {
+      isLocked = await this.persistence.checkAssistantWages(levelId, pricing.effectiveFrom, pricing.effectiveTo);
+      conflictMessage = 'Không thể xóa bảng giá lương trợ giảng này vì đã có dữ liệu tính lương trợ giảng trong khoảng thời gian áp dụng.';
+    }
 
     if (isLocked) {
-      throw new AcademicError('PRICING_CONFLICT', 'Không thể xóa bảng giá này vì đã có dữ liệu thu học phí hoặc tính lương trong khoảng thời gian áp dụng.');
+      throw new AcademicError('PRICING_CONFLICT', conflictMessage);
     }
 
     await this.persistence.deletePricing(pricing.id);

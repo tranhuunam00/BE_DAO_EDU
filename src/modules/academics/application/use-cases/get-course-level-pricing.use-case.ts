@@ -25,16 +25,25 @@ export class GetCourseLevelPricingUseCase {
   async execute(levelId: string): Promise<GetPricingResultDto[]> {
     const pricings = await this.persistence.findPricingByLevelId(levelId);
 
-    // Auto-heal multiple open-ended records if any legacy records have effectiveTo = null before a subsequent record
-    const sortedAsc = [...pricings].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
-    for (let i = 0; i < sortedAsc.length - 1; i++) {
-      const current = sortedAsc[i];
-      const next = sortedAsc[i + 1];
-      if (current.effectiveTo === null || current.effectiveTo >= next.effectiveFrom) {
-        const healedTo = subtractOneDay(next.effectiveFrom);
-        if (current.effectiveTo !== healedTo) {
-          current.effectiveTo = healedTo;
-          await this.persistence.savePricing(current as any);
+    // Auto-heal multiple open-ended records within each type independently
+    const types: Array<'student' | 'teacher' | 'ta'> = ['student', 'teacher', 'ta'];
+    for (const t of types) {
+      const typePricings = pricings.filter((p) => {
+        if (p.type) return p.type === t;
+        if (t === 'student') return Number(p.pricePerSession) > 0;
+        if (t === 'teacher') return Number(p.teacherWagePerSession) > 0;
+        return Number(p.taWagePerSession) > 0;
+      });
+      const sortedAsc = [...typePricings].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+      for (let i = 0; i < sortedAsc.length - 1; i++) {
+        const current = sortedAsc[i];
+        const next = sortedAsc[i + 1];
+        if (current.effectiveTo === null || current.effectiveTo >= next.effectiveFrom) {
+          const healedTo = subtractOneDay(next.effectiveFrom);
+          if (current.effectiveTo !== healedTo) {
+            current.effectiveTo = healedTo;
+            await this.persistence.savePricing(current as any);
+          }
         }
       }
     }
@@ -51,12 +60,19 @@ export class GetCourseLevelPricingUseCase {
       pricings.map(async (p) => {
         const pFrom = p.effectiveFrom;
         const pTo = p.effectiveTo;
+        const pricingType = p.type || (Number(p.teacherWagePerSession) > 0 ? 'teacher' : Number(p.taWagePerSession) > 0 ? 'ta' : 'student');
 
-        const [isStudentPriceLocked, isTeacherWageLocked, isTaWageLocked] = await Promise.all([
-          this.persistence.checkStudentBills(levelId, pFrom, pTo),
-          this.persistence.checkTeacherWages(levelId, pFrom, pTo),
-          this.persistence.checkAssistantWages(levelId, pFrom, pTo),
-        ]);
+        let isStudentPriceLocked = false;
+        let isTeacherWageLocked = false;
+        let isTaWageLocked = false;
+
+        if (pricingType === 'student') {
+          isStudentPriceLocked = await this.persistence.checkStudentBills(levelId, pFrom, pTo);
+        } else if (pricingType === 'teacher') {
+          isTeacherWageLocked = await this.persistence.checkTeacherWages(levelId, pFrom, pTo);
+        } else if (pricingType === 'ta') {
+          isTaWageLocked = await this.persistence.checkAssistantWages(levelId, pFrom, pTo);
+        }
 
         const isEffectiveFromLocked = pFrom <= todayStr;
         const isEffectiveToLocked = pTo !== null && pTo <= todayStr;
@@ -64,6 +80,7 @@ export class GetCourseLevelPricingUseCase {
 
         return {
           ...p,
+          type: pricingType,
           isStudentPriceLocked,
           isTeacherWageLocked,
           isTaWageLocked,

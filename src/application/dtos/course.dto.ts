@@ -57,6 +57,11 @@ export class CourseLevelPricingDto {
   @IsDateString()
   @IsNotEmpty({ message: 'Ngày kết thúc không được để trống' })
   effectiveTo!: string;
+
+  @ApiProperty({ required: false, example: 'student', description: 'Loại bảng giá (student, teacher, ta)' })
+  @IsString()
+  @IsOptional()
+  type?: string;
 }
 
 export class UpdateCourseLevelPricingDto {
@@ -84,6 +89,11 @@ export class UpdateCourseLevelPricingDto {
   @IsDateString()
   @IsOptional()
   effectiveTo?: string;
+
+  @ApiProperty({ required: false, example: 'student' })
+  @IsString()
+  @IsOptional()
+  type?: string;
 }
 
 export class CreateCourseDto {

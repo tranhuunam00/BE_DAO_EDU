@@ -216,16 +216,54 @@ export class CourseController {
 
     const savedLevel = await this.levelRepo.save(level);
 
-    // Save initial level pricing
-    const pricing = this.pricingRepo.create({
-      courseLevelId: savedLevel.id,
-      pricePerSession: dto.pricePerSession,
-      teacherWagePerSession: dto.teacherWagePerSession,
-      taWagePerSession: dto.taWagePerSession,
-      effectiveFrom: dto.effectiveFrom,
-      effectiveTo: null,
-    });
-    await this.pricingRepo.save(pricing);
+    // Save initial level pricings as separate records per type
+    const pricingEntities: CourseLevelPricingOrmEntity[] = [];
+
+    if (dto.pricePerSession !== undefined && Number(dto.pricePerSession) >= 0) {
+      pricingEntities.push(
+        this.pricingRepo.create({
+          courseLevelId: savedLevel.id,
+          pricePerSession: Number(dto.pricePerSession),
+          teacherWagePerSession: 0,
+          taWagePerSession: 0,
+          effectiveFrom: dto.effectiveFrom,
+          effectiveTo: null,
+          type: 'student',
+        }),
+      );
+    }
+
+    if (dto.teacherWagePerSession !== undefined && Number(dto.teacherWagePerSession) >= 0) {
+      pricingEntities.push(
+        this.pricingRepo.create({
+          courseLevelId: savedLevel.id,
+          pricePerSession: 0,
+          teacherWagePerSession: Number(dto.teacherWagePerSession),
+          taWagePerSession: 0,
+          effectiveFrom: dto.effectiveFrom,
+          effectiveTo: null,
+          type: 'teacher',
+        }),
+      );
+    }
+
+    if (dto.taWagePerSession !== undefined && Number(dto.taWagePerSession) >= 0) {
+      pricingEntities.push(
+        this.pricingRepo.create({
+          courseLevelId: savedLevel.id,
+          pricePerSession: 0,
+          teacherWagePerSession: 0,
+          taWagePerSession: Number(dto.taWagePerSession),
+          effectiveFrom: dto.effectiveFrom,
+          effectiveTo: null,
+          type: 'ta',
+        }),
+      );
+    }
+
+    if (pricingEntities.length > 0) {
+      await this.pricingRepo.save(pricingEntities);
+    }
 
     return this.findOne(id);
   }

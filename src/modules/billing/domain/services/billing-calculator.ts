@@ -9,6 +9,7 @@ export interface PricingRule {
   taWagePerSession: number;
   effectiveFrom: string;
   effectiveTo: string | null;
+  type?: string;
   createdAt?: Date;
 }
 
@@ -84,11 +85,18 @@ export class BillingCalculator {
   ): PricingRule | undefined {
     const targetDate = this.normalizeDate(date);
     const sorted = this.sortPricings(pricings);
+    const expectedType =
+      rateField === 'pricePerSession'
+        ? 'student'
+        : rateField === 'teacherWagePerSession'
+          ? 'teacher'
+          : 'ta';
     return sorted.find((rule) => {
       const from = this.normalizeDate(rule.effectiveFrom);
       const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
       return (
         rule.courseLevelId === levelId &&
+        (rule.type ? rule.type === expectedType : true) &&
         Number(rule[rateField]) > 0 &&
         from <= targetDate &&
         (to === null || to >= targetDate)
@@ -112,11 +120,18 @@ export class BillingCalculator {
       }
 
       const targetDate = this.normalizeDate(source.date);
+      const expectedType =
+        rateField === 'pricePerSession'
+          ? 'student'
+          : rateField === 'teacherWagePerSession'
+            ? 'teacher'
+            : 'ta';
       const pricing = sortedPricings.find((rule) => {
         const from = this.normalizeDate(rule.effectiveFrom);
         const to = rule.effectiveTo ? this.normalizeDate(rule.effectiveTo) : null;
         return (
           rule.courseLevelId === source.courseLevelId &&
+          (rule.type ? rule.type === expectedType : true) &&
           Number(rule[rateField]) > 0 &&
           from <= targetDate &&
           (to === null || to >= targetDate)

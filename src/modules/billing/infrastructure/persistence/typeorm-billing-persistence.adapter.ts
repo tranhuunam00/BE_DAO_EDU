@@ -157,7 +157,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     let pricingList: CourseLevelPricingOrmEntity[] = [];
     if (levelIds.length > 0) {
       pricingList = await pricingRepo.find({
-        where: { courseLevelId: In(levelIds) },
+        where: { courseLevelId: In(levelIds), type: 'student' },
         relations: { courseLevel: true },
       });
     }
@@ -189,6 +189,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       taWagePerSession: Number(pricing.taWagePerSession),
       effectiveFrom: pricing.effectiveFrom,
       effectiveTo: pricing.effectiveTo,
+      type: pricing.type,
       createdAt: pricing.createdAt,
     }));
 
@@ -278,7 +279,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     let pricingList: CourseLevelPricingOrmEntity[] = [];
     if (levelIds.length > 0) {
       pricingList = await pricingRepo.find({
-        where: { courseLevelId: In(levelIds) },
+        where: { courseLevelId: In(levelIds), type: 'student' },
       });
     }
 
@@ -612,7 +613,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     let pricingList: CourseLevelPricingOrmEntity[] = [];
     if (levelIds.length > 0) {
       pricingList = await pricingRepo.find({
-        where: { courseLevelId: In(levelIds) },
+        where: { courseLevelId: In(levelIds), type: In(['teacher', 'ta']) },
         relations: { courseLevel: true },
       });
     }
@@ -651,6 +652,7 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
         taWagePerSession: Number(p.taWagePerSession),
         effectiveFrom: p.effectiveFrom,
         effectiveTo: p.effectiveTo,
+        type: p.type,
         createdAt: p.createdAt,
       })),
       wageItems: wageItems.map((item) => ({
@@ -1023,6 +1025,7 @@ async function loadPricings(
     taWagePerSession: Number(row.taWagePerSession),
     effectiveFrom: row.effectiveFrom,
     effectiveTo: row.effectiveTo,
+    type: row.type,
   }));
 }
 

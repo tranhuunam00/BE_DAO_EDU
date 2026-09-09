@@ -350,7 +350,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
          COALESCE(p.price_per_session, 0)::numeric AS "rate"
        FROM classes cl
        JOIN course_level_pricing p ON p.course_level_id = cl.course_level_id
-       WHERE p.price_per_session > 0
+       WHERE p.type = 'student' AND p.price_per_session > 0
        ORDER BY p.effective_from DESC`
     );
     const pricingRulesByClass = new Map<string, Array<{ effectiveFrom: string; effectiveTo: string | null; rate: number }>>();

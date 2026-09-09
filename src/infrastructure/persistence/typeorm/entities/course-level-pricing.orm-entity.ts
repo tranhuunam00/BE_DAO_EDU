@@ -24,6 +24,9 @@ export class CourseLevelPricingOrmEntity {
   @Column({ type: 'date', name: 'effective_to', nullable: true })
   effectiveTo!: string | null;
 
+  @Column({ type: 'varchar', length: 20, name: 'type', default: 'student' })
+  type!: 'student' | 'teacher' | 'ta';
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

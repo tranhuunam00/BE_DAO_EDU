@@ -24,10 +24,12 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
     return this.pricingRepo.findOne({ where: { id } });
   }
 
-  async findActivePricing(levelId: string): Promise<CourseLevelPricingOrmEntity | null> {
-    return this.pricingRepo.findOne({
-      where: { courseLevelId: levelId, effectiveTo: IsNull() },
-    });
+  async findActivePricing(levelId: string, type?: string): Promise<CourseLevelPricingOrmEntity | null> {
+    const where: any = { courseLevelId: levelId, effectiveTo: IsNull() };
+    if (type) {
+      where.type = type;
+    }
+    return this.pricingRepo.findOne({ where });
   }
 
   async savePricing(pricing: CourseLevelPricingOrmEntity): Promise<CourseLevelPricingOrmEntity> {

@@ -6,6 +6,7 @@ export interface CoursePricingRecord {
   taWagePerSession: number;
   effectiveFrom: string;
   effectiveTo: string | null;
+  type: 'student' | 'teacher' | 'ta';
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -13,7 +14,7 @@ export interface CoursePricingRecord {
 export abstract class CoursePricingPersistencePort {
   abstract findPricingByLevelId(levelId: string): Promise<CoursePricingRecord[]>;
   abstract findPricingById(id: string): Promise<CoursePricingRecord | null>;
-  abstract findActivePricing(levelId: string): Promise<CoursePricingRecord | null>;
+  abstract findActivePricing(levelId: string, type?: string): Promise<CoursePricingRecord | null>;
   abstract savePricing(pricing: any): Promise<any>;
   abstract createPricing(pricingData: any): Promise<any>;
   abstract deletePricing(id: string): Promise<void>;

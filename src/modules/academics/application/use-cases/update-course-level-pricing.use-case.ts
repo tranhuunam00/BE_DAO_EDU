@@ -15,6 +15,7 @@ export class UpdateCourseLevelPricingUseCase {
       throw new AcademicError('PRICING_NOT_FOUND', 'Không tìm thấy bảng giá lịch sử này.');
     }
     const levelId = pricing.courseLevelId;
+    const pricingType = pricing.type || (Number(pricing.teacherWagePerSession) > 0 ? 'teacher' : Number(pricing.taWagePerSession) > 0 ? 'ta' : 'student');
 
     const isPriceChanged = dto.pricePerSession !== undefined && Number(dto.pricePerSession) !== Number(pricing.pricePerSession);
     const isTeacherWageChanged = dto.teacherWagePerSession !== undefined && Number(dto.teacherWagePerSession) !== Number(pricing.teacherWagePerSession);
@@ -31,6 +32,7 @@ export class UpdateCourseLevelPricingUseCase {
     const newTo = dto.effectiveTo !== undefined ? dto.effectiveTo : pricing.effectiveTo;
     
     const isDateChanged = newFrom !== pricing.effectiveFrom || newTo !== pricing.effectiveTo;
+
     // 1. Guard price/wage value changes independently based on which field values are changing
     if (isPriceChanged) {
       const maxStudentBill = await this.persistence.getMaxStudentBillDate(levelId);
@@ -72,15 +74,15 @@ export class UpdateCourseLevelPricingUseCase {
 
     const validateMaxLock = async (dateVal: string | null) => {
       if (!dateVal) return false;
-      if (Number(pricing.pricePerSession) > 0) {
+      if (pricingType === 'student' || (!pricing.type && Number(pricing.pricePerSession) > 0)) {
         const max = await this.persistence.getMaxStudentBillDate(levelId);
         if (checkLock(dateVal, max)) return true;
       }
-      if (Number(pricing.teacherWagePerSession) > 0) {
+      if (pricingType === 'teacher' || (!pricing.type && Number(pricing.teacherWagePerSession) > 0)) {
         const max = await this.persistence.getMaxTeacherWageDate(levelId);
         if (checkLock(dateVal, max)) return true;
       }
-      if (Number(pricing.taWagePerSession) > 0) {
+      if (pricingType === 'ta' || (!pricing.type && Number(pricing.taWagePerSession) > 0)) {
         const max = await this.persistence.getMaxAssistantWageDate(levelId);
         if (checkLock(dateVal, max)) return true;
       }
@@ -148,44 +150,40 @@ export class UpdateCourseLevelPricingUseCase {
       throw new AcademicError('PRICING_CONFLICT', 'Ngày bắt đầu áp dụng không được sau ngày kết thúc.');
     }
 
-    const targetPrice = dto.pricePerSession !== undefined ? Number(dto.pricePerSession) : Number(pricing.pricePerSession);
-    const targetTeacherWage = dto.teacherWagePerSession !== undefined ? Number(dto.teacherWagePerSession) : Number(pricing.teacherWagePerSession);
-    const targetTaWage = dto.taWagePerSession !== undefined ? Number(dto.taWagePerSession) : Number(pricing.taWagePerSession);
-
     if (isDateChanged) {
       const allPricings = await this.persistence.findPricingByLevelId(levelId);
       const otherPricings = allPricings.filter((p) => p.id !== id);
 
-      const checkFieldOverlap = (rateField: 'pricePerSession' | 'teacherWagePerSession' | 'taWagePerSession', label: string) => {
-        const fieldPricings = otherPricings.filter((p) => Number((p as any)[rateField]) > 0);
-        const hasOverlap = fieldPricings.some((p) => {
-          const pFrom = p.effectiveFrom;
-          const pTo = p.effectiveTo;
-          if (newTo === null) {
-            return pTo === null || pTo >= newFrom;
-          }
-          if (pTo === null) {
-            return pFrom <= newTo;
-          }
-          return newFrom <= pTo && newTo >= pFrom;
-        });
+      const sameTypeOtherPricings = otherPricings.filter((p) => {
+        if (p.type) return p.type === pricingType;
+        if (pricingType === 'student') return Number(p.pricePerSession) > 0;
+        if (pricingType === 'teacher') return Number(p.teacherWagePerSession) > 0;
+        return Number(p.taWagePerSession) > 0;
+      });
 
-        if (hasOverlap) {
-          throw new AcademicError(
-            'PRICING_CONFLICT',
-            `Khoảng thời gian áp dụng ${label} bị trùng lặp với một bản ghi ${label} khác.`,
-          );
-        }
+      const labelMap: Record<string, string> = {
+        student: 'đơn giá học phí',
+        teacher: 'lương giáo viên',
+        ta: 'lương trợ giảng',
       };
 
-      if (targetPrice > 0) {
-        checkFieldOverlap('pricePerSession', 'đơn giá học phí');
-      }
-      if (targetTeacherWage > 0) {
-        checkFieldOverlap('teacherWagePerSession', 'lương giáo viên');
-      }
-      if (targetTaWage > 0) {
-        checkFieldOverlap('taWagePerSession', 'lương trợ giảng');
+      const hasOverlap = sameTypeOtherPricings.some((p) => {
+        const pFrom = p.effectiveFrom;
+        const pTo = p.effectiveTo;
+        if (newTo === null) {
+          return pTo === null || pTo >= newFrom;
+        }
+        if (pTo === null) {
+          return pFrom <= newTo;
+        }
+        return newFrom <= pTo && newTo >= pFrom;
+      });
+
+      if (hasOverlap) {
+        throw new AcademicError(
+          'PRICING_CONFLICT',
+          `Khoảng thời gian áp dụng ${labelMap[pricingType]} bị trùng lặp với một bản ghi ${labelMap[pricingType]} khác.`,
+        );
       }
     }
 
@@ -194,6 +192,8 @@ export class UpdateCourseLevelPricingUseCase {
     if (dto.taWagePerSession !== undefined) pricing.taWagePerSession = dto.taWagePerSession;
     if (dto.effectiveFrom !== undefined) pricing.effectiveFrom = dto.effectiveFrom;
     if (dto.effectiveTo !== undefined) pricing.effectiveTo = dto.effectiveTo || null;
+    if (dto.type !== undefined) pricing.type = dto.type as any;
+    else if (!pricing.type) pricing.type = pricingType;
 
     return this.persistence.savePricing(pricing);
   }
