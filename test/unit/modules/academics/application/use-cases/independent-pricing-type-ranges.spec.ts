@@ -189,4 +189,24 @@ describe('Independent Pricing Types Range & Billing Accuracy Suite', () => {
     expect(teacherPricing?.type).toBe('teacher');
     expect(teacherPricing?.teacherWagePerSession).toBe(140000);
   });
+
+  it('Case 5: Cho phép tạo mới ngày bắt đầu ở quá khứ khi chưa có bản ghi nào của type đó', async () => {
+    // Level này đã có bản ghi student và teacher, nhưng CHƯA CÓ bản ghi ta nào
+    inMemoryPricings = inMemoryPricings.filter((p) => p.type !== 'ta');
+
+    // Tạo mới bản ghi cho type 'ta' với ngày bắt đầu ở quá khứ '2026-01-01'
+    const result = await createUseCase.execute(levelId, {
+      taWagePerSession: 80000,
+      effectiveFrom: '2026-01-01',
+      effectiveTo: '2026-12-31',
+      type: 'ta',
+    });
+
+    expect(result).toBeDefined();
+    expect(result.type).toBe('ta');
+    expect(result.taWagePerSession).toBe(80000);
+    expect(result.effectiveFrom).toBe('2026-01-01');
+    expect(result.effectiveTo).toBe('2026-12-31');
+  });
 });
+
