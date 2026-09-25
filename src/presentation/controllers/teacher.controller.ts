@@ -191,8 +191,8 @@ export class TeacherController {
 
       const latestWage = await this.monthlyWageRepo
         .createQueryBuilder('wage')
-        .where('wage.billingEndDate < :waveEndDate', { waveEndDate })
-        .orderBy('wage.billingEndDate', 'DESC')
+        .where('wage.billing_end_date < :waveEndDate', { waveEndDate })
+        .orderBy('wage.billing_end_date', 'DESC')
         .getOne();
 
       if (latestWage && latestWage.billingEndDate) {
@@ -329,8 +329,8 @@ export class TeacherController {
 
         const prevWage = await this.monthlyWageRepo
           .createQueryBuilder('wage')
-          .where('wage.billingEndDate < :endDate', { endDate: new Date(finalBillingEndDate) })
-          .orderBy('wage.billingEndDate', 'DESC')
+          .where('wage.billing_end_date < :endDate', { endDate: new Date(finalBillingEndDate) })
+          .orderBy('wage.billing_end_date', 'DESC')
           .getOne();
 
         if (prevWage && prevWage.billingEndDate) {

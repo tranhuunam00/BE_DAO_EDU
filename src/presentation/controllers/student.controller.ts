@@ -497,8 +497,8 @@ export class StudentController {
 
       const latestBill = await this.monthlyBillRepo
         .createQueryBuilder('bill')
-        .where('bill.billingEndDate < :waveEndDate', { waveEndDate })
-        .orderBy('bill.billingEndDate', 'DESC')
+        .where('bill.billing_end_date < :waveEndDate', { waveEndDate })
+        .orderBy('bill.billing_end_date', 'DESC')
         .getOne();
 
       if (latestBill && latestBill.billingEndDate) {
@@ -669,10 +669,10 @@ export class StudentController {
 
         const prevBill = await this.monthlyBillRepo
           .createQueryBuilder('bill')
-          .where('bill.billingEndDate < :endDate', {
+          .where('bill.billing_end_date < :endDate', {
             endDate: new Date(finalBillingEndDate),
           })
-          .orderBy('bill.billingEndDate', 'DESC')
+          .orderBy('bill.billing_end_date', 'DESC')
           .getOne();
 
         if (prevBill && prevBill.billingEndDate) {

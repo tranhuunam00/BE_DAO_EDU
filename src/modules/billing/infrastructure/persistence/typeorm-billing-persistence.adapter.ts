@@ -83,8 +83,8 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
     const periodIds = prevPeriods.map((p) => p.id);
     const billsSum = await this.dataSource.getRepository(StudentMonthlyBillOrmEntity)
       .createQueryBuilder('bill')
-      .select('SUM(bill.totalAmount)', 'sum')
-      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .select('SUM(bill.total_amount)', 'sum')
+      .where('bill.period_id IN (:...periodIds)', { periodIds })
       .getRawOne();
     return Number(billsSum?.sum || 0);
   }
@@ -572,10 +572,10 @@ export class TypeOrmBillingPersistenceAdapter extends BillingPersistencePort {
       .leftJoinAndSelect('session.classEntity', 'classEntity')
       .leftJoinAndSelect('classEntity.course', 'course')
       .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-      .where('(session.teacherId = :teacherId OR session.assistantId = :teacherId)', { teacherId });
+      .where('(session.teacher_id = :teacherId OR session.assistant_id = :teacherId)', { teacherId });
 
     if (classIds && classIds.length > 0) {
-      query.andWhere('session.classId IN (:...classIds)', { classIds });
+      query.andWhere('session.class_id IN (:...classIds)', { classIds });
     }
     if (startDate) {
       query.andWhere('session.date >= :startDate', { startDate });
@@ -701,8 +701,8 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
     const periodIds = prevPeriods.map((p) => p.id);
     const billsSum = await this.manager.getRepository(StudentMonthlyBillOrmEntity)
       .createQueryBuilder('bill')
-      .select('SUM(bill.totalAmount)', 'sum')
-      .where('bill.periodId IN (:...periodIds)', { periodIds })
+      .select('SUM(bill.total_amount)', 'sum')
+      .where('bill.period_id IN (:...periodIds)', { periodIds })
       .getRawOne();
     return Number(billsSum?.sum || 0);
   }
@@ -746,8 +746,8 @@ class TypeOrmBillingTransactionContext implements BillingTransactionContext {
       const lastBill = await this.manager
         .getRepository(StudentMonthlyBillOrmEntity)
         .createQueryBuilder('bill')
-        .where('bill.billCode LIKE :prefix', { prefix: `${prefix}%` })
-        .orderBy('bill.billCode', 'DESC')
+        .where('bill.bill_code LIKE :prefix', { prefix: `${prefix}%` })
+        .orderBy('bill.bill_code', 'DESC')
         .getOne();
 
       let nextSeq = 1;
@@ -1041,7 +1041,7 @@ async function findTuitionSources(
     .innerJoinAndSelect('session.classEntity', 'classEntity')
     .leftJoinAndSelect('classEntity.course', 'course')
     .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
-    .where('attendance.billId IS NULL')
+    .where('attendance.bill_id IS NULL')
     .andWhere('session.date <= :endDate', { endDate })
     .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
@@ -1052,7 +1052,7 @@ async function findTuitionSources(
       },
     );
   if (ownerIds?.length) {
-    query.andWhere('attendance.studentId IN (:...ownerIds)', { ownerIds });
+    query.andWhere('attendance.student_id IN (:...ownerIds)', { ownerIds });
   }
   const rows = await query.getMany();
   return rows.map((row) => ({
@@ -1087,8 +1087,8 @@ async function findSalarySources(
     .leftJoinAndSelect('classEntity.course', 'course')
     .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
     .innerJoinAndSelect('session.teacher', 'teacher')
-    .where('session.wageId IS NULL')
-    .andWhere('session.teacherId IS NOT NULL')
+    .where('session.wage_id IS NULL')
+    .andWhere('session.teacher_id IS NOT NULL')
     .andWhere('session.date <= :endDate', { endDate })
     .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
@@ -1108,7 +1108,7 @@ async function findSalarySources(
       return 'EXISTS ' + subQuery;
     });
   if (ownerIds?.length) {
-    q1.andWhere('session.teacherId IN (:...ownerIds)', { ownerIds });
+    q1.andWhere('session.teacher_id IN (:...ownerIds)', { ownerIds });
   }
   const rows1 = await q1.getMany();
   const sources1: BillingSource[] = rows1.map((row) => ({
@@ -1135,8 +1135,8 @@ async function findSalarySources(
     .leftJoinAndSelect('classEntity.course', 'course')
     .leftJoinAndSelect('classEntity.courseLevel', 'courseLevel')
     .innerJoinAndSelect('session.assistant', 'assistant')
-    .where('session.assistantWageId IS NULL')
-    .andWhere('session.assistantId IS NOT NULL')
+    .where('session.assistant_wage_id IS NULL')
+    .andWhere('session.assistant_id IS NOT NULL')
     .andWhere('session.date <= :endDate', { endDate })
     .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
     .andWhere(
@@ -1156,7 +1156,7 @@ async function findSalarySources(
       return 'EXISTS ' + subQuery;
     });
   if (ownerIds?.length) {
-    q2.andWhere('session.assistantId IN (:...ownerIds)', { ownerIds });
+    q2.andWhere('session.assistant_id IN (:...ownerIds)', { ownerIds });
   }
   const rows2 = await q2.getMany();
   const sources2: BillingSource[] = rows2.map((row) => ({
@@ -1184,13 +1184,13 @@ async function aggregateOrders<
 >(repository: Repository<T>) {
   const rows = await repository
     .createQueryBuilder('orders')
-    .select('orders.periodId', 'periodId')
+    .select('orders.period_id', 'periodId')
     .addSelect('COUNT(*)', 'totalOrders')
     .addSelect(`COUNT(*) FILTER (WHERE orders.status = 'Paid')`, 'paidOrders')
-    .addSelect('COALESCE(SUM(orders.totalAmount), 0)', 'totalExpected')
-    .addSelect('COALESCE(SUM(orders.paidAmount), 0)', 'totalPaid')
-    .where('orders.periodId IS NOT NULL')
-    .groupBy('orders.periodId')
+    .addSelect('COALESCE(SUM(orders.total_amount), 0)', 'totalExpected')
+    .addSelect('COALESCE(SUM(orders.paid_amount), 0)', 'totalPaid')
+    .where('orders.period_id IS NOT NULL')
+    .groupBy('orders.period_id')
     .getRawMany<{
       periodId: string;
       totalOrders: string;
@@ -1253,8 +1253,8 @@ async function createReceiptCode(manager: EntityManager) {
   const lastBill = await manager
     .getRepository(StudentMonthlyBillOrmEntity)
     .createQueryBuilder('bill')
-    .where('bill.receiptCode LIKE :prefix', { prefix: `${dayPrefix}%` })
-    .orderBy('bill.receiptCode', 'DESC')
+    .where('bill.receipt_code LIKE :prefix', { prefix: `${dayPrefix}%` })
+    .orderBy('bill.receipt_code', 'DESC')
     .getOne();
 
   let nextSeq = 1;

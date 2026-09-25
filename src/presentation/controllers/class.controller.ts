@@ -224,10 +224,19 @@ export class ClassController {
   @Get(':id')
   @ApiOperation({ summary: 'Lấy chi tiết Lớp học' })
   async findOne(@Param('id') id: string) {
-    const classEntity = await this.classRepo.findOneOrFail({
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${id}`);
+    }
+
+    const classEntity = await this.classRepo.findOne({
       where: { id },
       relations: { course: true, courseLevel: true, mainTeacher: true, assistant: true, center: true },
     });
+
+    if (!classEntity) {
+      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${id}`);
+    }
+
     const schedules = await this.scheduleRepo.find({
       where: { classId: id },
       relations: { room: true },
@@ -235,7 +244,7 @@ export class ClassController {
     });
     const students = await this.classStudentRepo.find({
       where: { classId: id },
-      relations: { student: true },
+      relations: { student: { user: true } },
       order: { joinedDate: 'ASC' },
     });
 
@@ -625,6 +634,10 @@ export class ClassController {
     @Query('month') month?: string,
     @Query('year') year?: string,
   ) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId)) {
+      return [];
+    }
+
     const qb = this.sessionRepo.createQueryBuilder('s')
       .leftJoinAndSelect('s.teacher', 'teacher')
       .leftJoinAndSelect('s.room', 'room')

@@ -29,6 +29,14 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    if (code === '22P02') {
+      response.status(400).json({
+        statusCode: 400,
+        message: 'Định dạng mã ID không hợp lệ.',
+      });
+      return;
+    }
+
     response.status(500).json({
       statusCode: 500,
       message: 'Database operation failed.',

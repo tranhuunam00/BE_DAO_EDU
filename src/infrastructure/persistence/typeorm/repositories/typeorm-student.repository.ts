@@ -66,7 +66,7 @@ export class TypeOrmStudentRepository implements IStudentRepository {
       );
     }
 
-    qb.orderBy('student.createdAt', 'DESC'); // Sử dụng trường camelCase do TypeORM tự map sang snake_case
+    qb.orderBy('student.created_at', 'DESC');
     qb.skip(skip);
     qb.take(limit);
 

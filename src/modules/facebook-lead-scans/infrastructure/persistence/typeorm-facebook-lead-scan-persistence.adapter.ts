@@ -170,11 +170,11 @@ export class TypeOrmFacebookLeadScanPersistenceAdapter
   async getScannedPostIds(groupUrl: string): Promise<string[]> {
     const rows = await this.scanRepository
       .createQueryBuilder('scan')
-      .select('DISTINCT scan.postId', 'postId')
-      .where('scan.groupUrl = :groupUrl', { groupUrl })
-      .andWhere('scan.postId != :empty', { empty: '' })
+      .select('DISTINCT scan.post_id', 'postId')
+      .where('scan.group_url = :groupUrl', { groupUrl })
+      .andWhere('scan.post_id != :empty', { empty: '' })
       .getRawMany();
-    return rows.map((r) => r.postId);
+    return rows.map((r: any) => r.postId || r.post_id);
   }
 
   private toItemEntity(

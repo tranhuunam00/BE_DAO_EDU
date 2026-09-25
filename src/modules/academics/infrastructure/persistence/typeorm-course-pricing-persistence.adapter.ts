@@ -51,8 +51,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .createQueryBuilder('att')
       .innerJoin('att.classSession', 'session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('att.billId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('att.bill_id IS NOT NULL')
       .andWhere('session.date >= :from', { from });
     if (to) {
       qb.andWhere('session.date <= :to', { to });
@@ -65,8 +65,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('session.wageId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('session.wage_id IS NOT NULL')
       .andWhere('session.date >= :from', { from });
     if (to) {
       qb.andWhere('session.date <= :to', { to });
@@ -79,8 +79,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('session.assistantWageId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('session.assistant_wage_id IS NOT NULL')
       .andWhere('session.date >= :from', { from });
     if (to) {
       qb.andWhere('session.date <= :to', { to });
@@ -94,8 +94,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .createQueryBuilder('att')
       .innerJoin('att.classSession', 'session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('att.billId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('att.bill_id IS NOT NULL')
       .select('MAX(session.date)', 'maxDate')
       .getRawOne();
     return result?.maxDate || null;
@@ -106,8 +106,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('session.wageId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('session.wage_id IS NOT NULL')
       .select('MAX(session.date)', 'maxDate')
       .getRawOne();
     return result?.maxDate || null;
@@ -118,8 +118,8 @@ export class TypeOrmCoursePricingPersistenceAdapter implements CoursePricingPers
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
-      .andWhere('session.assistantWageId IS NOT NULL')
+      .where('class.course_level_id = :levelId', { levelId })
+      .andWhere('session.assistant_wage_id IS NOT NULL')
       .select('MAX(session.date)', 'maxDate')
       .getRawOne();
     return result?.maxDate || null;

@@ -271,11 +271,11 @@ export class DashboardController {
 
     const sessionClasses = await this.sessionRepo
       .createQueryBuilder('session')
-      .select('DISTINCT session.classId', 'classId')
-      .where('session.teacherId = :teacherId OR session.assistantId = :teacherId', { teacherId: teacher.id })
+      .select('DISTINCT session.class_id', 'classId')
+      .where('session.teacher_id = :teacherId OR session.assistant_id = :teacherId', { teacherId: teacher.id })
       .getRawMany<{ classId: string }>();
 
-    const classIds = new Set(sessionClasses.map((row) => row.classId));
+    const classIds = new Set(sessionClasses.map((row: any) => row.classId || row.class_id));
     const mainTeacherClasses = await this.classRepo.find({
       where: { mainTeacherId: teacher.id },
       select: { id: true },

@@ -641,8 +641,8 @@ export class AssignmentController {
     const teacher = await this.getTeacherByUser(userId);
     const sessionRows = await this.sessionRepo
       .createQueryBuilder('session')
-      .select('DISTINCT session.classId', 'classId')
-      .where('session.teacherId = :teacherId OR session.assistantId = :teacherId', { teacherId: teacher.id })
+      .select('DISTINCT session.class_id', 'classId')
+      .where('session.teacher_id = :teacherId OR session.assistant_id = :teacherId', { teacherId: teacher.id })
       .getRawMany<{ classId: string }>();
     const mainClasses = await this.classRepo.find({
       where: { mainTeacherId: teacher.id },
@@ -650,7 +650,7 @@ export class AssignmentController {
     });
     const classIds = Array.from(
       new Set([
-        ...sessionRows.map((row) => row.classId),
+        ...sessionRows.map((row: any) => row.classId || row.class_id),
         ...mainClasses.map((item) => item.id),
       ]),
     );

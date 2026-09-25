@@ -98,7 +98,7 @@ export class CourseController {
         const sessionCount = await this.pricingRepo.manager.getRepository(ClassSessionOrmEntity)
           .createQueryBuilder('session')
           .innerJoin('session.classEntity', 'class')
-          .where('class.courseLevelId = :levelId', { levelId: level.id })
+          .where('class.course_level_id = :levelId', { levelId: level.id })
           .getCount();
 
         return { ...level, pricing, classCount, sessionCount };
@@ -332,7 +332,7 @@ export class CourseController {
       .getRepository(ClassSessionOrmEntity)
       .createQueryBuilder('session')
       .innerJoin('session.classEntity', 'class')
-      .where('class.courseLevelId = :levelId', { levelId })
+      .where('class.course_level_id = :levelId', { levelId })
       .getCount();
 
     if (sessionCount > 0) {

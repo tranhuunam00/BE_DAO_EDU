@@ -37,28 +37,28 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
     }
 
     if (query.status) {
-      qb.andWhere('lead.contactStatus = :status', { status: query.status });
+      qb.andWhere('lead.contact_status = :status', { status: query.status });
     }
 
     if (query.excludeAnonymous) {
       qb.andWhere(
-        "lead.authorName NOT IN ('Ẩn danh', 'Không tên') AND lead.authorName NOT ILIKE '%ẩn danh%'"
+        "lead.author_name NOT IN ('Ẩn danh', 'Không tên') AND lead.author_name NOT ILIKE '%ẩn danh%'"
       );
     }
 
     if (query.leadLevel) {
-      qb.andWhere('lead.leadLevel = :leadLevel', { leadLevel: query.leadLevel });
+      qb.andWhere('lead.lead_level = :leadLevel', { leadLevel: query.leadLevel });
     }
 
     if (query.search) {
       qb.andWhere(
-        '(lead.authorName ILIKE :search OR lead.authorUrl ILIKE :search OR lead.profileKey ILIKE :search)',
+        '(lead.author_name ILIKE :search OR lead.author_url ILIKE :search OR lead.profile_key ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }
     
-    qb.orderBy('lead.createdAt', 'DESC');
-    qb.addOrderBy('demand.createdAt', 'DESC');
+    qb.orderBy('lead.created_at', 'DESC');
+    qb.addOrderBy('demand.created_at', 'DESC');
 
     qb.skip((query.page - 1) * query.limit);
     qb.take(query.limit);
@@ -83,8 +83,8 @@ export class TypeOrmLeadCrmPersistenceAdapter implements LeadCrmPersistencePort 
     const interactions = await this.interactionRepository
       .createQueryBuilder('interaction')
       .leftJoinAndSelect('interaction.actor', 'actor')
-      .where('interaction.leadId = :id', { id })
-      .orderBy('interaction.createdAt', 'DESC')
+      .where('interaction.lead_id = :id', { id })
+      .orderBy('interaction.created_at', 'DESC')
       .getMany();
 
     return {

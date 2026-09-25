@@ -46,57 +46,57 @@ export class TimekeepingDeviceController {
     const qb = this.logRepository.createQueryBuilder('log')
       .leftJoinAndSelect('log.student', 'student')
       .leftJoinAndSelect('log.teacher', 'teacher')
-      .orderBy('log.eventTime', 'DESC');
+      .orderBy('log.event_time', 'DESC');
 
     if (search) {
       const searchLower = `%${search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(log.employeeNo) LIKE :search OR LOWER(student.lastName) LIKE :search OR LOWER(student.firstName) LIKE :search OR LOWER(CONCAT(student.lastName, \' \', student.firstName)) LIKE :search OR LOWER(teacher.lastName) LIKE :search OR LOWER(teacher.firstName) LIKE :search OR LOWER(CONCAT(teacher.lastName, \' \', teacher.firstName)) LIKE :search)',
+        '(LOWER(log.employee_no) LIKE :search OR LOWER(student.lastName) LIKE :search OR LOWER(student.firstName) LIKE :search OR LOWER(CONCAT(student.lastName, \' \', student.firstName)) LIKE :search OR LOWER(teacher.lastName) LIKE :search OR LOWER(teacher.firstName) LIKE :search OR LOWER(CONCAT(teacher.lastName, \' \', teacher.firstName)) LIKE :search)',
         { search: searchLower }
       );
     }
 
     // Lọc theo vai trò (học sinh / giáo viên)
     if (role === 'student') {
-      qb.andWhere('log.studentId IS NOT NULL');
+      qb.andWhere('log.student_id IS NOT NULL');
     } else if (role === 'teacher') {
-      qb.andWhere('log.teacherId IS NOT NULL');
+      qb.andWhere('log.teacher_id IS NOT NULL');
     } else if (role === 'unmatched') {
-      qb.andWhere('log.studentId IS NULL AND log.teacherId IS NULL');
+      qb.andWhere('log.student_id IS NULL AND log.teacher_id IS NULL');
     }
 
     // Lọc theo khoảng ngày (startDate & endDate) hoặc ngày đơn (date)
     if (startDate) {
       const start = new Date(`${startDate}T00:00:00+07:00`);
-      qb.andWhere('log.eventTime >= :start', { start });
+      qb.andWhere('log.event_time >= :start', { start });
     }
     if (endDate) {
       const end = new Date(`${endDate}T23:59:59+07:00`);
-      qb.andWhere('log.eventTime <= :end', { end });
+      qb.andWhere('log.event_time <= :end', { end });
     }
     if (!startDate && !endDate && date) {
       const start = new Date(`${date}T00:00:00+07:00`);
       const end = new Date(`${date}T23:59:59+07:00`);
-      qb.andWhere('log.eventTime BETWEEN :start AND :end', { start, end });
+      qb.andWhere('log.event_time BETWEEN :start AND :end', { start, end });
     }
 
     // Lọc theo hình thức xác thực
     if (verifyMethod) {
-      qb.andWhere('log.verifyMethod = :verifyMethod', { verifyMethod });
+      qb.andWhere('log.verify_method = :verifyMethod', { verifyMethod });
     }
 
     // Lọc theo trạng thái khớp học sinh
     if (matchStatus === 'matched') {
-      qb.andWhere('log.studentId IS NOT NULL');
+      qb.andWhere('log.student_id IS NOT NULL');
     } else if (matchStatus === 'unmatched') {
-      qb.andWhere('log.studentId IS NULL');
+      qb.andWhere('log.student_id IS NULL');
     }
 
     // Lọc theo trạng thái khớp ca học
     if (sessionMatchStatus === 'matched') {
-      qb.andWhere('log.matchedSessions IS NOT NULL');
+      qb.andWhere('log.matched_sessions IS NOT NULL');
     } else if (sessionMatchStatus === 'unmatched') {
-      qb.andWhere('log.matchedSessions IS NULL');
+      qb.andWhere('log.matched_sessions IS NULL');
     }
 
     // Lọc theo lớp học (classId) của ca học khớp

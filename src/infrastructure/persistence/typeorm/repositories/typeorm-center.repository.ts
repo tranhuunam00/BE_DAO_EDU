@@ -68,7 +68,7 @@ export class TypeOrmCenterRepository implements ICenterRepository {
       qb.andWhere('center.province = :province', { province: query.province });
     }
 
-    qb.orderBy('center.createdAt', 'DESC');
+    qb.orderBy('center.created_at', 'DESC');
     qb.skip(skip);
     qb.take(limit);
 

@@ -278,8 +278,8 @@ async function createReceiptCode(manager: EntityManager) {
   const lastBill = await manager
     .getRepository(StudentMonthlyBillOrmEntity)
     .createQueryBuilder('bill')
-    .where('bill.receiptCode LIKE :prefix', { prefix: `${dayPrefix}%` })
-    .orderBy('bill.receiptCode', 'DESC')
+    .where('bill.receipt_code LIKE :prefix', { prefix: `${dayPrefix}%` })
+    .orderBy('bill.receipt_code', 'DESC')
     .getOne();
 
   let nextSeq = 1;

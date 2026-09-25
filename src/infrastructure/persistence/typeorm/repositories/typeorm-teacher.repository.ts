@@ -54,7 +54,7 @@ export class TypeOrmTeacherRepository implements ITeacherRepository {
       qb.andWhere('teacher.province = :province', { province: query.province });
     }
 
-    qb.orderBy('teacher.createdAt', 'DESC');
+    qb.orderBy('teacher.created_at', 'DESC');
     qb.skip(skip);
     qb.take(limit);
 

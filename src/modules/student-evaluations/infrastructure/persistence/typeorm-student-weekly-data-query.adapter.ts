@@ -61,7 +61,7 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       .where('cs.class_id IN (:...classIds)', { classIds })
       .andWhere('cs.date >= :startDate AND cs.date <= :endDate', { startDate, endDate })
       .orderBy('cs.date', 'ASC')
-      .addOrderBy('cs.startTime', 'ASC')
+      .addOrderBy('cs.start_time', 'ASC')
       .getMany();
 
     if (!sessions.length) return [];
@@ -196,8 +196,8 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
         classId,
         status: 'Active',
       })
-      .orderBy('s.lastName', 'ASC')
-      .addOrderBy('s.firstName', 'ASC')
+      .orderBy('s.last_name', 'ASC')
+      .addOrderBy('s.first_name', 'ASC')
       .getMany();
 
     return enrollments
