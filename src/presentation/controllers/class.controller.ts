@@ -35,6 +35,7 @@ import { CreateClassDto, UpdateClassDto, SaveEvaluationsDto, CreateAdhocSessionD
 import { AssignmentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/assignment.orm-entity';
 import { NotificationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification.orm-entity';
 import { NotificationLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/notification-log.orm-entity';
+import { LeaveRequestOrmEntity } from '../../infrastructure/persistence/typeorm/entities/leave-request.orm-entity';
 import { GetHolidayDatesUseCase } from '../../modules/academics/application/use-cases/manage-holidays.use-cases';
 import { AcademicError } from '../../modules/academics/domain/errors/academic.error';
 import {
@@ -643,36 +644,44 @@ export class ClassController {
     const sessionIds = sessions.map((s) => s.id);
     const attendanceRecords = await this.attendanceRepo
       .createQueryBuilder('att')
-      .select('att.classSessionId', 'classSessionId')
-      .addSelect('att.billId', 'billId')
-      .addSelect('att.isPresent', 'isPresent')
-      .addSelect('att.verifyMethod', 'verifyMethod')
-      .addSelect('att.isLate', 'isLate')
-      .addSelect('att.lateMinutes', 'lateMinutes')
-      .addSelect('att.leaveStatus', 'leaveStatus')
-      .addSelect('att.evaluationComment', 'evaluationComment')
-      .addSelect('att.evaluationScore', 'evaluationScore')
+      .select('att.class_session_id', 'classSessionId')
+      .addSelect('att.bill_id', 'billId')
       .where(
-        'att.classSessionId IN (:...sessionIds) AND (' +
-          'att.billId IS NOT NULL OR ' +
-          'att.isPresent = true OR ' +
-          'att.verifyMethod IS NOT NULL OR ' +
-          'att.isLate = true OR ' +
-          '(att.lateMinutes IS NOT NULL AND att.lateMinutes > 0) OR ' +
-          'att.leaveStatus IN (:...leaveStatuses) OR ' +
-          '(att.evaluationComment IS NOT NULL AND TRIM(att.evaluationComment) != \'\') OR ' +
-          '(att.evaluationScore IS NOT NULL AND TRIM(att.evaluationScore) != \'\')' +
+        'att.class_session_id IN (:...sessionIds) AND (' +
+          'att.bill_id IS NOT NULL OR ' +
+          'att.is_present = true OR ' +
+          'att.verify_method IS NOT NULL OR ' +
+          'att.is_late = true OR ' +
+          '(att.late_minutes IS NOT NULL AND att.late_minutes > 0) OR ' +
+          '(att.evaluation_comment IS NOT NULL AND TRIM(att.evaluation_comment) != \'\') OR ' +
+          '(att.evaluation_score IS NOT NULL AND TRIM(att.evaluation_score) != \'\')' +
         ')',
-        { sessionIds, leaveStatuses: ['approved', 'pending'] },
+        { sessionIds },
       )
+      .getRawMany();
+
+    const leaveRecords = await this.sessionRepo.manager
+      .createQueryBuilder(LeaveRequestOrmEntity, 'lr')
+      .select('lr.class_session_id', 'classSessionId')
+      .where('lr.class_session_id IN (:...sessionIds) AND lr.status IN (:...statuses)', {
+        sessionIds,
+        statuses: ['approved', 'pending'],
+      })
       .getRawMany();
 
     const billedSessionIds = new Set<string>();
     const activeAttendanceSessionIds = new Set<string>();
 
     for (const r of attendanceRecords) {
-      if (r.billId) billedSessionIds.add(r.classSessionId);
-      activeAttendanceSessionIds.add(r.classSessionId);
+      const sId = r.classSessionId || r.classsessionid;
+      const bId = r.billId || r.billid;
+      if (bId) billedSessionIds.add(sId);
+      if (sId) activeAttendanceSessionIds.add(sId);
+    }
+
+    for (const lr of leaveRecords) {
+      const sId = lr.classSessionId || lr.classsessionid;
+      if (sId) activeAttendanceSessionIds.add(sId);
     }
 
     return sessions.map((s: any) => {

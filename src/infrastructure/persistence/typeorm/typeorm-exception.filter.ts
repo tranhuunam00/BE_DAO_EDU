@@ -8,6 +8,7 @@ import { QueryFailedError } from 'typeorm';
 @Catch(QueryFailedError)
 export class TypeOrmExceptionFilter implements ExceptionFilter {
   catch(exception: QueryFailedError, host: ArgumentsHost): void {
+    console.error('[TypeOrmExceptionFilter] DB error:', exception.message, (exception as any).query);
     const code = (
       exception as QueryFailedError & {
         driverError?: { code?: string; constraint?: string };
