@@ -133,6 +133,7 @@ export class WeeklyStudentReportEntity {
   public get strengths(): string { return this._strengths; }
   public get improvements(): string { return this._improvements; }
   public get recommendations(): string[] { return [...this._recommendations]; }
+  public get sessions(): any[] { return [...this._sessions]; }
   public get isApproved(): boolean { return this._isApproved; }
   public get approvedAt(): Date | null { return this._approvedAt; }
   public get approvedBy(): string | null { return this._approvedBy; }

@@ -13,6 +13,7 @@ import {
 
 export interface SessionEvaluationInput {
   classSessionId: string;
+  className?: string;
   subjectName: string;
   date?: string;
   isPresent: boolean;

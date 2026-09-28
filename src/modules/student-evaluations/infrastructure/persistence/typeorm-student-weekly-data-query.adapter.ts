@@ -138,6 +138,7 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
 
       return {
         classSessionId: s.id,
+        className: s.classEntity?.className || s.classEntity?.classCode || '',
         subjectName,
         date: s.date ? new Date(s.date).toISOString().split('T')[0] : '',
         isPresent,

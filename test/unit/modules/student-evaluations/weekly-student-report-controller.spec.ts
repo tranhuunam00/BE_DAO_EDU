@@ -6,6 +6,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 describe('WeeklyStudentReportController Spec', () => {
   let controller: WeeklyStudentReportController;
   let mockWeeklyUseCase: jest.Mocked<GetWeeklyStudentReportUseCase>;
+  let mockMonthlyUseCase: any;
   let mockClassUseCase: jest.Mocked<GetClassWeeklyReportsUseCase>;
   let mockStudentRepo: any;
 
@@ -13,6 +14,14 @@ describe('WeeklyStudentReportController Spec', () => {
     mockWeeklyUseCase = {
       execute: jest.fn().mockResolvedValue({
         report: { id: 'rep-1', sqiScore: 85 } as any,
+        hasSessions: true,
+        message: undefined,
+      }),
+    } as any;
+
+    mockMonthlyUseCase = {
+      execute: jest.fn().mockResolvedValue({
+        report: { id: 'rep-m-1', sqiScore: 88 } as any,
         hasSessions: true,
         message: undefined,
       }),
@@ -31,6 +40,7 @@ describe('WeeklyStudentReportController Spec', () => {
 
     controller = new WeeklyStudentReportController(
       mockWeeklyUseCase,
+      mockMonthlyUseCase,
       mockClassUseCase,
       mockStudentRepo,
     );

@@ -28,6 +28,7 @@ import { GetSessionEvaluationsUseCase } from './application/use-cases/get-sessio
 import { SaveSessionEvaluationsUseCase } from './application/use-cases/save-session-evaluations.use-case';
 import { GenerateAiEvaluationCommentUseCase } from './application/use-cases/generate-ai-evaluation-comment.use-case';
 import { GetWeeklyStudentReportUseCase } from './application/use-cases/get-weekly-student-report.use-case';
+import { GetMonthlyStudentReportUseCase } from './application/use-cases/get-monthly-student-report.use-case';
 import { GetClassWeeklyReportsUseCase } from './application/use-cases/get-class-weekly-reports.use-case';
 import { AskParentAiChatbotUseCase } from './application/use-cases/ask-parent-ai-chatbot.use-case';
 
@@ -113,6 +114,12 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
       inject: [IStudentWeeklyDataQueryPort],
     },
     {
+      provide: GetMonthlyStudentReportUseCase,
+      useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
+        new GetMonthlyStudentReportUseCase(queryPort),
+      inject: [IStudentWeeklyDataQueryPort],
+    },
+    {
       provide: GetClassWeeklyReportsUseCase,
       useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
         new GetClassWeeklyReportsUseCase(queryPort),
@@ -133,6 +140,7 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
     GetSessionEvaluationsUseCase,
     SaveSessionEvaluationsUseCase,
     GetWeeklyStudentReportUseCase,
+    GetMonthlyStudentReportUseCase,
     GetClassWeeklyReportsUseCase,
     AskParentAiChatbotUseCase,
   ],

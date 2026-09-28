@@ -16,6 +16,7 @@ import { RolesGuard } from '../../../../infrastructure/security/roles.guard';
 import { Roles } from '../../../../infrastructure/security/roles.decorator';
 import { Role } from '../../../../domain/value-objects/role.enum';
 import { GetWeeklyStudentReportUseCase } from '../../application/use-cases/get-weekly-student-report.use-case';
+import { GetMonthlyStudentReportUseCase } from '../../application/use-cases/get-monthly-student-report.use-case';
 import { GetClassWeeklyReportsUseCase } from '../../application/use-cases/get-class-weekly-reports.use-case';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
 
@@ -24,6 +25,7 @@ import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm
 export class WeeklyStudentReportController {
   constructor(
     private readonly getWeeklyReportUseCase: GetWeeklyStudentReportUseCase,
+    private readonly getMonthlyReportUseCase: GetMonthlyStudentReportUseCase,
     private readonly getClassWeeklyReportsUseCase: GetClassWeeklyReportsUseCase,
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepo: Repository<StudentOrmEntity>,
@@ -138,6 +140,95 @@ export class WeeklyStudentReportController {
       hasSessions: result.hasSessions,
       message: result.message,
     };
+  }
+
+  /**
+   * 4. API DÀNH CHO PHỤ HUYNH / HỌC SINH: XEM BÁO CÁO THÁNG
+   */
+  @Get('my-report/monthly')
+  @Roles(Role.STUDENT)
+  async getMyMonthlyReport(
+    @Req() req: any,
+    @Headers('x-student-id') headerStudentId?: string,
+    @Query('month') monthStr?: string,
+    @Query('year') yearStr?: string,
+  ) {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new ForbiddenException('Không xác định được danh tính người dùng');
+    }
+
+    let targetStudentId = headerStudentId;
+    if (targetStudentId) {
+      const owned = await this.studentRepo.findOne({
+        where: { id: targetStudentId, userId },
+      });
+      if (!owned) {
+        throw new ForbiddenException('Bạn không có quyền truy cập báo cáo của học sinh này.');
+      }
+    } else {
+      const defaultStudent = await this.studentRepo.findOne({
+        where: { userId },
+      });
+      if (!defaultStudent) {
+        throw new NotFoundException('Tài khoản này chưa được liên kết với học sinh nào');
+      }
+      targetStudentId = defaultStudent.id;
+    }
+
+    const { month, year } = this.resolveMonthAndYear(monthStr, yearStr);
+
+    const result = await this.getMonthlyReportUseCase.execute({
+      studentId: targetStudentId,
+      month,
+      year,
+      requestUserId: userId,
+      userRole: 'STUDENT',
+    });
+
+    return {
+      success: true,
+      data: this.serializeReport(result.report),
+      hasSessions: result.hasSessions,
+      message: result.message,
+    };
+  }
+
+  /**
+   * 5. API DÀNH CHO GIÁO VIÊN & ADMIN: XEM BÁO CÁO THÁNG CỦA 1 HỌC SINH
+   */
+  @Get('student/:studentId/monthly')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  async getStudentMonthlyReport(
+    @Param('studentId') studentId: string,
+    @Req() req: any,
+    @Query('month') monthStr?: string,
+    @Query('year') yearStr?: string,
+  ) {
+    const { month, year } = this.resolveMonthAndYear(monthStr, yearStr);
+
+    const result = await this.getMonthlyReportUseCase.execute({
+      studentId,
+      month,
+      year,
+      requestUserId: req.user?.sub,
+      userRole: req.user?.role,
+    });
+
+    return {
+      success: true,
+      data: this.serializeReport(result.report),
+      hasSessions: result.hasSessions,
+      message: result.message,
+    };
+  }
+
+  private resolveMonthAndYear(monthStr?: string, yearStr?: string): { month: number; year: number } {
+    const now = new Date();
+    const currentYear = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
+    const currentMonth = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1;
+    const validMonth = !isNaN(currentMonth) && currentMonth >= 1 && currentMonth <= 12 ? currentMonth : now.getMonth() + 1;
+    return { month: validMonth, year: !isNaN(currentYear) ? currentYear : now.getFullYear() };
   }
 
   private serializeReport(report: any): any {
