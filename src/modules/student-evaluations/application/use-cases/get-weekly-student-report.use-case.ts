@@ -59,13 +59,20 @@ export class GetWeeklyStudentReportUseCase {
       };
     }
 
-    // 5. Lấy SQI tuần trước để tính Delta
+    // 5. Lấy dữ liệu các buổi học tuần trước để so sánh chính xác từng môn và SQI
     const previousWeek = weekNumber === 1 ? 52 : weekNumber - 1;
     const previousYear = weekNumber === 1 ? year - 1 : year;
-    const previousSqi = await this.queryPort.getPreviousWeekSqi(studentId, previousWeek, previousYear);
+    const { startDate: prevStart, endDate: prevEnd } = this.getWeekDateRange(previousWeek, previousYear);
+    const [prevSessions, prevSqi] = await Promise.all([
+      this.queryPort.getWeeklySessions(studentId, prevStart, prevEnd),
+      this.queryPort.getPreviousWeekSqi(studentId, previousWeek, previousYear),
+    ]);
 
-    // 6. Tính toán điểm SQI 7 yếu tố
-    const sqiResult = SqiCalculator.calculate(sessions, previousSqi);
+    // 6. Tính toán điểm SQI & Xu hướng từng môn học dựa trên đối soát thực tế
+    const sqiResult = SqiCalculator.calculate(
+      sessions,
+      prevSessions.length > 0 ? prevSessions : prevSqi,
+    );
 
     // 7. Tổng hợp sư phạm có căn cứ (Data -> Evidence -> Interpretation -> Recommendation)
     const pedagogicalContent = this.synthesizePedagogicalContent(studentName, sessions, sqiResult);

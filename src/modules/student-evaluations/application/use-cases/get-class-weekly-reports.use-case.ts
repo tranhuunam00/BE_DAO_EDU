@@ -97,13 +97,19 @@ export class GetClassWeeklyReportsUseCase {
       level1: 0,
     };
 
+    const { startDate: prevStart, endDate: prevEnd } = this.getWeekDateRange(previousWeek, previousYear);
+
     for (const student of enrolledStudents) {
-      const [sessions, prevSqi] = await Promise.all([
+      const [sessions, prevSessions, prevSqi] = await Promise.all([
         this.queryPort.getWeeklySessions(student.id, startDate, endDate),
+        this.queryPort.getWeeklySessions(student.id, prevStart, prevEnd),
         this.queryPort.getPreviousWeekSqi(student.id, previousWeek, previousYear),
       ]);
 
-      const sqiResult = SqiCalculator.calculate(sessions, prevSqi);
+      const sqiResult = SqiCalculator.calculate(
+        sessions,
+        prevSessions.length > 0 ? prevSessions : prevSqi,
+      );
 
       // Tính tỉ lệ điểm danh và BTVN
       let attendanceRate = 0;

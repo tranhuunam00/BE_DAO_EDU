@@ -39,6 +39,7 @@ describe('WeeklyStudentReportController Spec', () => {
   describe('1. getMyReport (Phụ huynh / Học sinh)', () => {
     it('1.1. Ưu tiên sử dụng header x-student-id khi phụ huynh chuyển đổi giữa các con', async () => {
       const req = { user: { sub: 'user-parent-1', role: 'STUDENT' } };
+      mockStudentRepo.findOne.mockResolvedValue({ id: 'child-student-2', userId: 'user-parent-1' });
 
       const result = await controller.getMyReport(req, 'child-student-2', '35', '2026');
 
@@ -50,7 +51,9 @@ describe('WeeklyStudentReportController Spec', () => {
         userRole: 'STUDENT',
       });
       expect(result.data).toBeDefined();
-      expect(mockStudentRepo.findOne).not.toHaveBeenCalled();
+      expect(mockStudentRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'child-student-2', userId: 'user-parent-1' },
+      });
     });
 
     it('1.2. Tự động tìm học sinh đầu tiên của phụ huynh nếu không có header x-student-id', async () => {

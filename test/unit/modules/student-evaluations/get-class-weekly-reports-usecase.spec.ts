@@ -48,7 +48,10 @@ describe('GetClassWeeklyReportsUseCase & Edge Cases Spec', () => {
     ]);
 
     // Học sinh 1: Xuất sắc
-    mockPort.getWeeklySessions.mockImplementation(async (studentId: string) => {
+    mockPort.getWeeklySessions.mockImplementation(async (studentId: string, startDate?: string) => {
+      if (startDate && startDate < '2026-08-20') {
+        return [];
+      }
       if (studentId === 's-1') {
         return [
           {

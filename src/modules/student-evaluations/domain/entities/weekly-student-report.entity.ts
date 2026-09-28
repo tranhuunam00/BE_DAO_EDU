@@ -26,7 +26,9 @@ export interface SqiBreakdown {
 export interface SubjectPerformance {
   subjectName: string;
   score: number;
+  previousScore?: number | null;
   trend: TrendDirection;
+  scoreDelta?: number;
   isEstimated?: boolean;
 }
 

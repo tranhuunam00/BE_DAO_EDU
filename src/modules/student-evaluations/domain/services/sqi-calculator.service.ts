@@ -38,7 +38,7 @@ export interface SqiCalculationResult {
 export class SqiCalculator {
   public static calculate(
     sessions: SessionEvaluationInput[],
-    previousWeekSqi: number | null = null,
+    previousDataOrSqi: SessionEvaluationInput[] | number | null = null,
   ): SqiCalculationResult {
     if (!sessions || sessions.length === 0) {
       return {
@@ -58,6 +58,19 @@ export class SqiCalculator {
         },
         subjectPerformances: [],
       };
+    }
+
+    let previousSessions: SessionEvaluationInput[] | null = null;
+    let previousWeekSqi: number | null = null;
+
+    if (Array.isArray(previousDataOrSqi)) {
+      previousSessions = previousDataOrSqi;
+      if (previousSessions.length > 0) {
+        const prevRes = SqiCalculator.calculate(previousSessions, null);
+        previousWeekSqi = prevRes.sqiScore;
+      }
+    } else if (typeof previousDataOrSqi === 'number') {
+      previousWeekSqi = previousDataOrSqi;
     }
 
     const totalSessions = sessions.length;
@@ -141,7 +154,6 @@ export class SqiCalculator {
     // 7. Mức độ tiến bộ (20%)
     const baseSumWithoutProgress =
       attendanceScore + homeworkScore + attitudeScore + behaviorScore + competencyScore + academicScore;
-    // Chuẩn hóa về thang 100 để so sánh với previousWeekSqi
     const normalizedCurrent = (baseSumWithoutProgress / 80) * 100;
 
     let progressScore = 16;
@@ -154,13 +166,13 @@ export class SqiCalculator {
       trend = TrendDirection.NEW;
     } else {
       delta = normalizedCurrent - previousWeekSqi;
-      if (delta >= 3) {
+      if (delta >= 2.5) {
         progressScore = 20;
         trend = TrendDirection.UP;
-      } else if (delta >= -3) {
+      } else if (delta >= -2.5) {
         progressScore = 16;
         trend = TrendDirection.STABLE;
-      } else if (delta >= -8) {
+      } else if (delta >= -7.0) {
         progressScore = 12;
         trend = TrendDirection.DOWN;
       } else {
@@ -186,7 +198,26 @@ export class SqiCalculator {
       ),
     );
 
-    // Tính điểm theo từng môn
+    // Tính điểm môn học tuần trước để so sánh chính xác
+    const prevSubjectMap = new Map<string, { totalScore: number; count: number }>();
+    if (previousSessions && previousSessions.length > 0) {
+      for (const ps of previousSessions) {
+        const name = ps.subjectName || 'Chung';
+        const ex = prevSubjectMap.get(name) || { totalScore: 0, count: 0 };
+        let sScore = 8.0;
+        if (ps.score !== null && ps.score !== undefined && ps.score !== '') {
+          const p = Number(String(ps.score).replace(',', '.'));
+          if (!isNaN(p)) sScore = p;
+        } else if (ps.understanding === UnderstandingStatus.NOT_UNDERSTOOD) {
+          sScore = 5.5;
+        }
+        ex.totalScore += sScore;
+        ex.count += 1;
+        prevSubjectMap.set(name, ex);
+      }
+    }
+
+    // Tính điểm theo từng môn tuần này
     const subjectMap = new Map<string, { totalScore: number; count: number; hasRealScore: boolean }>();
     for (const s of sessions) {
       const name = s.subjectName || 'Chung';
@@ -209,10 +240,31 @@ export class SqiCalculator {
     const subjectPerformances: SubjectPerformance[] = [];
     subjectMap.forEach((val, name) => {
       const avg = Math.round((val.totalScore / val.count) * 10) / 10;
+      let subTrend = TrendDirection.STABLE;
+      let scoreDelta: number | undefined = undefined;
+      let prevAvg: number | null = null;
+
+      const prevSub = prevSubjectMap.get(name);
+      if (prevSub && prevSub.count > 0) {
+        prevAvg = Math.round((prevSub.totalScore / prevSub.count) * 10) / 10;
+        scoreDelta = Math.round((avg - prevAvg) * 10) / 10;
+        if (scoreDelta > 0.1) {
+          subTrend = TrendDirection.UP;
+        } else if (scoreDelta < -0.1) {
+          subTrend = TrendDirection.DOWN;
+        } else {
+          subTrend = TrendDirection.STABLE;
+        }
+      } else {
+        subTrend = TrendDirection.NEW;
+      }
+
       subjectPerformances.push({
         subjectName: name,
         score: avg,
-        trend: avg >= 8 ? TrendDirection.UP : avg >= 6.5 ? TrendDirection.STABLE : TrendDirection.DOWN,
+        previousScore: prevAvg,
+        trend: subTrend,
+        scoreDelta,
         isEstimated: !val.hasRealScore,
       });
     });
