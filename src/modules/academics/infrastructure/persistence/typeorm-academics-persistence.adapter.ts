@@ -326,68 +326,31 @@ export class TypeOrmAcademicsPersistenceAdapter
     joinedDate: string,
   ): Promise<{ message: string; deletedCount: number; createdCount: number }> {
     return this.runSerializable(async (manager) => {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!joinedDate || !dateRegex.test(joinedDate) || isNaN(Date.parse(joinedDate))) {
+        throw new AcademicError('INVALID_DATE_FORMAT', 'Định dạng ngày tham gia không hợp lệ.');
+      }
+
       const classStudent = await manager.findOne(ClassStudentOrmEntity, {
         where: { classId, studentId, status: 'Active' },
         lock: { mode: 'pessimistic_write' },
       });
       if (!classStudent) {
-        throw new AcademicError(
-          'STUDENT_NOT_FOUND',
-          'Học sinh không ở trạng thái hoạt động trong lớp này.',
-        );
+        throw new AcademicError('STUDENT_NOT_FOUND', 'Học sinh không ở trạng thái hoạt động trong lớp này.');
       }
 
-      const sessions = await manager.find(ClassSessionOrmEntity, {
-        where: { classId },
-      });
-      const sessionIds = sessions.map((s) => s.id);
-      let attendances: StudentAttendanceOrmEntity[] = [];
-      if (sessionIds.length > 0) {
-        attendances = await manager.find(StudentAttendanceOrmEntity, {
-          where: { classSessionId: In(sessionIds), studentId },
-        });
+      const classEntity = await manager.findOne(ClassOrmEntity, { where: { id: classId } });
+      if (classEntity?.finishDate && joinedDate > classEntity.finishDate) {
+        throw new AcademicError('JOINED_DATE_AFTER_FINISH_DATE', 'Ngày vào lớp không được sau ngày kết thúc lớp học.');
       }
-
-      // 1. Kiểm tra an toàn tuyệt đối trước khi thực hiện
-      AttendanceDeletionGuard.validateSafeToUpdateJoinedDate({
-        studentId,
-        newJoinedDate: joinedDate,
-        sessions,
-        attendances,
-      });
-
-      // 2. Tính toán danh sách xóa và tạo mới an toàn
-      const syncResult = AttendanceDeletionGuard.syncAttendanceForStudent({
-        studentId,
-        newJoinedDate: joinedDate,
-        sessions,
-        existingAttendances: attendances,
-      });
 
       classStudent.joinedDate = joinedDate;
       await manager.save(classStudent);
 
-      if (syncResult.deletedAttendanceIds.length > 0) {
-        await manager.delete(StudentAttendanceOrmEntity, {
-          id: In(syncResult.deletedAttendanceIds),
-        });
-      }
-
-      if (syncResult.createdAttendanceRecords.length > 0) {
-        const toSave = syncResult.createdAttendanceRecords.map((r) =>
-          manager.create(StudentAttendanceOrmEntity, {
-            classSessionId: r.classSessionId,
-            studentId: r.studentId,
-            isPresent: false,
-          }),
-        );
-        await manager.save(StudentAttendanceOrmEntity, toSave);
-      }
-
       return {
-        message: 'Cập nhật ngày tham gia lớp và đồng bộ điểm danh thành công!',
-        deletedCount: syncResult.deletedAttendanceIds.length,
-        createdCount: syncResult.createdAttendanceRecords.length,
+        message: 'Cập nhật ngày tham gia lớp thành công!',
+        deletedCount: 0,
+        createdCount: 0,
       };
     });
   }
@@ -402,6 +365,16 @@ export class TypeOrmAcademicsPersistenceAdapter
     createdCount: number;
   }> {
     return this.runSerializable(async (manager) => {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!joinedDate || !dateRegex.test(joinedDate) || isNaN(Date.parse(joinedDate))) {
+        throw new AcademicError('INVALID_DATE_FORMAT', 'Định dạng ngày tham gia không hợp lệ.');
+      }
+
+      const classEntity = await manager.findOne(ClassOrmEntity, { where: { id: classId } });
+      if (classEntity?.finishDate && joinedDate > classEntity.finishDate) {
+        throw new AcademicError('JOINED_DATE_AFTER_FINISH_DATE', 'Ngày vào lớp không được sau ngày kết thúc lớp học.');
+      }
+
       const classStudents = await manager.find(ClassStudentOrmEntity, {
         where: { classId, status: 'Active' },
         lock: { mode: 'pessimistic_write' },
@@ -415,66 +388,26 @@ export class TypeOrmAcademicsPersistenceAdapter
         };
       }
 
-      const sessions = await manager.find(ClassSessionOrmEntity, {
-        where: { classId },
-      });
-      const sessionIds = sessions.map((s) => s.id);
-      let attendances: StudentAttendanceOrmEntity[] = [];
-      if (sessionIds.length > 0) {
-        attendances = await manager.find(StudentAttendanceOrmEntity, {
-          where: { classSessionId: In(sessionIds) },
-        });
-      }
-
-      // Kiểm tra an toàn và đồng bộ hàng loạt cho toàn bộ học sinh
-      const syncResult = AttendanceDeletionGuard.syncAttendanceForAllStudents({
-        students: classStudents,
-        newJoinedDate: joinedDate,
-        sessions,
-        existingAttendances: attendances,
-      });
-
       for (const cs of classStudents) {
         cs.joinedDate = joinedDate;
       }
       await manager.save(ClassStudentOrmEntity, classStudents);
 
-      if (syncResult.deletedAttendanceIds.length > 0) {
-        await manager.delete(StudentAttendanceOrmEntity, {
-          id: In(syncResult.deletedAttendanceIds),
-        });
-      }
-
-      if (syncResult.createdAttendanceRecords.length > 0) {
-        const toSave = syncResult.createdAttendanceRecords.map((r) =>
-          manager.create(StudentAttendanceOrmEntity, {
-            classSessionId: r.classSessionId,
-            studentId: r.studentId,
-            isPresent: false,
-          }),
-        );
-        await manager.save(StudentAttendanceOrmEntity, toSave);
-      }
-
       return {
         message: 'Cập nhật ngày tham gia lớp cho toàn bộ học sinh thành công!',
         affectedStudents: classStudents.length,
-        deletedCount: syncResult.deletedAttendanceIds.length,
-        createdCount: syncResult.createdAttendanceRecords.length,
+        deletedCount: 0,
+        createdCount: 0,
       };
     });
   }
 
-  private async runSerializable<T>(
-    work: (manager: EntityManager) => Promise<T>,
-  ): Promise<T> {
+  private async runSerializable<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         return await this.dataSource.transaction('READ COMMITTED', work);
       } catch (error) {
-        const code = (error as { code?: string; driverError?: { code?: string } })
-          .driverError?.code ??
-          (error as { code?: string }).code;
+        const code = (error as any).driverError?.code ?? (error as any).code;
         if (code !== '40001' || attempt === 3) throw error;
       }
     }
