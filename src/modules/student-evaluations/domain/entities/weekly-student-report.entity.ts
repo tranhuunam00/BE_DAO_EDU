@@ -46,6 +46,8 @@ export interface CreateWeeklyStudentReportProps {
   sqiBreakdown: SqiBreakdown;
   subjectPerformances: SubjectPerformance[];
   overview: string;
+  commendation?: string | null;
+  suggestion?: string | null;
   strengths: string;
   improvements: string;
   recommendations: string[];
@@ -71,6 +73,8 @@ export class WeeklyStudentReportEntity {
   private _sqiBreakdown: SqiBreakdown;
   private _subjectPerformances: SubjectPerformance[];
   private _overview: string;
+  private _commendation: string | null;
+  private _suggestion: string | null;
   private _strengths: string;
   private _improvements: string;
   private _recommendations: string[];
@@ -102,6 +106,8 @@ export class WeeklyStudentReportEntity {
     this._sqiBreakdown = { ...props.sqiBreakdown };
     this._subjectPerformances = props.subjectPerformances ? [...props.subjectPerformances] : [];
     this._overview = props.overview || '';
+    this._commendation = props.commendation || null;
+    this._suggestion = props.suggestion || null;
     this._strengths = props.strengths || '';
     this._improvements = props.improvements || '';
     this._recommendations = props.recommendations ? [...props.recommendations] : [];
@@ -130,6 +136,8 @@ export class WeeklyStudentReportEntity {
   public get sqiBreakdown(): SqiBreakdown { return { ...this._sqiBreakdown }; }
   public get subjectPerformances(): SubjectPerformance[] { return [...this._subjectPerformances]; }
   public get overview(): string { return this._overview; }
+  public get commendation(): string | null { return this._commendation; }
+  public get suggestion(): string | null { return this._suggestion; }
   public get strengths(): string { return this._strengths; }
   public get improvements(): string { return this._improvements; }
   public get recommendations(): string[] { return [...this._recommendations]; }
@@ -183,6 +191,8 @@ export class WeeklyStudentReportEntity {
       sqiBreakdown: this._sqiBreakdown,
       subjectPerformances: this._subjectPerformances,
       overview: this._overview,
+      commendation: this._commendation,
+      suggestion: this._suggestion,
       strengths: this._strengths,
       improvements: this._improvements,
       recommendations: this._recommendations,

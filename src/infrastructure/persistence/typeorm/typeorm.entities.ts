@@ -40,6 +40,7 @@ import { StudyMaterialOrmEntity } from './entities/study-material.orm-entity';
 import { TimekeepingDeviceOrmEntity } from './entities/timekeeping-device.orm-entity';
 import { TimekeepingLogOrmEntity } from './entities/timekeeping-log.orm-entity';
 import { StudentSessionEvaluationOrmEntity } from './entities/student-session-evaluation.orm-entity';
+import { StudentReportApprovalOrmEntity } from './entities/student-report-approval.orm-entity';
 
 export const TYPEORM_ENTITIES = [
   UserOrmEntity,
@@ -84,4 +85,5 @@ export const TYPEORM_ENTITIES = [
   TimekeepingDeviceOrmEntity,
   TimekeepingLogOrmEntity,
   StudentSessionEvaluationOrmEntity,
+  StudentReportApprovalOrmEntity,
 ];

@@ -19,8 +19,13 @@ export interface GetMonthlyReportOutput {
   message?: string;
 }
 
+import { IStudentReportApprovalRepositoryPort } from '../ports/student-report-approval-repository.port';
+
 export class GetMonthlyStudentReportUseCase {
-  constructor(private readonly queryPort: IStudentWeeklyDataQueryPort) {}
+  constructor(
+    private readonly queryPort: IStudentWeeklyDataQueryPort,
+    private readonly approvalRepo?: IStudentReportApprovalRepositoryPort,
+  ) {}
 
   async execute(input: GetMonthlyReportInput): Promise<GetMonthlyReportOutput> {
     const { studentId, month, year, requestUserId, userRole } = input;
@@ -70,7 +75,10 @@ export class GetMonthlyStudentReportUseCase {
     const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
     const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
 
-    const prevSessions = await this.queryPort.getWeeklySessions(studentId, prevStart, prevEnd).catch(() => []);
+    const [prevSessions, approval] = await Promise.all([
+      this.queryPort.getWeeklySessions(studentId, prevStart, prevEnd).catch(() => []),
+      this.approvalRepo ? this.approvalRepo.findApproval(studentId, 'month', month, year) : Promise.resolve(null),
+    ]);
 
     // 6. Tính toán điểm SQI tháng & Xu hướng
     const sqiResult = SqiCalculator.calculate(
@@ -95,11 +103,15 @@ export class GetMonthlyStudentReportUseCase {
       sqiBreakdown: sqiResult.breakdown,
       subjectPerformances: sqiResult.subjectPerformances,
       overview: pedagogicalContent.overview,
+      commendation: approval?.commendation || null,
+      suggestion: approval?.suggestion || null,
       strengths: pedagogicalContent.strengths,
       improvements: pedagogicalContent.improvements,
       recommendations: pedagogicalContent.recommendations,
       sessions,
-      isApproved: true,
+      isApproved: approval ? approval.isApproved : false,
+      approvedAt: approval?.approvedAt || null,
+      approvedBy: approval?.approvedByName || approval?.approvedByUserId || null,
     });
 
     return {

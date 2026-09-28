@@ -19,8 +19,13 @@ export interface GetWeeklyReportOutput {
   message?: string;
 }
 
+import { IStudentReportApprovalRepositoryPort } from '../ports/student-report-approval-repository.port';
+
 export class GetWeeklyStudentReportUseCase {
-  constructor(private readonly queryPort: IStudentWeeklyDataQueryPort) {}
+  constructor(
+    private readonly queryPort: IStudentWeeklyDataQueryPort,
+    private readonly approvalRepo?: IStudentReportApprovalRepositoryPort,
+  ) {}
 
   async execute(input: GetWeeklyReportInput): Promise<GetWeeklyReportOutput> {
     const { studentId, weekNumber, year, requestUserId, userRole } = input;
@@ -63,9 +68,10 @@ export class GetWeeklyStudentReportUseCase {
     const previousWeek = weekNumber === 1 ? 52 : weekNumber - 1;
     const previousYear = weekNumber === 1 ? year - 1 : year;
     const { startDate: prevStart, endDate: prevEnd } = this.getWeekDateRange(previousWeek, previousYear);
-    const [prevSessions, prevSqi] = await Promise.all([
+    const [prevSessions, prevSqi, approval] = await Promise.all([
       this.queryPort.getWeeklySessions(studentId, prevStart, prevEnd),
       this.queryPort.getPreviousWeekSqi(studentId, previousWeek, previousYear),
+      this.approvalRepo ? this.approvalRepo.findApproval(studentId, 'week', weekNumber, year) : Promise.resolve(null),
     ]);
 
     // 6. Tính toán điểm SQI & Xu hướng từng môn học dựa trên đối soát thực tế
@@ -91,11 +97,15 @@ export class GetWeeklyStudentReportUseCase {
       sqiBreakdown: sqiResult.breakdown,
       subjectPerformances: sqiResult.subjectPerformances,
       overview: pedagogicalContent.overview,
+      commendation: approval?.commendation || null,
+      suggestion: approval?.suggestion || null,
       strengths: pedagogicalContent.strengths,
       improvements: pedagogicalContent.improvements,
       recommendations: pedagogicalContent.recommendations,
       sessions,
-      isApproved: true, // Auto-computed pure view
+      isApproved: approval ? approval.isApproved : false,
+      approvedAt: approval?.approvedAt || null,
+      approvedBy: approval?.approvedByName || approval?.approvedByUserId || null,
     });
 
     return {

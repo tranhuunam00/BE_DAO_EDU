@@ -8,6 +8,7 @@ describe('WeeklyStudentReportController Spec', () => {
   let mockWeeklyUseCase: jest.Mocked<GetWeeklyStudentReportUseCase>;
   let mockMonthlyUseCase: any;
   let mockClassUseCase: jest.Mocked<GetClassWeeklyReportsUseCase>;
+  let mockToggleApprovalUseCase: any;
   let mockStudentRepo: any;
 
   beforeEach(() => {
@@ -34,6 +35,13 @@ describe('WeeklyStudentReportController Spec', () => {
       }),
     } as any;
 
+    mockToggleApprovalUseCase = {
+      execute: jest.fn().mockResolvedValue({
+        id: 'appr-1',
+        isApproved: true,
+      }),
+    } as any;
+
     mockStudentRepo = {
       findOne: jest.fn(),
     };
@@ -42,6 +50,7 @@ describe('WeeklyStudentReportController Spec', () => {
       mockWeeklyUseCase,
       mockMonthlyUseCase,
       mockClassUseCase,
+      mockToggleApprovalUseCase,
       mockStudentRepo,
     );
   });

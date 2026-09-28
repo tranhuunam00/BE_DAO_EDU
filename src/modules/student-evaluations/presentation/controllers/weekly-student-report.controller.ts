@@ -18,7 +18,9 @@ import { Role } from '../../../../domain/value-objects/role.enum';
 import { GetWeeklyStudentReportUseCase } from '../../application/use-cases/get-weekly-student-report.use-case';
 import { GetMonthlyStudentReportUseCase } from '../../application/use-cases/get-monthly-student-report.use-case';
 import { GetClassWeeklyReportsUseCase } from '../../application/use-cases/get-class-weekly-reports.use-case';
+import { ToggleReportApprovalUseCase } from '../../application/use-cases/toggle-report-approval.use-case';
 import { StudentOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student.orm-entity';
+import { Body, Post } from '@nestjs/common';
 
 @Controller('weekly-reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +29,7 @@ export class WeeklyStudentReportController {
     private readonly getWeeklyReportUseCase: GetWeeklyStudentReportUseCase,
     private readonly getMonthlyReportUseCase: GetMonthlyStudentReportUseCase,
     private readonly getClassWeeklyReportsUseCase: GetClassWeeklyReportsUseCase,
+    private readonly toggleReportApprovalUseCase: ToggleReportApprovalUseCase,
     @InjectRepository(StudentOrmEntity)
     private readonly studentRepo: Repository<StudentOrmEntity>,
   ) {}
@@ -234,6 +237,43 @@ export class WeeklyStudentReportController {
       data: this.serializeReport(result.report),
       hasSessions: result.hasSessions,
       message: result.message,
+    };
+  }
+
+  /**
+   * 6. API DÀNH CHO GIÁO VIÊN & ADMIN: PHÊ DUYỆT / HỦY DUYỆT BÁO CÁO CỦA HỌC SINH
+   */
+  @Post('student/:studentId/toggle-approval')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  async toggleReportApproval(
+    @Param('studentId') studentId: string,
+    @Body()
+    body: {
+      reportType: 'week' | 'month';
+      periodNumber: number;
+      year: number;
+      isApproved: boolean;
+      commendation?: string | null;
+      suggestion?: string | null;
+    },
+    @Req() req: any,
+  ) {
+    const userId = req.user?.sub;
+    const result = await this.toggleReportApprovalUseCase.execute({
+      studentId,
+      reportType: body.reportType,
+      periodNumber: body.periodNumber,
+      year: body.year,
+      isApproved: body.isApproved,
+      userId,
+      commendation: body.commendation,
+      suggestion: body.suggestion,
+    });
+
+    return {
+      success: true,
+      data: result,
+      message: body.isApproved ? 'Đã phê duyệt báo cáo thành công' : 'Đã hủy duyệt báo cáo',
     };
   }
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentSessionEvaluationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-session-evaluation.orm-entity';
+import { StudentReportApprovalOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-report-approval.orm-entity';
 import { ClassSessionOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-session.orm-entity';
 import { TeacherOrmEntity } from '../../infrastructure/persistence/typeorm/entities/teacher.orm-entity';
 import { StudentAttendanceOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-attendance.orm-entity';
@@ -9,6 +10,7 @@ import { ClassOrmEntity } from '../../infrastructure/persistence/typeorm/entitie
 import { ClassStudentOrmEntity } from '../../infrastructure/persistence/typeorm/entities/class-student.orm-entity';
 
 import { IStudentSessionEvaluationRepositoryPort } from './application/ports/student-session-evaluation-repository.port';
+import { IStudentReportApprovalRepositoryPort } from './application/ports/student-report-approval-repository.port';
 import { IAiEvaluationGeneratorPort } from './application/ports/ai-evaluation-generator.port';
 import { ILlmRateLimiterPort } from './application/ports/llm-rate-limiter.port';
 import { ILlmEvaluationCachePort } from './application/ports/llm-evaluation-cache.port';
@@ -17,6 +19,7 @@ import { PARENT_AI_CHAT_PORT } from './application/ports/parent-ai-chat.port';
 import { STUDENT_PROFILE_CONTEXT_QUERY_PORT } from './application/ports/student-profile-context-query.port';
 
 import { TypeOrmStudentSessionEvaluationAdapter } from './infrastructure/persistence/typeorm-student-session-evaluation.adapter';
+import { TypeOrmStudentReportApprovalAdapter } from './infrastructure/persistence/typeorm-student-report-approval.adapter';
 import { TypeOrmStudentWeeklyDataQueryAdapter } from './infrastructure/persistence/typeorm-student-weekly-data-query.adapter';
 import { TypeOrmStudentProfileContextAdapter } from './infrastructure/persistence/typeorm-student-profile-context.adapter';
 import { GeminiAiEvaluationGeneratorAdapter } from './infrastructure/ai/gemini-ai-evaluation-generator.adapter';
@@ -30,6 +33,7 @@ import { GenerateAiEvaluationCommentUseCase } from './application/use-cases/gene
 import { GetWeeklyStudentReportUseCase } from './application/use-cases/get-weekly-student-report.use-case';
 import { GetMonthlyStudentReportUseCase } from './application/use-cases/get-monthly-student-report.use-case';
 import { GetClassWeeklyReportsUseCase } from './application/use-cases/get-class-weekly-reports.use-case';
+import { ToggleReportApprovalUseCase } from './application/use-cases/toggle-report-approval.use-case';
 import { AskParentAiChatbotUseCase } from './application/use-cases/ask-parent-ai-chatbot.use-case';
 
 import { StudentEvaluationController } from './presentation/controllers/student-evaluation.controller';
@@ -40,6 +44,7 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
   imports: [
     TypeOrmModule.forFeature([
       StudentSessionEvaluationOrmEntity,
+      StudentReportApprovalOrmEntity,
       ClassSessionOrmEntity,
       TeacherOrmEntity,
       StudentAttendanceOrmEntity,
@@ -57,6 +62,10 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
     {
       provide: IStudentSessionEvaluationRepositoryPort,
       useClass: TypeOrmStudentSessionEvaluationAdapter,
+    },
+    {
+      provide: IStudentReportApprovalRepositoryPort,
+      useClass: TypeOrmStudentReportApprovalAdapter,
     },
     {
       provide: IStudentWeeklyDataQueryPort,
@@ -109,21 +118,27 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
     },
     {
       provide: GetWeeklyStudentReportUseCase,
-      useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
-        new GetWeeklyStudentReportUseCase(queryPort),
-      inject: [IStudentWeeklyDataQueryPort],
+      useFactory: (queryPort: IStudentWeeklyDataQueryPort, approvalRepo: IStudentReportApprovalRepositoryPort) =>
+        new GetWeeklyStudentReportUseCase(queryPort, approvalRepo),
+      inject: [IStudentWeeklyDataQueryPort, IStudentReportApprovalRepositoryPort],
     },
     {
       provide: GetMonthlyStudentReportUseCase,
-      useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
-        new GetMonthlyStudentReportUseCase(queryPort),
-      inject: [IStudentWeeklyDataQueryPort],
+      useFactory: (queryPort: IStudentWeeklyDataQueryPort, approvalRepo: IStudentReportApprovalRepositoryPort) =>
+        new GetMonthlyStudentReportUseCase(queryPort, approvalRepo),
+      inject: [IStudentWeeklyDataQueryPort, IStudentReportApprovalRepositoryPort],
     },
     {
       provide: GetClassWeeklyReportsUseCase,
       useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
         new GetClassWeeklyReportsUseCase(queryPort),
       inject: [IStudentWeeklyDataQueryPort],
+    },
+    {
+      provide: ToggleReportApprovalUseCase,
+      useFactory: (approvalRepo: IStudentReportApprovalRepositoryPort) =>
+        new ToggleReportApprovalUseCase(approvalRepo),
+      inject: [IStudentReportApprovalRepositoryPort],
     },
     {
       provide: AskParentAiChatbotUseCase,
@@ -142,6 +157,7 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
     GetWeeklyStudentReportUseCase,
     GetMonthlyStudentReportUseCase,
     GetClassWeeklyReportsUseCase,
+    ToggleReportApprovalUseCase,
     AskParentAiChatbotUseCase,
   ],
 })
