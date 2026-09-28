@@ -910,7 +910,7 @@ export class ClassController {
     return session;
   }
 
-  @Post('sessions/:sessionId/revert-to-scheduled')
+  @Post(['sessions/:sessionId/revert-to-scheduled', 'sessions/:sessionId/revert'])
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Hoàn tác bắt đầu điểm danh (chuyển trạng thái trở lại Chưa diễn ra)' })
   async revertToScheduled(
