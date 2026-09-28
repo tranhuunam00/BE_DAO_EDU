@@ -111,26 +111,18 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       const subjectName =
         s.classEntity?.course?.name || s.classEntity?.className || 'Môn học chung';
 
-      let homeworkStatus: HomeworkStatus = HomeworkStatus.COMPLETED;
-      if (ev?.homeworkStatus) {
-        homeworkStatus = ev.homeworkStatus as HomeworkStatus;
-      } else if (!isPresent) {
-        homeworkStatus = HomeworkStatus.NOT_DONE;
-      }
+      // Không có evaluation record → undefined, KHÔNG được tự gán mặc định
+      const homeworkStatus: HomeworkStatus | undefined = ev?.homeworkStatus
+        ? (ev.homeworkStatus as HomeworkStatus)
+        : undefined;
 
-      let participation: ParticipationStatus = isPresent
-        ? ParticipationStatus.ACTIVE
-        : ParticipationStatus.PASSIVE;
-      if (ev?.participation) {
-        participation = ev.participation as ParticipationStatus;
-      }
+      const participation: ParticipationStatus | undefined = ev?.participation
+        ? (ev.participation as ParticipationStatus)
+        : undefined;
 
-      let understanding: UnderstandingStatus = isPresent
-        ? UnderstandingStatus.UNDERSTOOD
-        : UnderstandingStatus.NOT_UNDERSTOOD;
-      if (ev?.understanding) {
-        understanding = ev.understanding as UnderstandingStatus;
-      }
+      const understanding: UnderstandingStatus | undefined = ev?.understanding
+        ? (ev.understanding as UnderstandingStatus)
+        : undefined;
 
       const behaviorTags: BehaviorTag[] = (ev?.behaviorTags || []) as BehaviorTag[];
       const score = ev?.score || att?.evaluationScore || null;

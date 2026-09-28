@@ -265,16 +265,15 @@ export class SqiCalculator {
       for (const ps of previousSessions) {
         const name = ps.subjectName || 'Chung';
         const ex = prevSubjectMap.get(name) || { totalScore: 0, count: 0 };
-        let sScore = 8.0;
+        // Chỉ tính khi có điểm thực tế, KHÔNG bịa mặc định
         if (ps.score !== null && ps.score !== undefined && ps.score !== '') {
           const p = Number(String(ps.score).replace(',', '.'));
-          if (!isNaN(p)) sScore = p;
-        } else if (ps.understanding === UnderstandingStatus.NOT_UNDERSTOOD) {
-          sScore = 5.5;
+          if (!isNaN(p)) {
+            ex.totalScore += p;
+            ex.count += 1;
+            prevSubjectMap.set(name, ex);
+          }
         }
-        ex.totalScore += sScore;
-        ex.count += 1;
-        prevSubjectMap.set(name, ex);
       }
     }
 
@@ -283,19 +282,16 @@ export class SqiCalculator {
     for (const s of sessions) {
       const name = s.subjectName || 'Chung';
       const existing = subjectMap.get(name) || { totalScore: 0, count: 0, hasRealScore: false };
-      let sessionScore = 8.0;
+      // Chỉ tính khi có điểm thực tế, KHÔNG bịa mặc định
       if (s.score !== null && s.score !== undefined && s.score !== '') {
         const parsed = Number(String(s.score).replace(',', '.'));
         if (!isNaN(parsed)) {
-          sessionScore = parsed;
+          existing.totalScore += parsed;
+          existing.count += 1;
           existing.hasRealScore = true;
+          subjectMap.set(name, existing);
         }
-      } else if (s.understanding === UnderstandingStatus.NOT_UNDERSTOOD) {
-        sessionScore = 5.5;
       }
-      existing.totalScore += sessionScore;
-      existing.count += 1;
-      subjectMap.set(name, existing);
     }
 
     const subjectPerformances: SubjectPerformance[] = [];
