@@ -86,7 +86,7 @@ describe('SqiCalculator Domain Service & Benchmark Spec', () => {
       expect(result.sqiDelta).toBeLessThan(0);
       expect(result.trend).toBe(TrendDirection.DOWN);
       expect(result.breakdown.homework).toBeLessThan(5);
-      expect(result.breakdown.attendance).toBeLessThan(5);
+      expect(result.breakdown.attendance).toBeLessThanOrEqual(5);
     });
 
     it('1.3. Xử lý an toàn khi tuần đó học sinh không có buổi học nào (Nghỉ lễ)', () => {
@@ -118,7 +118,7 @@ describe('SqiCalculator Domain Service & Benchmark Spec', () => {
       expect(result.sqiScore).toBeGreaterThan(70);
       expect(result.sqiDelta).toBe(0);
       expect(result.trend).toBe(TrendDirection.NEW);
-      expect(result.breakdown.progress).toBe(16);
+      expect(result.breakdown.progress).toBeNull();
     });
   });
 
@@ -174,6 +174,51 @@ describe('SqiCalculator Domain Service & Benchmark Spec', () => {
         `[BENCHMARK] Thời gian tính toán SQI cho ${STUDENT_COUNT} học sinh: ${durationMs.toFixed(2)}ms (SLA < 50ms)`,
       );
       expect(durationMs).toBeLessThan(50);
+    });
+
+    it('2.2. Tiêu chí chưa có thì trả về null (hiển thị "-"), không tự tiện gán 10, SQI chỉ tính trên tiêu chí đã có', () => {
+      const sessions: SessionEvaluationInput[] = [
+        {
+          classSessionId: 'sess-att-1',
+          subjectName: 'Toán',
+          isPresent: true,
+          // Không có homeworkStatus, participation, understanding, behaviorTags, score
+        },
+        {
+          classSessionId: 'sess-att-2',
+          subjectName: 'Toán',
+          isPresent: true,
+        },
+      ];
+
+      const result = SqiCalculator.calculate(sessions, null);
+
+      expect(result.breakdown.attendance).toBe(10);
+      expect(result.breakdown.homework).toBeNull(); // Chưa có -> null
+      expect(result.breakdown.attitude).toBeNull(); // Chưa có -> null
+      expect(result.breakdown.behavior).toBeNull(); // Chưa có -> null
+      expect(result.breakdown.competency).toBeNull(); // Chưa có -> null
+      expect(result.breakdown.academic).toBeNull(); // Chưa có -> null
+      expect(result.breakdown.progress).toBeNull(); // Chưa có -> null
+
+      // SQI chuẩn hóa trên tiêu chí chuyên cần (có mặt 100%) -> 100đ
+      expect(result.sqiScore).toBe(100);
+      expect(result.level).toBe(SqiLevel.LEVEL_5_EXCELLENT);
+    });
+
+    it('2.3. Chuyên cần chỉ tính Có mặt vs Vắng, không bịa điểm khi vắng', () => {
+      const sessions: SessionEvaluationInput[] = [
+        { classSessionId: 'sess-1', subjectName: 'Toán', isPresent: true },
+        { classSessionId: 'sess-2', subjectName: 'Toán', isPresent: false },
+      ];
+
+      const result = SqiCalculator.calculate(sessions, null);
+
+      // Có mặt 1/2 buổi -> Chuyên cần 5/10
+      expect(result.breakdown.attendance).toBe(5);
+      // SQI chuẩn hóa -> 50đ
+      expect(result.sqiScore).toBe(50);
+      expect(result.breakdown.homework).toBeNull();
     });
   });
 });

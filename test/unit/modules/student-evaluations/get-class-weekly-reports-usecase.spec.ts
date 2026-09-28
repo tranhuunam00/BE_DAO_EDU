@@ -145,7 +145,135 @@ describe('GetClassWeeklyReportsUseCase & Edge Cases Spec', () => {
     });
 
     expect(result.students[0].hasSessions).toBe(false);
-    expect(result.students[0].sqiScore).toBe(0);
+    expect(result.students[0].sqiScore).toBeNull();
+    expect(result.students[0].level).toBeNull();
+    expect(result.students[0].attendanceRate).toBeNull();
+    expect(result.students[0].homeworkRate).toBeNull();
     expect(result.averageSqi).toBe(0);
   });
+
+  it('4. Tính toán tổng hợp báo cáo THEO THÁNG cho cả lớp học khi truyền month và year', async () => {
+    mockPort.getClassStudents.mockResolvedValue([
+      { id: 's-m1', name: 'Ngô Anh Vũ', code: 'S101' },
+      { id: 's-m2', name: 'Đoàn Linh', code: 'S102' },
+    ]);
+
+    mockPort.getWeeklySessions.mockImplementation(async (studentId: string, startDate?: string) => {
+      // startDate của tháng 9 là 2026-09-01
+      if (startDate === '2026-09-01') {
+        return [
+          {
+            classSessionId: 'sess-m-1',
+            subjectName: 'Toán',
+            isPresent: true,
+            isLate: false,
+            homeworkStatus: HomeworkStatus.COMPLETED,
+            participation: ParticipationStatus.ACTIVE,
+            understanding: UnderstandingStatus.UNDERSTOOD,
+            behaviorTags: [BehaviorTag.ATTENTIVE],
+            score: '9.0',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const result = await useCase.execute({
+      classId: 'class-month-1',
+      month: 9,
+      year: 2026,
+    });
+
+    expect(result.startDate).toBe('2026-09-01');
+    expect(result.endDate).toBe('2026-09-30');
+    expect(result.month).toBe(9);
+    expect(result.totalStudents).toBe(2);
+    expect(result.averageSqi).toBeGreaterThan(80);
+    expect(result.students[0].hasSessions).toBe(true);
+  });
+
+  it('5. HOẠT ĐỘNG AN TOÀN 100% khi học sinh CHỈ CÓ THÔNG TIN ĐIỂM DANH (không có nhận xét, điểm số hay BTVN)', async () => {
+    mockPort.getClassStudents.mockResolvedValue([
+      { id: 's-att-only', name: 'Trần Văn Nam', code: 'S888' },
+    ]);
+
+    // Giả lập dữ liệu chỉ có từ bảng attendance, evaluation null/undefined
+    mockPort.getWeeklySessions.mockResolvedValue([
+      {
+        classSessionId: 'sess-att-1',
+        subjectName: 'Tiếng Anh',
+        isPresent: true,
+        isLate: false,
+        homeworkStatus: undefined,
+        participation: undefined,
+        understanding: undefined,
+        behaviorTags: [],
+        score: null,
+        teacherComment: null,
+      } as any,
+      {
+        classSessionId: 'sess-att-2',
+        subjectName: 'Tiếng Anh',
+        isPresent: true,
+        isLate: true, // Đi muộn
+        homeworkStatus: undefined,
+        participation: undefined,
+        understanding: undefined,
+        behaviorTags: [],
+        score: null,
+        teacherComment: null,
+      } as any,
+    ]);
+
+    const result = await useCase.execute({
+      classId: 'class-att-1',
+      weekNumber: 38,
+      year: 2026,
+    });
+
+    expect(result.students).toHaveLength(1);
+    const st = result.students[0];
+    expect(st.hasSessions).toBe(true);
+    expect(st.attendanceRate).toBe(100);
+    expect(st.homeworkRate).toBeNull(); // Không có BTVN thì null (hiển thị —), không tự ý mặc định 0%
+    // SQI vẫn tính ra điểm hợp lệ chỉ dựa trên tiêu chí có mặt, không bị NaN hoặc null
+    expect(st.sqiScore).toBe(100);
+    expect(Number.isNaN(st.sqiScore)).toBe(false);
+    expect(result.averageSqi).toBe(st.sqiScore);
+  });
+
+  it('6. PERFORMANCE BENCHMARK: Xử lý tổng hợp báo cáo cho 50 học sinh với 12 buổi học/tháng trong < 50ms', async () => {
+    const studentList = Array.from({ length: 50 }, (_, i) => ({
+      id: `student-perf-${i}`,
+      name: `Học sinh Benchmark ${i}`,
+      code: `S${1000 + i}`,
+    }));
+    mockPort.getClassStudents.mockResolvedValue(studentList);
+
+    const mockSessions = Array.from({ length: 12 }, (_, j) => ({
+      classSessionId: `sess-${j}`,
+      subjectName: 'Toán',
+      isPresent: j % 5 !== 0,
+      isLate: j % 4 === 0,
+      homeworkStatus: j % 2 === 0 ? HomeworkStatus.COMPLETED : HomeworkStatus.INCOMPLETE,
+      participation: ParticipationStatus.ACTIVE,
+      understanding: UnderstandingStatus.UNDERSTOOD,
+      behaviorTags: [],
+      score: '8.0',
+    }));
+    mockPort.getWeeklySessions.mockResolvedValue(mockSessions);
+
+    const startTime = performance.now();
+    const result = await useCase.execute({
+      classId: 'class-perf-benchmark',
+      month: 9,
+      year: 2026,
+    });
+    const executionDuration = performance.now() - startTime;
+
+    expect(result.totalStudents).toBe(50);
+    expect(result.students).toHaveLength(50);
+    expect(executionDuration).toBeLessThan(50); // SLA < 50ms
+  });
 });
+

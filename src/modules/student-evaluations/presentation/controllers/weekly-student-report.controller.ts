@@ -96,12 +96,26 @@ export class WeeklyStudentReportController {
     @Req() req: any,
     @Query('week') weekStr?: string,
     @Query('year') yearStr?: string,
+    @Query('month') monthStr?: string,
   ) {
-    const { weekNumber, year } = this.resolveWeekAndYear(weekStr, yearStr);
+    let weekNumber: number | undefined;
+    let month: number | undefined;
+    let year: number;
+
+    if (monthStr) {
+      const resolved = this.resolveMonthAndYear(monthStr, yearStr);
+      month = resolved.month;
+      year = resolved.year;
+    } else {
+      const resolved = this.resolveWeekAndYear(weekStr, yearStr);
+      weekNumber = resolved.weekNumber;
+      year = resolved.year;
+    }
 
     const result = await this.getClassWeeklyReportsUseCase.execute({
       classId,
       weekNumber,
+      month,
       year,
       requestUserId: req.user?.sub,
       userRole: req.user?.role,

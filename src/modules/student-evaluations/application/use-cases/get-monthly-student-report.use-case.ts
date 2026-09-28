@@ -116,9 +116,15 @@ export class GetMonthlyStudentReportUseCase {
     year: number,
   ): { overview: string; strengths: string; improvements: string; recommendations: string[] } {
     const total = sessions.length;
-    const completedHw = sessions.filter((s) => s.homeworkStatus === 'completed').length;
-    const understoodCount = sessions.filter((s) => s.understanding === 'understood').length;
-    const activeCount = sessions.filter((s) => s.participation === 'active').length;
+    const hwSessions = sessions.filter((s) => Boolean(s.homeworkStatus));
+    const completedHw = hwSessions.filter((s) => s.homeworkStatus === 'completed').length;
+
+    const underSessions = sessions.filter((s) => Boolean(s.understanding));
+    const understoodCount = underSessions.filter((s) => s.understanding === 'understood').length;
+
+    const partSessions = sessions.filter((s) => Boolean(s.participation));
+    const activeCount = partSessions.filter((s) => s.participation === 'active').length;
+
     const absentCount = sessions.filter((s) => !s.isPresent).length;
 
     // Overview
@@ -133,13 +139,13 @@ export class GetMonthlyStudentReportUseCase {
 
     // Strengths
     const strengthParts: string[] = [];
-    if (understoodCount > 0) {
-      strengthParts.push(`Nắm bắt bài nhanh (${understoodCount}/${total} buổi tiếp thu tốt)`);
+    if (underSessions.length > 0 && understoodCount > 0) {
+      strengthParts.push(`Nắm bắt bài nhanh (${understoodCount}/${underSessions.length} buổi tiếp thu tốt)`);
     }
-    if (activeCount > 0) {
+    if (partSessions.length > 0 && activeCount > 0) {
       strengthParts.push('chăm chỉ phát biểu xây dựng bài');
     }
-    if (completedHw === total && total > 0) {
+    if (hwSessions.length > 0 && completedHw === hwSessions.length) {
       strengthParts.push('hoàn thành đủ 100% bài tập về nhà');
     }
     const strengths =
@@ -149,13 +155,13 @@ export class GetMonthlyStudentReportUseCase {
 
     // Improvements
     const improveParts: string[] = [];
-    if (completedHw < total) {
-      improveParts.push(`còn ${total - completedHw} buổi chưa làm đủ bài tập`);
+    if (hwSessions.length > 0 && completedHw < hwSessions.length) {
+      improveParts.push(`còn ${hwSessions.length - completedHw} buổi chưa làm đủ bài tập`);
     }
     if (absentCount > 0) {
       improveParts.push(`vắng ${absentCount} buổi học`);
     }
-    if (understoodCount < total) {
+    if (underSessions.length > 0 && understoodCount < underSessions.length) {
       improveParts.push('cần ôn lại một số phần kiến thức trọng tâm');
     }
     const improvements =
@@ -165,7 +171,7 @@ export class GetMonthlyStudentReportUseCase {
 
     // Recommendations
     const recommendations: string[] = [];
-    if (completedHw < total) {
+    if (hwSessions.length > 0 && completedHw < hwSessions.length) {
       recommendations.push('Gia đình nhắc con làm đầy đủ bài tập trước buổi học.');
     }
     if (absentCount > 0) {

@@ -4,29 +4,31 @@ import { IStudentWeeklyDataQueryPort } from '../ports/student-weekly-data-query.
 
 export interface GetClassWeeklyReportsInput {
   classId: string;
-  weekNumber: number;
+  weekNumber?: number;
+  month?: number;
   year: number;
-  requestUserId: string;
-  userRole: string;
+  requestUserId?: string;
+  userRole?: string;
 }
 
 export interface StudentWeeklySummary {
   studentId: string;
   studentName: string;
   studentCode: string;
-  sqiScore: number;
-  sqiDelta: number;
-  level: SqiLevel;
+  sqiScore: number | null;
+  sqiDelta: number | null;
+  level: SqiLevel | null;
   trend: TrendDirection;
   hasSessions: boolean;
-  attendanceRate: number;
-  homeworkRate: number;
+  attendanceRate: number | null;
+  homeworkRate: number | null;
 }
 
 export interface GetClassWeeklyReportsOutput {
   classId: string;
   className: string;
-  weekNumber: number;
+  weekNumber?: number;
+  month?: number;
   year: number;
   startDate: string;
   endDate: string;
@@ -46,14 +48,14 @@ export class GetClassWeeklyReportsUseCase {
   constructor(private readonly queryPort: IStudentWeeklyDataQueryPort) {}
 
   async execute(input: GetClassWeeklyReportsInput): Promise<GetClassWeeklyReportsOutput> {
-    const { classId, weekNumber, year, requestUserId, userRole } = input;
+    const { classId, weekNumber, month, year, requestUserId, userRole } = input;
 
     if (!classId || !classId.trim()) {
       throw new Error('classId không được để trống');
     }
 
     // 1. Kiểm tra phân quyền: Nếu là Teacher thì phải phụ trách lớp này
-    if (userRole === 'TEACHER') {
+    if (userRole === 'TEACHER' && requestUserId) {
       const hasAccess = await this.queryPort.verifyTeacherClassAccess(requestUserId, classId);
       if (!hasAccess) {
         throw new Error('Bạn không có quyền xem báo cáo của lớp học này');
@@ -61,7 +63,40 @@ export class GetClassWeeklyReportsUseCase {
     }
 
     const className = (await this.queryPort.getClassName(classId)) || 'Lớp học';
-    const { startDate, endDate } = this.getWeekDateRange(weekNumber, year);
+
+    const isMonthly = typeof month === 'number' && month >= 1 && month <= 12;
+    let startDate: string;
+    let endDate: string;
+    let prevStart: string;
+    let prevEnd: string;
+    let previousPeriodNumber = 0;
+    let previousYear = year;
+
+    if (isMonthly) {
+      const paddedMonth = String(month).padStart(2, '0');
+      const lastDay = new Date(year, month, 0).getDate();
+      startDate = `${year}-${paddedMonth}-01`;
+      endDate = `${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`;
+
+      const prevMonth = month === 1 ? 12 : month - 1;
+      previousYear = month === 1 ? year - 1 : year;
+      const prevLastDay = new Date(previousYear, prevMonth, 0).getDate();
+      prevStart = `${previousYear}-${String(prevMonth).padStart(2, '0')}-01`;
+      prevEnd = `${previousYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
+      previousPeriodNumber = prevMonth;
+    } else {
+      const validWeek = weekNumber || 1;
+      const currentRange = this.getWeekDateRange(validWeek, year);
+      startDate = currentRange.startDate;
+      endDate = currentRange.endDate;
+
+      const previousWeek = validWeek === 1 ? 52 : validWeek - 1;
+      previousYear = validWeek === 1 ? year - 1 : year;
+      const prevRange = this.getWeekDateRange(previousWeek, previousYear);
+      prevStart = prevRange.startDate;
+      prevEnd = prevRange.endDate;
+      previousPeriodNumber = previousWeek;
+    }
 
     // 2. Lấy danh sách học sinh đang học trong lớp
     const enrolledStudents = await this.queryPort.getClassStudents(classId);
@@ -71,6 +106,7 @@ export class GetClassWeeklyReportsUseCase {
         classId,
         className,
         weekNumber,
+        month,
         year,
         startDate,
         endDate,
@@ -82,9 +118,6 @@ export class GetClassWeeklyReportsUseCase {
     }
 
     // 3. Tính toán SQI cho từng học sinh trong lớp (PURE QUERY - ZERO MUTATION)
-    const previousWeek = weekNumber === 1 ? 52 : weekNumber - 1;
-    const previousYear = weekNumber === 1 ? year - 1 : year;
-
     const studentSummaries: StudentWeeklySummary[] = [];
     let totalSqiSum = 0;
     let validStudentCount = 0;
@@ -97,13 +130,11 @@ export class GetClassWeeklyReportsUseCase {
       level1: 0,
     };
 
-    const { startDate: prevStart, endDate: prevEnd } = this.getWeekDateRange(previousWeek, previousYear);
-
     for (const student of enrolledStudents) {
       const [sessions, prevSessions, prevSqi] = await Promise.all([
         this.queryPort.getWeeklySessions(student.id, startDate, endDate),
         this.queryPort.getWeeklySessions(student.id, prevStart, prevEnd),
-        this.queryPort.getPreviousWeekSqi(student.id, previousWeek, previousYear),
+        this.queryPort.getPreviousWeekSqi(student.id, previousPeriodNumber, previousYear),
       ]);
 
       const sqiResult = SqiCalculator.calculate(
@@ -112,17 +143,22 @@ export class GetClassWeeklyReportsUseCase {
       );
 
       // Tính tỉ lệ điểm danh và BTVN
-      let attendanceRate = 0;
-      let homeworkRate = 0;
+      let attendanceRate: number | null = null;
+      let homeworkRate: number | null = null;
       if (sessions.length > 0) {
         const presentCount = sessions.filter((s) => s.isPresent).length;
         attendanceRate = Math.round((presentCount / sessions.length) * 100);
 
-        const doneHwCount = sessions.filter((s) => s.homeworkStatus === 'completed').length;
-        homeworkRate = Math.round((doneHwCount / sessions.length) * 100);
+        const sessionsWithHw = sessions.filter(
+          (s) => Boolean(s.homeworkStatus),
+        );
+        if (sessionsWithHw.length > 0) {
+          const doneHwCount = sessionsWithHw.filter((s) => s.homeworkStatus === 'completed').length;
+          homeworkRate = Math.round((doneHwCount / sessionsWithHw.length) * 100);
+        }
       }
 
-      if (sqiResult.hasSessions) {
+      if (sqiResult.hasSessions && sqiResult.sqiScore !== null) {
         totalSqiSum += sqiResult.sqiScore;
         validStudentCount += 1;
 
@@ -137,10 +173,10 @@ export class GetClassWeeklyReportsUseCase {
         studentId: student.id,
         studentName: student.name,
         studentCode: student.code,
-        sqiScore: sqiResult.sqiScore,
-        sqiDelta: sqiResult.sqiDelta,
-        level: sqiResult.level,
-        trend: sqiResult.trend,
+        sqiScore: sqiResult.hasSessions ? sqiResult.sqiScore : null,
+        sqiDelta: sqiResult.hasSessions ? sqiResult.sqiDelta : null,
+        level: sqiResult.hasSessions ? sqiResult.level : null,
+        trend: sqiResult.hasSessions ? sqiResult.trend : TrendDirection.STABLE,
         hasSessions: sqiResult.hasSessions,
         attendanceRate,
         homeworkRate,
@@ -154,6 +190,7 @@ export class GetClassWeeklyReportsUseCase {
       classId,
       className,
       weekNumber,
+      month,
       year,
       startDate,
       endDate,

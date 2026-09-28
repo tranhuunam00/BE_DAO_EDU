@@ -110,9 +110,15 @@ export class GetWeeklyStudentReportUseCase {
     sqi: { sqiScore: number; sqiDelta: number; trend: TrendDirection },
   ): { overview: string; strengths: string; improvements: string; recommendations: string[] } {
     const total = sessions.length;
-    const completedHw = sessions.filter((s) => s.homeworkStatus === 'completed').length;
-    const understoodCount = sessions.filter((s) => s.understanding === 'understood').length;
-    const activeCount = sessions.filter((s) => s.participation === 'active').length;
+    const hwSessions = sessions.filter((s) => Boolean(s.homeworkStatus));
+    const completedHw = hwSessions.filter((s) => s.homeworkStatus === 'completed').length;
+
+    const underSessions = sessions.filter((s) => Boolean(s.understanding));
+    const understoodCount = underSessions.filter((s) => s.understanding === 'understood').length;
+
+    const partSessions = sessions.filter((s) => Boolean(s.participation));
+    const activeCount = partSessions.filter((s) => s.participation === 'active').length;
+
     const absentCount = sessions.filter((s) => !s.isPresent).length;
 
     // Overview
@@ -127,13 +133,13 @@ export class GetWeeklyStudentReportUseCase {
 
     // Strengths
     const strengthParts: string[] = [];
-    if (understoodCount > 0) {
-      strengthParts.push(`Nắm bắt bài nhanh (${understoodCount}/${total} buổi tiếp thu bài tốt)`);
+    if (underSessions.length > 0 && understoodCount > 0) {
+      strengthParts.push(`Nắm bắt bài nhanh (${understoodCount}/${underSessions.length} buổi tiếp thu bài tốt)`);
     }
-    if (activeCount > 0) {
+    if (partSessions.length > 0 && activeCount > 0) {
       strengthParts.push('chủ động tham gia phát biểu xây dựng bài');
     }
-    if (completedHw === total && total > 0) {
+    if (hwSessions.length > 0 && completedHw === hwSessions.length) {
       strengthParts.push('hoàn thành 100% bài tập về nhà đúng hạn');
     }
     const strengths =
@@ -143,13 +149,13 @@ export class GetWeeklyStudentReportUseCase {
 
     // Improvements
     const improveParts: string[] = [];
-    if (completedHw < total) {
-      improveParts.push(`còn ${total - completedHw} buổi chưa hoàn thiện đầy đủ bài tập về nhà`);
+    if (hwSessions.length > 0 && completedHw < hwSessions.length) {
+      improveParts.push(`còn ${hwSessions.length - completedHw} buổi chưa hoàn thiện đầy đủ bài tập về nhà`);
     }
     if (absentCount > 0) {
       improveParts.push(`vắng ${absentCount} buổi học`);
     }
-    if (understoodCount < total) {
+    if (underSessions.length > 0 && understoodCount < underSessions.length) {
       improveParts.push('cần dành thêm thời gian ôn tập lại một số phần bài học mới');
     }
     const improvements =
@@ -159,11 +165,11 @@ export class GetWeeklyStudentReportUseCase {
 
     // Recommendations for parents
     const recommendations: string[] = [];
-    if (completedHw < total) {
+    if (hwSessions.length > 0 && completedHw < hwSessions.length) {
       recommendations.push(
         'Nhắc con dành 20-30 phút mỗi tối để giải quyết bài tập còn dang dở, tránh dồn bài trước buổi học.',
       );
-    } else {
+    } else if (hwSessions.length > 0) {
       recommendations.push('Duy trì thói quen hoàn thành bài tập sớm vào buổi tối.');
     }
     recommendations.push(

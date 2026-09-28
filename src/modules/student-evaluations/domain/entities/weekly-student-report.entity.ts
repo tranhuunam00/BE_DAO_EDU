@@ -14,13 +14,13 @@ export enum TrendDirection {
 }
 
 export interface SqiBreakdown {
-  academic: number;
-  progress: number;
-  competency: number;
-  attendance: number;
-  homework: number;
-  attitude: number;
-  behavior: number;
+  academic: number | null;
+  progress: number | null;
+  competency: number | null;
+  attendance: number | null;
+  homework: number | null;
+  attitude: number | null;
+  behavior: number | null;
 }
 
 export interface SubjectPerformance {
