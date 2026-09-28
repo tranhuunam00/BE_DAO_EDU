@@ -1128,7 +1128,17 @@ export class ClassController {
     });
     await this.validateAttendancePermission(session, req);
 
+    const classMembers = await this.classStudentRepo.find({
+      where: { classId: session.classId },
+    });
+    const memberIds = new Set(classMembers.map((s) => s.studentId));
+
     for (const item of body.evaluations) {
+      if (!memberIds.has(item.studentId)) {
+        throw new BadRequestException(
+          `Học sinh với ID ${item.studentId} không thuộc lớp học này.`,
+        );
+      }
       if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
         const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
         if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {

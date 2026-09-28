@@ -986,6 +986,36 @@ describe('ClassController.overrideAttendance', () => {
       ).rejects.toThrow('Điểm đánh giá phải là số từ 0 đến 10.');
     });
 
+    it('throws BadRequestException for students never enrolled in the class', async () => {
+      const { controller, repos } = createController();
+      const session = {
+        id: 'session-1',
+        classId: 'class-1',
+        date: '2099-12-31',
+        startTime: '08:00',
+        endTime: '09:30',
+        attendanceLocked: false,
+        teacherId: 'teacher-main',
+        classEntity: { id: 'class-1', mainTeacherId: 'teacher-main' },
+      };
+      repos.sessionRepo.findOneOrFail.mockResolvedValue(session);
+      repos.teacherRepo.findOne.mockResolvedValue({ id: 'teacher-main' });
+      repos.classStudentRepo.find.mockResolvedValue([
+        { studentId: 'student-1', status: 'Active' }
+      ]);
+
+      const req = { user: { role: 'TEACHER', sub: 'user-main' } };
+      const body = {
+        evaluations: [
+          { studentId: 'student-2', evaluationScore: 9.0, evaluationComment: 'Not enrolled' }
+        ]
+      };
+
+      await expect(
+        controller.saveEvaluations(req, 'session-1', body)
+      ).rejects.toThrow('Học sinh với ID student-2 không thuộc lớp học này.');
+    });
+
   });
 
   describe('deleteSession', () => {
