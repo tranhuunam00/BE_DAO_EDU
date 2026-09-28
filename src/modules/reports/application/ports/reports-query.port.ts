@@ -88,6 +88,18 @@ export interface TopAbsentStudent {
   rate: number;
 }
 
+/** Dung chung cho ca topPresent va topAbsent (DENSE_RANK) */
+export interface TopAttendanceStudentRow {
+  studentId: string;
+  studentCode: string;
+  fullName: string;
+  presentCount: number;
+  absentCount: number;
+  totalSessions: number;
+  attendanceRate: number;
+  rank: number;
+}
+
 export interface AssignmentSummary {
   totalAssigned: number;
   totalSubmitted: number;
@@ -123,6 +135,8 @@ export abstract class ReportsQueryPort {
   abstract getAttendanceByClass(filters: ReportFilters): Promise<AttendanceByClassRow[]>;
   abstract getAttendanceByMonth(filters: ReportFilters): Promise<AttendanceByMonth[]>;
   abstract getTopAbsentStudents(filters: ReportFilters): Promise<TopAbsentStudent[]>;
+  abstract getTopPresentStudents(filters: ReportFilters): Promise<TopAttendanceStudentRow[]>;
+  abstract getTopAbsentStudentsRanked(filters: ReportFilters): Promise<TopAttendanceStudentRow[]>;
 
   // Assignments
   abstract getAssignmentSummary(filters: ReportFilters): Promise<AssignmentSummary>;

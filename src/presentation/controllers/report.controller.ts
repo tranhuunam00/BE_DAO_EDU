@@ -10,6 +10,7 @@ import { GetSalaryReportUseCase } from '../../modules/reports/application/use-ca
 import { GetAttendanceReportUseCase } from '../../modules/reports/application/use-cases/get-attendance-report.use-case';
 import { GetAssignmentReportUseCase } from '../../modules/reports/application/use-cases/get-assignment-report.use-case';
 import { GetStudentsReportUseCase } from '../../modules/reports/application/use-cases/get-students-report.use-case';
+import { GetTopStudentsAttendanceUseCase } from '../../modules/reports/application/use-cases/get-top-students-attendance.use-case';
 
 @ApiTags('Báo cáo (Reports)')
 @ApiBearerAuth()
@@ -23,6 +24,7 @@ export class ReportController {
     private readonly attendanceReport: GetAttendanceReportUseCase,
     private readonly assignmentReport: GetAssignmentReportUseCase,
     private readonly studentsReport: GetStudentsReportUseCase,
+    private readonly topStudentsAttendance: GetTopStudentsAttendanceUseCase,
     private readonly reportsQuery: ReportsQueryPort,
   ) {}
 
@@ -170,7 +172,7 @@ export class ReportController {
   }
 
   @Get('student-debts')
-  @ApiOperation({ summary: 'BC theo dõi công nợ học viên' })
+  @ApiOperation({ summary: 'BC theo doi cong no hoc vien' })
   getStudentDebts(
     @Query('month') month?: string,
     @Query('startMonth') startMonth?: string,
@@ -181,5 +183,21 @@ export class ReportController {
     @Query('classStatus') classStatus?: string,
   ) {
     return this.reportsQuery.getStudentDebtsReport(this.parseFilters(month, startMonth, endMonth, centerId, classId, classIds, classStatus));
+  }
+
+  @Get('top-students-attendance')
+  @ApiOperation({ summary: 'Top 5 hoc sinh di hoc nhieu nhat va it nhat (xu ly dong hang)' })
+  getTopStudentsAttendance(
+    @Query('month') month?: string,
+    @Query('startMonth') startMonth?: string,
+    @Query('endMonth') endMonth?: string,
+    @Query('centerId') centerId?: string,
+    @Query('classId') classId?: string,
+    @Query('classIds') classIds?: string,
+    @Query('classStatus') classStatus?: string,
+  ) {
+    return this.topStudentsAttendance.execute(
+      this.parseFilters(month, startMonth, endMonth, centerId, classId, classIds, classStatus),
+    );
   }
 }

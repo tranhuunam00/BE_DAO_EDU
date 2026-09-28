@@ -16,6 +16,7 @@ import {
   SalaryByTeacherRow,
   SalarySummary,
   TopAbsentStudent,
+  TopAttendanceStudentRow,
   StudentsSummary,
   NewStudentsByMonthRow,
   NewStudentRow,
@@ -554,6 +555,76 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         rate: total > 0 ? Number(((absent / total) * 100).toFixed(1)) : 0,
       };
     });
+  }
+
+  // ── Top Students Attendance (DENSE_RANK, xu ly tie) ──
+
+  private buildTopAttendanceSql(rankBy: 'present' | 'absent', where: string): string {
+    const orderCol  = rankBy === 'present' ? '"presentCount"' : '"absentCount"';
+    return `
+      SELECT
+        "studentId", "studentCode", "fullName",
+        "presentCount", "absentCount", "totalSessions",
+        CASE WHEN "totalSessions" > 0
+          THEN ROUND(("presentCount"::numeric / "totalSessions") * 100, 1)
+          ELSE 0 END AS "attendanceRate",
+        DENSE_RANK() OVER (ORDER BY ${orderCol} DESC) AS rank
+      FROM (
+        SELECT
+          s.id   AS "studentId",
+          s.student_id AS "studentCode",
+          CONCAT(s.last_name, ' ', s.first_name) AS "fullName",
+          COUNT(*) FILTER (WHERE sa.is_present = true)::int  AS "presentCount",
+          COUNT(*) FILTER (WHERE sa.is_present = false)::int AS "absentCount",
+          COUNT(*)::int AS "totalSessions"
+        FROM student_attendance sa
+        JOIN class_sessions cs ON cs.id = sa.class_session_id
+        JOIN classes cl        ON cl.id = cs.class_id
+        JOIN students s        ON s.id  = sa.student_id
+        ${where}
+        GROUP BY s.id, s.student_id, s.last_name, s.first_name
+      ) agg
+    `;
+  }
+
+  async getTopPresentStudents(filters: ReportFilters): Promise<TopAttendanceStudentRow[]> {
+    const { where, params } = this.attendanceWhereClause(filters);
+    const rows = await this.ds.query(
+      `SELECT * FROM (${this.buildTopAttendanceSql('present', where)}) ranked
+       WHERE rank <= 5
+       ORDER BY rank, "studentCode" ASC`,
+      params,
+    );
+    return rows.map((r: any) => ({
+      studentId:      r.studentId,
+      studentCode:    r.studentCode,
+      fullName:       r.fullName,
+      presentCount:   Number(r.presentCount),
+      absentCount:    Number(r.absentCount),
+      totalSessions:  Number(r.totalSessions),
+      attendanceRate: Number(r.attendanceRate),
+      rank:           Number(r.rank),
+    }));
+  }
+
+  async getTopAbsentStudentsRanked(filters: ReportFilters): Promise<TopAttendanceStudentRow[]> {
+    const { where, params } = this.attendanceWhereClause(filters);
+    const rows = await this.ds.query(
+      `SELECT * FROM (${this.buildTopAttendanceSql('absent', where)}) ranked
+       WHERE rank <= 5
+       ORDER BY rank, "studentCode" ASC`,
+      params,
+    );
+    return rows.map((r: any) => ({
+      studentId:      r.studentId,
+      studentCode:    r.studentCode,
+      fullName:       r.fullName,
+      presentCount:   Number(r.presentCount),
+      absentCount:    Number(r.absentCount),
+      totalSessions:  Number(r.totalSessions),
+      attendanceRate: Number(r.attendanceRate),
+      rank:           Number(r.rank),
+    }));
   }
 
   // ── Assignments ──────────────────────────────────────

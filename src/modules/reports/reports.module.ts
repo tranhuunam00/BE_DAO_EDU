@@ -6,6 +6,7 @@ import { GetSalaryReportUseCase } from './application/use-cases/get-salary-repor
 import { GetAttendanceReportUseCase } from './application/use-cases/get-attendance-report.use-case';
 import { GetAssignmentReportUseCase } from './application/use-cases/get-assignment-report.use-case';
 import { GetStudentsReportUseCase } from './application/use-cases/get-students-report.use-case';
+import { GetTopStudentsAttendanceUseCase } from './application/use-cases/get-top-students-attendance.use-case';
 import { TypeOrmReportsQueryAdapter } from './infrastructure/persistence/typeorm-reports-query.adapter';
 import { ReportController } from '../../presentation/controllers/report.controller';
 
@@ -37,6 +38,11 @@ import { ReportController } from '../../presentation/controllers/report.controll
     {
       provide: GetStudentsReportUseCase,
       useFactory: (q: ReportsQueryPort) => new GetStudentsReportUseCase(q),
+      inject: [ReportsQueryPort],
+    },
+    {
+      provide: GetTopStudentsAttendanceUseCase,
+      useFactory: (q: ReportsQueryPort) => new GetTopStudentsAttendanceUseCase(q),
       inject: [ReportsQueryPort],
     },
   ],
