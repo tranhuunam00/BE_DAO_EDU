@@ -58,6 +58,7 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       .createQueryBuilder('cs')
       .leftJoinAndSelect('cs.classEntity', 'c')
       .leftJoinAndSelect('c.course', 'course')
+      .leftJoinAndSelect('c.courseLevel', 'courseLevel')
       .where('cs.class_id IN (:...classIds)', { classIds })
       .andWhere('cs.date >= :startDate AND cs.date <= :endDate', { startDate, endDate })
       .orderBy('cs.date', 'ASC')
@@ -108,8 +109,20 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
 
       const isPresent = att ? att.isPresent : false;
       const isLate = att ? att.isLate : false;
-      const subjectName =
-        s.classEntity?.course?.name || s.classEntity?.className || 'Môn học chung';
+      
+      const levelName = s.classEntity?.courseLevel?.levelName?.trim() || '';
+      let courseName = (s.classEntity?.course?.name || '').replace(/^Học phí\s+/i, '').trim();
+
+      let subjectName = 'Môn học chung';
+      if (courseName && levelName) {
+        subjectName = `${courseName} - ${levelName}`;
+      } else if (levelName) {
+        subjectName = levelName;
+      } else if (courseName) {
+        subjectName = courseName;
+      } else if (s.classEntity?.className) {
+        subjectName = s.classEntity.className;
+      }
 
       // Không có evaluation record → undefined, KHÔNG được tự gán mặc định
       const homeworkStatus: HomeworkStatus | undefined = ev?.homeworkStatus
