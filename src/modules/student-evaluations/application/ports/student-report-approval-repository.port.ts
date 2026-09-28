@@ -34,3 +34,8 @@ export interface IStudentReportApprovalRepositoryPort {
     year: number,
   ): Promise<Map<string, StudentReportApprovalRecord>>;
 }
+
+export const IStudentReportApprovalRepositoryPort = Symbol(
+  'IStudentReportApprovalRepositoryPort',
+);
+

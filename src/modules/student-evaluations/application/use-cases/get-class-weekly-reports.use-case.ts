@@ -1,6 +1,7 @@
 import { SqiCalculator } from '../../domain/services/sqi-calculator.service';
 import { SqiLevel, TrendDirection } from '../../domain/entities/weekly-student-report.entity';
 import { IStudentWeeklyDataQueryPort } from '../ports/student-weekly-data-query.port';
+import { IStudentReportApprovalRepositoryPort } from '../ports/student-report-approval-repository.port';
 
 export interface GetClassWeeklyReportsInput {
   classId: string;
@@ -22,6 +23,8 @@ export interface StudentWeeklySummary {
   hasSessions: boolean;
   attendanceRate: number | null;
   homeworkRate: number | null;
+  isApproved: boolean;
+  sentToZaloAt: Date | null;
 }
 
 export interface GetClassWeeklyReportsOutput {
@@ -45,7 +48,10 @@ export interface GetClassWeeklyReportsOutput {
 }
 
 export class GetClassWeeklyReportsUseCase {
-  constructor(private readonly queryPort: IStudentWeeklyDataQueryPort) {}
+  constructor(
+    private readonly queryPort: IStudentWeeklyDataQueryPort,
+    private readonly approvalRepo?: IStudentReportApprovalRepositoryPort,
+  ) {}
 
   async execute(input: GetClassWeeklyReportsInput): Promise<GetClassWeeklyReportsOutput> {
     const { classId, weekNumber, month, year, requestUserId, userRole } = input;
@@ -117,7 +123,7 @@ export class GetClassWeeklyReportsUseCase {
       };
     }
 
-    // 3. Tính toán SQI cho từng học sinh trong lớp (PURE QUERY - ZERO MUTATION)
+    // 3. Tính toán SQI & trạng thái duyệt cho từng học sinh trong lớp (PURE QUERY - ZERO MUTATION)
     const studentSummaries: StudentWeeklySummary[] = [];
     let totalSqiSum = 0;
     let validStudentCount = 0;
@@ -129,6 +135,13 @@ export class GetClassWeeklyReportsUseCase {
       level2: 0,
       level1: 0,
     };
+
+    const studentIds = enrolledStudents.map((s) => s.id);
+    const reportType = isMonthly ? 'month' : 'week';
+    const periodNum = isMonthly ? month! : (weekNumber || 1);
+    const approvalsMap = this.approvalRepo
+      ? await this.approvalRepo.findApprovalsByStudents(studentIds, reportType, periodNum, year)
+      : new Map();
 
     for (const student of enrolledStudents) {
       const [sessions, prevSessions, prevSqi] = await Promise.all([
@@ -169,6 +182,8 @@ export class GetClassWeeklyReportsUseCase {
         else levelDist.level1 += 1;
       }
 
+      const approval = approvalsMap.get(student.id);
+
       studentSummaries.push({
         studentId: student.id,
         studentName: student.name,
@@ -180,6 +195,8 @@ export class GetClassWeeklyReportsUseCase {
         hasSessions: sqiResult.hasSessions,
         attendanceRate,
         homeworkRate,
+        isApproved: approval?.isApproved ?? false,
+        sentToZaloAt: approval?.sentToZaloAt ?? null,
       });
     }
 

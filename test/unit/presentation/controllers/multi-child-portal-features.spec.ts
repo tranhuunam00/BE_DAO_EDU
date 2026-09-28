@@ -204,6 +204,8 @@ describe('Multi-Child Portal Features & Security Hardening (TDD Spec)', () => {
       const controller = new WeeklyStudentReportController(
         mockGetWeeklyReportUseCase as any,
         {} as any,
+        {} as any,
+        {} as any,
         mockStudentRepo as any,
       );
 
@@ -231,6 +233,8 @@ describe('Multi-Child Portal Features & Security Hardening (TDD Spec)', () => {
 
       const controller = new WeeklyStudentReportController(
         mockGetWeeklyReportUseCase as any,
+        {} as any,
+        {} as any,
         {} as any,
         mockStudentRepo as any,
       );

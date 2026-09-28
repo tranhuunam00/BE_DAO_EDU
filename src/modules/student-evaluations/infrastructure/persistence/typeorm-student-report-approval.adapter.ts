@@ -23,7 +23,7 @@ export class TypeOrmStudentReportApprovalAdapter implements IStudentReportApprov
   ): Promise<StudentReportApprovalRecord | null> {
     const found = await this.repo.findOne({
       where: { studentId, reportType, periodNumber, year },
-      relations: ['approvedByUser'],
+      relations: { approvedByUser: true },
     });
 
     if (!found) return null;
@@ -84,7 +84,7 @@ export class TypeOrmStudentReportApprovalAdapter implements IStudentReportApprov
         periodNumber,
         year,
       },
-      relations: ['approvedByUser'],
+      relations: { approvedByUser: true },
     });
 
     const map = new Map<string, StudentReportApprovalRecord>();

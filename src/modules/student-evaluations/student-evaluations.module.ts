@@ -38,6 +38,7 @@ import { AskParentAiChatbotUseCase } from './application/use-cases/ask-parent-ai
 
 import { StudentEvaluationController } from './presentation/controllers/student-evaluation.controller';
 import { WeeklyStudentReportController } from './presentation/controllers/weekly-student-report.controller';
+import { PublicWeeklyReportController } from './presentation/controllers/public-weekly-report.controller';
 import { ParentAiChatController } from './presentation/controllers/parent-ai-chat.controller';
 
 @Module({
@@ -56,6 +57,7 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
   controllers: [
     StudentEvaluationController,
     WeeklyStudentReportController,
+    PublicWeeklyReportController,
     ParentAiChatController,
   ],
   providers: [
@@ -130,9 +132,9 @@ import { ParentAiChatController } from './presentation/controllers/parent-ai-cha
     },
     {
       provide: GetClassWeeklyReportsUseCase,
-      useFactory: (queryPort: IStudentWeeklyDataQueryPort) =>
-        new GetClassWeeklyReportsUseCase(queryPort),
-      inject: [IStudentWeeklyDataQueryPort],
+      useFactory: (queryPort: IStudentWeeklyDataQueryPort, approvalRepo: IStudentReportApprovalRepositoryPort) =>
+        new GetClassWeeklyReportsUseCase(queryPort, approvalRepo),
+      inject: [IStudentWeeklyDataQueryPort, IStudentReportApprovalRepositoryPort],
     },
     {
       provide: ToggleReportApprovalUseCase,
