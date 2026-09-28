@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SPEC: GetTopStudentsAttendanceUseCase
  * TDD RED phase — test se FAIL cho den khi implementation duoc viet.
  *
@@ -182,12 +182,12 @@ describe('GetTopStudentsAttendanceUseCase', () => {
     const largeStub = new (class extends StubReportsQueryPort {
       async getTopPresentStudents(): Promise<TopAttendanceStudentRow[]> {
         return computeTopStudentsFromMock(
-          attendance, sessions, students as any, 'present',
+          attendance as any, sessions as any, students as any, 'present',
         ).filter((r) => r.rank <= 5);
       }
       async getTopAbsentStudentsRanked(): Promise<TopAttendanceStudentRow[]> {
         return computeTopStudentsFromMock(
-          attendance, sessions, students as any, 'absent',
+          attendance as any, sessions as any, students as any, 'absent',
         ).filter((r) => r.rank <= 5);
       }
     })();

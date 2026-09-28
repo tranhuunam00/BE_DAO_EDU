@@ -560,7 +560,11 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
   // ── Top Students Attendance (DENSE_RANK, xu ly tie) ──
 
   private buildTopAttendanceSql(rankBy: 'present' | 'absent', where: string): string {
-    const orderCol  = rankBy === 'present' ? '"presentCount"' : '"absentCount"';
+    const orderCol = rankBy === 'present' ? '"presentCount"' : '"absentCount"';
+    // Chi tinh HS co buoi thuc su (tranh rank ao khi absentCount = 0 cho "top it nhat")
+    const having   = rankBy === 'absent'
+      ? 'HAVING COUNT(*) FILTER (WHERE sa.is_present = false) > 0'
+      : 'HAVING COUNT(*) > 0';
     return `
       SELECT
         "studentId", "studentCode", "fullName",
@@ -571,8 +575,8 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         DENSE_RANK() OVER (ORDER BY ${orderCol} DESC) AS rank
       FROM (
         SELECT
-          s.id   AS "studentId",
-          s.student_id AS "studentCode",
+          s.id             AS "studentId",
+          s.student_id     AS "studentCode",
           CONCAT(s.last_name, ' ', s.first_name) AS "fullName",
           COUNT(*) FILTER (WHERE sa.is_present = true)::int  AS "presentCount",
           COUNT(*) FILTER (WHERE sa.is_present = false)::int AS "absentCount",
@@ -583,6 +587,7 @@ export class TypeOrmReportsQueryAdapter extends ReportsQueryPort {
         JOIN students s        ON s.id  = sa.student_id
         ${where}
         GROUP BY s.id, s.student_id, s.last_name, s.first_name
+        ${having}
       ) agg
     `;
   }
