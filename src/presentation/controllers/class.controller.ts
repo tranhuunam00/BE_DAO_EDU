@@ -213,8 +213,8 @@ export class ClassController {
         isEndingSoon = finish >= today && finish <= oneWeekLater;
       }
       const countObj = counts.find(item => item.classId === c.id);
-      return { 
-        ...c, 
+      return {
+        ...c,
         isEndingSoon,
         studentCount: countObj ? countObj.count : 0
       };
@@ -688,13 +688,13 @@ export class ClassController {
       .addSelect('att.bill_id', 'billId')
       .where(
         'att.class_session_id IN (:...sessionIds) AND (' +
-          'att.bill_id IS NOT NULL OR ' +
-          'att.is_present = true OR ' +
-          'att.verify_method IS NOT NULL OR ' +
-          'att.is_late = true OR ' +
-          '(att.late_minutes IS NOT NULL AND att.late_minutes > 0) OR ' +
-          '(att.evaluation_comment IS NOT NULL AND TRIM(att.evaluation_comment) != \'\') OR ' +
-          '(att.evaluation_score IS NOT NULL AND TRIM(att.evaluation_score) != \'\')' +
+        'att.bill_id IS NOT NULL OR ' +
+        'att.is_present = true OR ' +
+        'att.verify_method IS NOT NULL OR ' +
+        'att.is_late = true OR ' +
+        '(att.late_minutes IS NOT NULL AND att.late_minutes > 0) OR ' +
+        '(att.evaluation_comment IS NOT NULL AND TRIM(att.evaluation_comment) != \'\') OR ' +
+        '(att.evaluation_score IS NOT NULL AND TRIM(att.evaluation_score) != \'\')' +
         ')',
         { sessionIds },
       )
@@ -727,9 +727,9 @@ export class ClassController {
     return sessions.map((s: any) => {
       const isWageBilled = Boolean(
         s.wageId ||
-          s.assistantWageId ||
-          Number(s.billedTeacherWage) > 0 ||
-          Number(s.billedAssistantWage) > 0,
+        s.assistantWageId ||
+        Number(s.billedTeacherWage) > 0 ||
+        Number(s.billedAssistantWage) > 0,
       );
       return {
         ...s,
@@ -1128,17 +1128,7 @@ export class ClassController {
     });
     await this.validateAttendancePermission(session, req);
 
-    const enrolledStudents = await this.classStudentRepo.find({
-      where: { classId: session.classId, status: 'Active' },
-    });
-    const enrolledIds = new Set(enrolledStudents.map((s) => s.studentId));
-
     for (const item of body.evaluations) {
-      if (!enrolledIds.has(item.studentId)) {
-        throw new BadRequestException(
-          `Học sinh với ID ${item.studentId} không thuộc lớp học này.`,
-        );
-      }
       if (item.evaluationScore !== undefined && item.evaluationScore !== null && item.evaluationScore !== '') {
         const normalizedScore = Number(String(item.evaluationScore).replace(',', '.'));
         if (isNaN(normalizedScore) || normalizedScore < 0 || normalizedScore > 10) {
@@ -1567,7 +1557,7 @@ export class ClassController {
   private async regenerateFutureSessions(classId: string, fromDateOrStart: string | boolean = false) {
     const today = this.formatUtcDate(new Date());
     const classEntity = await this.classRepo.findOneOrFail({ where: { id: classId } });
-    
+
     let deleteFrom: string;
     if (typeof fromDateOrStart === 'string' && fromDateOrStart) {
       deleteFrom = fromDateOrStart;
