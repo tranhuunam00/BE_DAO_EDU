@@ -579,13 +579,19 @@ export class ClassController {
 
   @Delete(':id/students/:studentId')
   @ApiOperation({ summary: 'Kick Học sinh khỏi Lớp (Dropped)' })
-  async removeStudent(@Param('id') classId: string, @Param('studentId') studentId: string) {
+  async removeStudent(
+    @Param('id') classId: string,
+    @Param('studentId') studentId: string,
+    @Query('droppedDate') droppedDateQuery?: string,
+    @Body() body?: { droppedDate?: string },
+  ) {
+    const effectiveDate = body?.droppedDate || droppedDateQuery;
     await this.runAcademic(() =>
-      this.removeStudentUseCase.execute(classId, studentId),
+      this.removeStudentUseCase.execute(classId, studentId, effectiveDate),
     );
 
     // Automatically regenerate future sessions starting today to remove the dropped student
-    await this.regenerateFutureSessions(classId, false);
+    await this.regenerateFutureSessions(classId, effectiveDate || false);
 
     return { message: 'Học sinh đã được chuyển sang trạng thái Dropped' };
   }
@@ -1430,8 +1436,8 @@ export class ClassController {
     };
 
     // Load all needed data in parallel — avoid repeated DB calls inside the loop
-    const [activeStudents, existingSessions, holidayDates] = await Promise.all([
-      this.classStudentRepo.find({ where: { classId, status: 'Active' } }),
+    const [classStudents, existingSessions, holidayDates] = await Promise.all([
+      this.classStudentRepo.find({ where: { classId } }),
       this.sessionRepo.find({
         where: { classId, date: Between(startFromStr, endDateStr) },
         select: { id: true, date: true, startTime: true, status: true, attendanceLocked: true, teacherId: true, assistantId: true },
@@ -1507,11 +1513,20 @@ export class ClassController {
         );
         const savedSessions = await manager.save(ClassSessionOrmEntity, newEntities);
 
-        // 3. Bulk-insert attendance records for every new session × every active student
-        if (activeStudents.length > 0) {
+        // 3. Bulk-insert attendance records for sessions based on student active window (joinedDate -> droppedDate)
+        if (classStudents.length > 0) {
           const attendances = savedSessions.flatMap((session) =>
-            activeStudents
-              .filter((cs) => session.date >= cs.joinedDate)
+            classStudents
+              .filter((cs) => {
+                if (session.date < cs.joinedDate) return false;
+                if (cs.status === 'Active') {
+                  return !cs.droppedDate || session.date < cs.droppedDate;
+                }
+                if (cs.status === 'Dropped') {
+                  return Boolean(cs.droppedDate && session.date < cs.droppedDate);
+                }
+                return false;
+              })
               .map((cs) =>
                 manager.create(StudentAttendanceOrmEntity, {
                   classSessionId: session.id,
@@ -1520,7 +1535,9 @@ export class ClassController {
                 }),
               ),
           );
-          await manager.save(StudentAttendanceOrmEntity, attendances);
+          if (attendances.length > 0) {
+            await manager.save(StudentAttendanceOrmEntity, attendances);
+          }
         }
       }
     });

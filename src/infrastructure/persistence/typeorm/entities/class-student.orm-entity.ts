@@ -21,6 +21,9 @@ export class ClassStudentOrmEntity {
   @Column({ type: 'date', name: 'joined_date' })
   joinedDate!: string;
 
+  @Column({ type: 'date', name: 'dropped_date', nullable: true })
+  droppedDate!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

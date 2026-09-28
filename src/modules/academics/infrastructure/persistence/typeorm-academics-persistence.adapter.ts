@@ -122,6 +122,7 @@ export class TypeOrmAcademicsPersistenceAdapter
       enrollment ??= repository.create({ classId, studentId });
       enrollment.status = 'Active';
       enrollment.joinedDate = joinedDate;
+      enrollment.droppedDate = null;
       enrollment = await repository.save(enrollment);
 
       student.status = 'Studying';
@@ -142,15 +143,49 @@ export class TypeOrmAcademicsPersistenceAdapter
     effectiveDate: string,
   ): Promise<void> {
     return this.runSerializable(async (manager) => {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!effectiveDate || !dateRegex.test(effectiveDate) || isNaN(Date.parse(effectiveDate))) {
+        throw new AcademicError('INVALID_DATE_FORMAT', 'Định dạng ngày kích không hợp lệ.');
+      }
+
       const repository = manager.getRepository(ClassStudentOrmEntity);
       const enrollment = await repository.findOne({
-        where: { classId, studentId },
+        where: { classId, studentId, status: 'Active' },
         lock: { mode: 'pessimistic_write' },
       });
       if (!enrollment) {
-        throw new AcademicError('STUDENT_NOT_FOUND', 'Enrollment not found.');
+        throw new AcademicError('STUDENT_NOT_FOUND', 'Học sinh không ở trạng thái hoạt động trong lớp này.');
       }
+
+      if (enrollment.joinedDate && effectiveDate < enrollment.joinedDate) {
+        throw new AcademicError('DROPPED_DATE_BEFORE_JOINED_DATE', 'Ngày rời lớp không được trước ngày học sinh tham gia lớp.');
+      }
+
+      const classEntity = await manager.findOne(ClassOrmEntity, { where: { id: classId } });
+      if (classEntity?.finishDate && effectiveDate > classEntity.finishDate) {
+        throw new AcademicError('DROPPED_DATE_AFTER_FINISH_DATE', 'Ngày rời lớp không được sau ngày kết thúc lớp học.');
+      }
+
+      const billedSessions = await manager.find(ClassSessionOrmEntity, {
+        where: { classId, date: MoreThanOrEqual(effectiveDate) },
+      });
+      if (billedSessions.length > 0) {
+        const billedAtt = await manager.find(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(billedSessions.map(s => s.id)), studentId },
+        });
+        const conflict = billedAtt.find(a => a.billId != null);
+        if (conflict) {
+          const conflictSession = billedSessions.find(s => s.id === conflict.classSessionId);
+          const cDate = conflictSession?.date ? conflictSession.date.slice(0, 10) : '';
+          throw new AcademicError(
+            'CANNOT_DROP_STUDENT_BILLED_CONFLICT',
+            `Không thể chọn ngày kích trước buổi học ngày ${cDate} vì đã được xuất hóa đơn thu học phí.`,
+          );
+        }
+      }
+
       enrollment.status = 'Dropped';
+      enrollment.droppedDate = effectiveDate;
       await repository.save(enrollment);
 
       const activeClasses = await repository.count({

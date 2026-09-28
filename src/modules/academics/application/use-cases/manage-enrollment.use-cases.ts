@@ -18,11 +18,11 @@ export class EnrollStudentUseCase {
 export class RemoveStudentFromClassUseCase {
   constructor(private readonly persistence: AcademicsPersistencePort) {}
 
-  execute(classId: string, studentId: string): Promise<void> {
+  execute(classId: string, studentId: string, effectiveDate?: string): Promise<void> {
     return this.persistence.removeStudent(
       classId,
       studentId,
-      new Date().toISOString().split('T')[0],
+      effectiveDate || new Date().toISOString().split('T')[0],
     );
   }
 }
