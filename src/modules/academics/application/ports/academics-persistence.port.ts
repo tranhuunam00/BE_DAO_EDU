@@ -51,4 +51,10 @@ export abstract class AcademicsPersistencePort {
     classId: string,
     joinedDate: string,
   ): Promise<{ message: string; affectedStudents: number; deletedCount: number; createdCount: number }>;
+
+  abstract updateStudentDroppedDate(
+    classId: string,
+    studentId: string,
+    droppedDate: string,
+  ): Promise<{ message: string }>;
 }

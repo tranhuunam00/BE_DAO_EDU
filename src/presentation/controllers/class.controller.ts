@@ -50,6 +50,7 @@ import { CreateAdhocSessionUseCase } from '../../modules/academics/application/u
 import {
   UpdateStudentJoinedDateUseCase,
   UpdateAllStudentsJoinedDateUseCase,
+  UpdateStudentDroppedDateUseCase,
 } from '../../modules/academics/application/use-cases/update-student-joined-date.use-case';
 import { AttendanceDeletionGuard } from '../../modules/academics/domain/services/attendance-deletion-guard.service';
 import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
@@ -152,6 +153,7 @@ export class ClassController {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly updateStudentJoinedDateUseCase?: UpdateStudentJoinedDateUseCase,
     private readonly updateAllStudentsJoinedDateUseCase?: UpdateAllStudentsJoinedDateUseCase,
+    private readonly updateStudentDroppedDateUseCase?: UpdateStudentDroppedDateUseCase,
   ) { }
 
   @Get()
@@ -628,6 +630,25 @@ export class ClassController {
     }
     return this.runAcademic(() =>
       this.updateAllStudentsJoinedDateUseCase!.execute(classId, body.joinedDate),
+    );
+  }
+
+  @Put(':id/students/:studentId/dropped-date')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Chỉnh sửa ngày rời lớp (kick) của học sinh' })
+  async updateStudentDroppedDate(
+    @Param('id') classId: string,
+    @Param('studentId') studentId: string,
+    @Body() body: { droppedDate: string }
+  ) {
+    if (!body?.droppedDate) {
+      throw new BadRequestException('droppedDate is required');
+    }
+    if (!this.updateStudentDroppedDateUseCase) {
+      throw new BadRequestException('Tính năng đang được khởi tạo.');
+    }
+    return this.runAcademic(() =>
+      this.updateStudentDroppedDateUseCase!.execute(classId, studentId, body.droppedDate),
     );
   }
 

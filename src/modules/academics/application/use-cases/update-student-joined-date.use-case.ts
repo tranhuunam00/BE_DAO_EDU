@@ -15,3 +15,11 @@ export class UpdateAllStudentsJoinedDateUseCase {
     return this.persistence.updateAllStudentsJoinedDate(classId, joinedDate);
   }
 }
+
+export class UpdateStudentDroppedDateUseCase {
+  constructor(private readonly persistence: AcademicsPersistencePort) {}
+
+  execute(classId: string, studentId: string, droppedDate: string) {
+    return this.persistence.updateStudentDroppedDate(classId, studentId, droppedDate);
+  }
+}

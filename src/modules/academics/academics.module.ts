@@ -45,6 +45,7 @@ import { DeleteCourseLevelPricingUseCase } from './application/use-cases/delete-
 import {
   UpdateStudentJoinedDateUseCase,
   UpdateAllStudentsJoinedDateUseCase,
+  UpdateStudentDroppedDateUseCase,
 } from './application/use-cases/update-student-joined-date.use-case';
 
 @Module({
@@ -174,10 +175,17 @@ import {
         new UpdateAllStudentsJoinedDateUseCase(persistence),
       inject: [AcademicsPersistencePort],
     },
+    {
+      provide: UpdateStudentDroppedDateUseCase,
+      useFactory: (persistence: AcademicsPersistencePort) =>
+        new UpdateStudentDroppedDateUseCase(persistence),
+      inject: [AcademicsPersistencePort],
+    },
   ],
   exports: [
     UpdateStudentJoinedDateUseCase,
     UpdateAllStudentsJoinedDateUseCase,
+    UpdateStudentDroppedDateUseCase,
   ],
 })
 export class AcademicsModule {}

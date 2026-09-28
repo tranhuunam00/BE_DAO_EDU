@@ -1,6 +1,8 @@
 import { RemoveStudentFromClassUseCase, EnrollStudentUseCase } from '../../../../../../src/modules/academics/application/use-cases/manage-enrollment.use-cases';
 import { AcademicsPersistencePort } from '../../../../../../src/modules/academics/application/ports/academics-persistence.port';
 import { AcademicError } from '../../../../../../src/modules/academics/domain/errors/academic.error';
+import { SessionStatus } from '../../../../../../src/domain/value-objects/session-status.enum';
+import { AttendanceDeletionGuard } from '../../../../../../src/modules/academics/domain/services/attendance-deletion-guard.service';
 
 describe('StudentDroppedDateAndSessionSync Spec (TDD & Performance Benchmark)', () => {
   let removeStudentUseCase: RemoveStudentFromClassUseCase;
@@ -223,6 +225,116 @@ describe('StudentDroppedDateAndSessionSync Spec (TDD & Performance Benchmark)', 
 
       console.log(`[PERFORMANCE BENCHMARK] Khớp điểm danh 100 hs x 100 buổi: ${duration.toFixed(3)}ms (Matches: ${matchCount}, SLA < 5ms)`);
       expect(duration).toBeLessThan(5);
+    });
+  });
+
+  // =========================================================================
+  // PHẦN 4: BẢO VỆ CÁC BUỔI CÓ BILL & TRẠNG THÁI KHÁC CHƯA DIỄN RA (CẤM XÓA)
+  // =========================================================================
+  describe('PHẦN 4: QUY TẮC ĐỒNG BỘ - CHỈ CHO PHÉP XÓA BUỔI CHƯA DIỄN RA, CẤM XÓA BUỔI CÓ BILL VÀ ĐÃ DIỄN RA', () => {
+    it('Test Case 12: Buổi học có billId (đã xuất hóa đơn) -> CẤM XÓA tuyệt đối', () => {
+      const session = {
+        id: 'sess-billed',
+        classId: 'class-01',
+        date: '2026-10-01',
+        status: SessionStatus.SCHEDULED,
+        attendanceLocked: false,
+      };
+      const att = {
+        id: 'att-billed',
+        classSessionId: 'sess-billed',
+        studentId: 'st-01',
+        billId: 'bill-uuid-12345',
+        isPresent: false,
+      };
+
+      const safeIds = AttendanceDeletionGuard.filterSafeSessionsToDelete([session], [att]);
+      expect(safeIds).not.toContain('sess-billed');
+      expect(AttendanceDeletionGuard.isAttendanceSafeToDelete(session, att)).toBe(false);
+      expect(AttendanceDeletionGuard.getUnsafeReason(session, att)).toBe('đã được xuất hóa đơn thu học phí');
+    });
+
+    it('Test Case 13: Buổi học có trạng thái khác chưa diễn ra (Completed / In Progress / Cancelled) -> CẤM XÓA', () => {
+      const completedSession = {
+        id: 'sess-completed',
+        classId: 'class-01',
+        date: '2026-09-20',
+        status: SessionStatus.COMPLETED,
+        attendanceLocked: false,
+      };
+      const inProgressSession = {
+        id: 'sess-progress',
+        classId: 'class-01',
+        date: '2026-09-28',
+        status: SessionStatus.IN_PROGRESS,
+        attendanceLocked: false,
+      };
+      const cancelledSession = {
+        id: 'sess-cancelled',
+        classId: 'class-01',
+        date: '2026-09-22',
+        status: SessionStatus.CANCELLED,
+        attendanceLocked: false,
+      };
+
+      const atts = [
+        { id: 'a1', classSessionId: 'sess-completed', studentId: 'st-01', billId: null, isPresent: false },
+        { id: 'a2', classSessionId: 'sess-progress', studentId: 'st-01', billId: null, isPresent: false },
+        { id: 'a3', classSessionId: 'sess-cancelled', studentId: 'st-01', billId: null, isPresent: false },
+      ];
+
+      const safeIds = AttendanceDeletionGuard.filterSafeSessionsToDelete(
+        [completedSession, inProgressSession, cancelledSession],
+        atts,
+      );
+      expect(safeIds).toEqual([]);
+    });
+
+    it('Test Case 14: Buổi học Scheduled, chưa khóa, không bill, không điểm danh -> ĐƯỢC PHÉP XÓA để tái tạo', () => {
+      const scheduledSession = {
+        id: 'sess-safe',
+        classId: 'class-01',
+        date: '2026-10-15',
+        status: SessionStatus.SCHEDULED,
+        attendanceLocked: false,
+      };
+      const safeAtt = {
+        id: 'att-safe',
+        classSessionId: 'sess-safe',
+        studentId: 'st-01',
+        billId: null,
+        isPresent: false,
+      };
+
+      const safeIds = AttendanceDeletionGuard.filterSafeSessionsToDelete([scheduledSession], [safeAtt]);
+      expect(safeIds).toContain('sess-safe');
+      expect(AttendanceDeletionGuard.isAttendanceSafeToDelete(scheduledSession, safeAtt)).toBe(true);
+    });
+
+    it('Test Case 15 (Performance Benchmark): Quét 500 ca học hỗn hợp (có bill, đã diễn ra, chưa diễn ra) đạt SLA < 5ms', () => {
+      const mixedSessions = Array.from({ length: 500 }, (_, i) => ({
+        id: `sess-mixed-${i}`,
+        classId: 'class-01',
+        date: `2026-11-${String((i % 28) + 1).padStart(2, '0')}`,
+        status: i % 4 === 0 ? SessionStatus.COMPLETED : (i % 4 === 1 ? SessionStatus.IN_PROGRESS : SessionStatus.SCHEDULED),
+        attendanceLocked: i % 10 === 0,
+      }));
+
+      const mixedAttendances = mixedSessions.map((s, idx) => ({
+        id: `att-mixed-${idx}`,
+        classSessionId: s.id,
+        studentId: `student-${idx % 20}`,
+        billId: idx % 5 === 0 ? `bill-${idx}` : null,
+        isPresent: idx % 7 === 0,
+      }));
+
+      const start = performance.now();
+      const safeIds = AttendanceDeletionGuard.filterSafeSessionsToDelete(mixedSessions, mixedAttendances);
+      const duration = performance.now() - start;
+
+      console.log(`[PERFORMANCE BENCHMARK] Lọc an toàn 500 buổi học: ${duration.toFixed(3)}ms (Safe sessions: ${safeIds.length}, SLA < 5ms)`);
+      expect(duration).toBeLessThan(5);
+      expect(Array.isArray(safeIds)).toBe(true);
     });
   });
 });

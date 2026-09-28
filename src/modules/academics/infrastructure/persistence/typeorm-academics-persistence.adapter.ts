@@ -437,6 +437,53 @@ export class TypeOrmAcademicsPersistenceAdapter
     });
   }
 
+  updateStudentDroppedDate(classId: string, studentId: string, droppedDate: string): Promise<{ message: string }> {
+    return this.runSerializable(async (manager) => {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!droppedDate || !dateRegex.test(droppedDate) || isNaN(Date.parse(droppedDate))) {
+        throw new AcademicError('INVALID_DATE_FORMAT', 'Định dạng ngày kích không hợp lệ.');
+      }
+
+      const classStudent = await manager.findOne(ClassStudentOrmEntity, {
+        where: { classId, studentId, status: 'Dropped' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!classStudent) {
+        throw new AcademicError('STUDENT_NOT_FOUND', 'Học sinh không ở trạng thái bị kích trong lớp này.');
+      }
+      if (classStudent.joinedDate && droppedDate < classStudent.joinedDate) {
+        throw new AcademicError('DROPPED_DATE_BEFORE_JOINED_DATE', 'Ngày rời lớp không được trước ngày học sinh tham gia lớp.');
+      }
+
+      const classEntity = await manager.findOne(ClassOrmEntity, { where: { id: classId } });
+      if (classEntity?.finishDate && droppedDate > classEntity.finishDate) {
+        throw new AcademicError('DROPPED_DATE_AFTER_FINISH_DATE', 'Ngày rời lớp không được sau ngày kết thúc lớp học.');
+      }
+
+      const billedSessions = await manager.find(ClassSessionOrmEntity, {
+        where: { classId, date: MoreThanOrEqual(droppedDate) },
+      });
+      if (billedSessions.length > 0) {
+        const billedAtt = await manager.find(StudentAttendanceOrmEntity, {
+          where: { classSessionId: In(billedSessions.map((s) => s.id)), studentId },
+        });
+        const conflict = billedAtt.find((a) => a.billId != null);
+        if (conflict) {
+          const conflictSession = billedSessions.find((s) => s.id === conflict.classSessionId);
+          const cDate = conflictSession?.date ? conflictSession.date.slice(0, 10) : '';
+          throw new AcademicError(
+            'CANNOT_DROP_STUDENT_BILLED_CONFLICT',
+            `Không thể chọn ngày kích trước buổi học ngày ${cDate} vì đã được xuất hóa đơn thu học phí.`,
+          );
+        }
+      }
+
+      classStudent.droppedDate = droppedDate;
+      await manager.save(classStudent);
+      return { message: 'Cập nhật ngày rời lớp thành công!' };
+    });
+  }
+
   private async runSerializable<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
