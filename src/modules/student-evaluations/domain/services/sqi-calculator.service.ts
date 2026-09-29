@@ -18,10 +18,12 @@ export interface SessionEvaluationInput {
   date?: string;
   isPresent: boolean;
   isLate?: boolean;
-  homeworkStatus?: HomeworkStatus;
-  participation?: ParticipationStatus;
-  understanding?: UnderstandingStatus;
-  behaviorTags?: BehaviorTag[];
+  attendanceStatus?: string;
+  homeworkStatus?: string | HomeworkStatus;
+  participation?: string | ParticipationStatus;
+  understanding?: string | UnderstandingStatus;
+  behaviorTags?: string[] | BehaviorTag[];
+  behaviorStatus?: string;
   score?: string | null;
   teacherComment?: string | null;
 }
@@ -77,70 +79,196 @@ export class SqiCalculator {
 
     const totalSessions = sessions.length;
 
-    // 1. Chuyên cần (30%) - Tính theo tỷ lệ số buổi có mặt / tổng số buổi
-    let presentCount = 0;
-    for (const s of sessions) {
-      if (s.isPresent) {
-        presentCount += 1.0;
-      }
-    }
-    const attendanceScore = totalSessions > 0 ? (presentCount / totalSessions) * 30 : null;
+    // 1. Chuyên cần (30%)
+    let attPoints = 0;
+    const attCounts: Record<string, number> = {};
 
-    // 2. Làm bài tập (30%) - Chỉ tính trên các buổi có giao bài tập
-    const hwSessions = sessions.filter(
-      (s) => s.homeworkStatus !== undefined && s.homeworkStatus !== null,
-    );
+    for (const s of sessions) {
+      const status = (s.attendanceStatus || '').toLowerCase();
+      let p = 0;
+      let label = '';
+      if (status === 'yes' || status === 'on_time' || status === 'makeup') {
+        p = 1.0;
+        label = status === 'makeup' ? 'buổi học bù' : 'buổi đúng giờ';
+      } else if (status === 'late') {
+        p = 0.75;
+        label = 'buổi đi muộn';
+      } else if (status === 'early_leave') {
+        p = 0.75;
+        label = 'buổi về sớm';
+      } else if (status === 'late_much') {
+        p = 0.4;
+        label = 'buổi đi muộn nhiều';
+      } else if (status === 'absent_excused') {
+        p = 0.2;
+        label = 'buổi vắng có phép';
+      } else if (status === 'no' || status === 'absent_unexcused') {
+        p = 0.0;
+        label = status === 'no' ? 'buổi vắng mặt' : 'buổi vắng không phép';
+      } else {
+        // Fallback tương thích dữ liệu cũ
+        if (s.isPresent) {
+          p = 1.0;
+          label = s.isLate ? 'buổi đi muộn' : 'buổi đúng giờ';
+        } else {
+          p = 0.0;
+          label = 'buổi vắng mặt';
+        }
+      }
+      attPoints += p;
+      attCounts[label] = (attCounts[label] || 0) + 1;
+    }
+    const attendanceScore = totalSessions > 0 ? (attPoints / totalSessions) * 30 : null;
+    const attendanceNarrative = Object.entries(attCounts)
+      .map(([lbl, count]) => `${count} ${lbl}`)
+      .join(', ') || 'Chưa có dữ liệu';
+
+    // 2. Làm BTVN (30%)
+    const hwSessions = sessions.filter((s) => {
+      const st = String(s.homeworkStatus || '').toLowerCase();
+      return st !== '' && st !== 'no_homework' && st !== 'none' && st !== 'undefined';
+    });
     let homeworkScore: number | null = null;
+    let homeworkNarrative = 'Không giao BTVN';
     if (hwSessions.length > 0) {
       let hwPoints = 0;
+      const hwCounts: Record<string, number> = {};
       for (const s of hwSessions) {
-        if (s.homeworkStatus === HomeworkStatus.COMPLETED) {
-          hwPoints += 1.0;
-        } else if (s.homeworkStatus === HomeworkStatus.INCOMPLETE) {
-          hwPoints += 0.5;
+        const st = String(s.homeworkStatus || '').toLowerCase();
+        let p = 0;
+        let label = '';
+        if (st === 'yes' || st === 'excellent' || st === 'completed' || st === 'done') {
+          p = 1.0;
+          label = st === 'excellent' ? 'buổi làm tốt 100%' : 'buổi đã làm BTVN';
+        } else if (st === 'missing_few' || st === 'forgot_notebook') {
+          p = 0.7;
+          label = st === 'forgot_notebook' ? 'buổi quên mang vở' : 'buổi làm thiếu ít';
+        } else if (st === 'incomplete') {
+          p = 0.5;
+          label = 'buổi chưa xong';
+        } else if (st === 'coping') {
+          p = 0.4;
+          label = 'buổi làm đối phó/sơ sài';
+        } else if (st === 'missing_many') {
+          p = 0.3;
+          label = 'buổi làm thiếu nhiều';
         } else {
-          hwPoints += 0.0;
+          p = 0.0;
+          label = 'buổi chưa làm';
         }
+        hwPoints += p;
+        hwCounts[label] = (hwCounts[label] || 0) + 1;
       }
       homeworkScore = (hwPoints / hwSessions.length) * 30;
+      homeworkNarrative = Object.entries(hwCounts)
+        .map(([lbl, count]) => `${count} ${lbl}`)
+        .join(', ');
     }
 
-    // 3. Tuân thủ nội quy (20%) - Chỉ tính trên các buổi có đánh giá nề nếp
+    // 3. Tuân thủ NQ (20%)
     const behaviorSessions = sessions.filter(
-      (s) => Array.isArray(s.behaviorTags) && s.behaviorTags.length > 0,
+      (s) => (Array.isArray(s.behaviorTags) && s.behaviorTags.length > 0) || Boolean(s.behaviorStatus),
     );
     let behaviorScore: number | null = null;
+    let behaviorNarrative = 'Chưa có ghi nhận';
     if (behaviorSessions.length > 0) {
-      let goodSessions = 0;
+      let behPoints = 0;
+      const behCounts: Record<string, number> = {};
       for (const s of behaviorSessions) {
         const tags = (s.behaviorTags || []).map((t) => String(t).toLowerCase());
-        const hasViolation = tags.some((tag) =>
-          ['talkative', 'distracted', 'unfocused', 'phone', 'sleepy', 'disruptive'].includes(tag),
-        );
-        if (!hasViolation) {
-          goodSessions += 1.0;
+        const status = String(s.behaviorStatus || tags[0] || '').toLowerCase();
+        let p = 1.0;
+        let label = 'buổi tốt/nghiêm túc';
+
+        if (s.behaviorStatus) {
+          if (status === 'yes' || status === 'good') {
+            p = 1.0;
+            label = 'buổi tốt/nghiêm túc';
+          } else if (status === 'no') {
+            p = 0.0;
+            label = 'buổi chưa nghiêm túc';
+          } else if (status === 'disruptive') {
+            p = 0.1;
+            label = 'buổi đùa trong lớp';
+          } else if (status === 'phone_private') {
+            p = 0.3;
+            label = 'buổi dùng điện thoại/việc riêng';
+          } else if (status === 'talkative') {
+            p = 0.5;
+            label = 'buổi hay nói chuyện';
+          } else if (['unfocused', 'sleepy', 'missing_tools'].includes(status)) {
+            p = 0.7;
+            label = status === 'sleepy' ? 'buổi buồn ngủ/mệt mỏi' : status === 'missing_tools' ? 'buổi thiếu sách vở' : 'buổi mất tập trung';
+          } else {
+            p = 1.0;
+            label = 'buổi tốt/nghiêm túc';
+          }
+        } else {
+          // Legacy logic
+          const hasViolation = tags.some((tag) =>
+            ['talkative', 'distracted', 'unfocused', 'phone', 'sleepy', 'disruptive'].includes(tag),
+          );
+          if (!hasViolation) {
+            p = 1.0;
+            label = 'buổi tốt/nghiêm túc';
+          } else {
+            p = 0.0;
+            label = tags.includes('talkative') ? 'buổi hay nói chuyện' : 'buổi mất tập trung';
+          }
         }
+
+        behPoints += p;
+        behCounts[label] = (behCounts[label] || 0) + 1;
       }
-      behaviorScore = (goodSessions / behaviorSessions.length) * 20;
+      behaviorScore = (behPoints / behaviorSessions.length) * 20;
+      behaviorNarrative = Object.entries(behCounts)
+        .map(([lbl, count]) => `${count} ${lbl}`)
+        .join(', ');
     }
 
-    // 4. Tích cực tham gia (20%) - Chỉ tính trên các buổi có đánh giá tương tác
+    // 4. Tích cực phát biểu (20%)
     const partSessions = sessions.filter(
-      (s) => s.participation !== undefined && s.participation !== null,
+      (s) => s.participation !== undefined && s.participation !== null && String(s.participation) !== '',
     );
     let participationScore: number | null = null;
+    let participationNarrative = 'Chưa có ghi nhận';
     if (partSessions.length > 0) {
       let partPoints = 0;
+      const partCounts: Record<string, number> = {};
       for (const s of partSessions) {
-        if (s.participation === ParticipationStatus.ACTIVE) {
-          partPoints += 1.0;
-        } else if ((s.participation as string) === 'normal') {
-          partPoints += 0.6;
+        const pStatus = String(s.participation).toLowerCase();
+        let p = 0.7;
+        let label = 'buổi chăm chú nhưng ít nói';
+
+        if (pStatus === 'yes' || pStatus === 'active_raise_hand' || pStatus === 'active') {
+          p = 1.0;
+          label = pStatus === 'yes' ? 'buổi tích cực phát biểu' : 'buổi chủ động giơ tay';
+        } else if (pStatus === 'no') {
+          p = 0.0;
+          label = 'buổi chưa phát biểu';
+        } else if (pStatus === 'proactive_ask') {
+          p = 1.0;
+          label = 'buổi chủ động hỏi bài';
+        } else if (pStatus === 'answer_well') {
+          p = 0.8;
+          label = 'buổi gọi trả lời được';
+        } else if (pStatus === 'attentive_quiet' || pStatus === 'normal') {
+          p = 0.7;
+          label = 'buổi chăm chú nhưng ít nói';
+        } else if (pStatus === 'answer_hesitant') {
+          p = 0.4;
+          label = 'buổi gọi còn ấp úng';
         } else {
-          partPoints += 0.0; // PASSIVE
+          p = 0.0;
+          label = pStatus === 'cannot_answer' ? 'buổi gọi không trả lời được' : 'buổi ít nói';
         }
+        partPoints += p;
+        partCounts[label] = (partCounts[label] || 0) + 1;
       }
       participationScore = (partPoints / partSessions.length) * 20;
+      participationNarrative = Object.entries(partCounts)
+        .map(([lbl, count]) => `${count} ${lbl}`)
+        .join(', ');
     }
 
     // 5. TÍNH ĐIỂM SQI TỔNG HỢP: Chuẩn hóa trên tổng trọng số của các tiêu chí đã có dữ liệu
@@ -259,6 +387,12 @@ export class SqiCalculator {
       competency: null,
       academic: null,
       progress: null,
+      narratives: {
+        attendance: attendanceNarrative,
+        homework: homeworkNarrative,
+        behavior: behaviorNarrative,
+        participation: participationNarrative,
+      },
     };
 
     let level = SqiLevel.LEVEL_1_WEAK;

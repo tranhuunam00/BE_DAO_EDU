@@ -13,6 +13,13 @@ export enum TrendDirection {
   NEW = 'new',
 }
 
+export interface SqiBreakdownNarrative {
+  attendance?: string;
+  homework?: string;
+  behavior?: string;
+  participation?: string;
+}
+
 export interface SqiBreakdown {
   attendance: number | null;
   homework: number | null;
@@ -22,6 +29,7 @@ export interface SqiBreakdown {
   competency?: number | null;
   academic?: number | null;
   progress?: number | null;
+  narratives?: SqiBreakdownNarrative;
 }
 
 export interface SubjectPerformance {

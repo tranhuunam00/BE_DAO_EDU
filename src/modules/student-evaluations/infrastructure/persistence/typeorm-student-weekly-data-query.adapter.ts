@@ -143,6 +143,12 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       const score = ev?.score || att?.evaluationScore || null;
       const teacherComment = ev?.comment || att?.evaluationComment || null;
 
+      const attendanceStatus =
+        (att as any)?.status ||
+        (att as any)?.attendanceStatus ||
+        (att?.reason && ['on_time', 'makeup', 'late', 'early_leave', 'late_much', 'absent_excused', 'absent_unexcused'].includes(att.reason) ? att.reason : undefined) ||
+        (isPresent ? (isLate ? 'late' : 'on_time') : 'absent_unexcused');
+
       return {
         classSessionId: s.id,
         className: s.classEntity?.className || s.classEntity?.classCode || '',
@@ -150,6 +156,7 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
         date: s.date ? new Date(s.date).toISOString().split('T')[0] : '',
         isPresent,
         isLate,
+        attendanceStatus,
         homeworkStatus,
         participation,
         understanding,
