@@ -51,7 +51,7 @@ export class StudentEvaluationController {
 
     @InjectRepository(StudentAttendanceOrmEntity)
     private readonly attendanceRepo: Repository<StudentAttendanceOrmEntity>,
-  ) {}
+  ) { }
 
   @Get()
   @Roles(Role.ADMIN, Role.TEACHER)
@@ -147,8 +147,6 @@ export class StudentEvaluationController {
     @Param('sessionId') sessionId: string,
     @Body() dto: SaveEvaluationsDto,
   ) {
-    console.log(`[EVALUATION-API] >>> [POST /evaluations] Request sessionId: ${sessionId}, số lượng: ${dto.evaluations?.length || 0}`);
-    console.log(`[EVALUATION-API] Payload mẫu học sinh đầu tiên:`, JSON.stringify(dto.evaluations?.[0]));
     const access = await this.validateSessionAccess(sessionId, req);
     const normalizedEvaluations = (dto.evaluations || []).map((e) => {
       let hw = e.homeworkStatus;
@@ -170,8 +168,8 @@ export class StudentEvaluationController {
           tags = e.criteria.behavior === 'talkative'
             ? [BehaviorTag.TALKATIVE]
             : e.criteria.behavior === 'unfocused'
-            ? [BehaviorTag.DISTRACTED]
-            : [BehaviorTag.ATTENTIVE];
+              ? [BehaviorTag.DISTRACTED]
+              : [BehaviorTag.ATTENTIVE];
         }
       }
 
@@ -267,8 +265,8 @@ export class StudentEvaluationController {
         tags = it.criteria.behavior === 'talkative'
           ? [BehaviorTag.TALKATIVE]
           : it.criteria.behavior === 'unfocused'
-          ? [BehaviorTag.DISTRACTED]
-          : [BehaviorTag.ATTENTIVE];
+            ? [BehaviorTag.DISTRACTED]
+            : [BehaviorTag.ATTENTIVE];
       }
     }
 
