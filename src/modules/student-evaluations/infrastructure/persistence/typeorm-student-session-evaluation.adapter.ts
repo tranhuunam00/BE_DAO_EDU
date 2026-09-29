@@ -25,8 +25,39 @@ export class TypeOrmStudentSessionEvaluationAdapter
   ): Promise<StudentSessionEvaluationEntity[]> {
     if (!evaluations.length) return [];
 
-    const ormEntities = evaluations.map((e) => this.toOrmEntity(e));
-    const saved = await this.repository.save(ormEntities);
+    const sessionId = evaluations[0].classSessionId;
+    const existingOrmList = await this.repository.find({
+      where: { classSessionId: sessionId },
+    });
+    const existingMap = new Map<string, StudentSessionEvaluationOrmEntity>(
+      existingOrmList.map((item) => [item.studentId, item]),
+    );
+
+    const toSave: StudentSessionEvaluationOrmEntity[] = [];
+
+    for (const domain of evaluations) {
+      let orm = existingMap.get(domain.studentId);
+      if (!orm) {
+        orm = new StudentSessionEvaluationOrmEntity();
+        orm.classSessionId = domain.classSessionId;
+        orm.studentId = domain.studentId;
+      }
+      orm.teacherId = domain.teacherId;
+      orm.homeworkStatus = domain.homeworkStatus;
+      orm.participation = domain.participation;
+      orm.understanding = domain.understanding;
+      orm.behaviorTags = domain.behaviorTags;
+      orm.score = domain.score;
+      orm.comment = domain.comment;
+      orm.isAiGenerated = domain.isAiGenerated;
+      orm.isApproved = domain.isApproved;
+      orm.approvedAt = domain.approvedAt;
+      orm.updatedAt = new Date();
+
+      toSave.push(orm);
+    }
+
+    const saved = await this.repository.save(toSave);
     return saved.map((s) => this.toDomainEntity(s));
   }
 
