@@ -270,9 +270,12 @@ export class StudentEvaluationController {
       }
     }
 
+    const rawName = (it.studentName || '').trim();
+    const studentName = rawName && rawName !== '-' ? rawName : 'Học sinh';
+
     return {
       studentId: it.studentId,
-      studentName: it.studentName,
+      studentName,
       homeworkStatus: hw,
       participation: part,
       understanding: under,
