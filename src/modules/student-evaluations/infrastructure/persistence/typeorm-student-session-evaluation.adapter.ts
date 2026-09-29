@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StudentSessionEvaluationOrmEntity } from '../../../../infrastructure/persistence/typeorm/entities/student-session-evaluation.orm-entity';
@@ -15,6 +15,8 @@ import {
 export class TypeOrmStudentSessionEvaluationAdapter
   implements IStudentSessionEvaluationRepositoryPort
 {
+  private readonly logger = new Logger(TypeOrmStudentSessionEvaluationAdapter.name);
+
   constructor(
     @InjectRepository(StudentSessionEvaluationOrmEntity)
     private readonly repository: Repository<StudentSessionEvaluationOrmEntity>,
@@ -26,39 +28,47 @@ export class TypeOrmStudentSessionEvaluationAdapter
     if (!evaluations.length) return [];
 
     const sessionId = evaluations[0].classSessionId;
-    const existingOrmList = await this.repository.find({
-      where: { classSessionId: sessionId },
-    });
-    const existingMap = new Map<string, StudentSessionEvaluationOrmEntity>(
-      existingOrmList.map((item) => [item.studentId, item]),
-    );
+    this.logger.log(`[saveBatch] Bắt đầu lưu ${evaluations.length} đánh giá cho session ${sessionId}`);
 
-    const toSave: StudentSessionEvaluationOrmEntity[] = [];
+    try {
+      const existingOrmList = await this.repository.find({
+        where: { classSessionId: sessionId },
+      });
+      const existingMap = new Map<string, StudentSessionEvaluationOrmEntity>(
+        existingOrmList.map((item) => [item.studentId, item]),
+      );
 
-    for (const domain of evaluations) {
-      let orm = existingMap.get(domain.studentId);
-      if (!orm) {
-        orm = new StudentSessionEvaluationOrmEntity();
-        orm.classSessionId = domain.classSessionId;
-        orm.studentId = domain.studentId;
+      const toSave: StudentSessionEvaluationOrmEntity[] = [];
+
+      for (const domain of evaluations) {
+        let orm = existingMap.get(domain.studentId);
+        if (!orm) {
+          orm = new StudentSessionEvaluationOrmEntity();
+          orm.classSessionId = domain.classSessionId;
+          orm.studentId = domain.studentId;
+        }
+        orm.teacherId = domain.teacherId;
+        orm.homeworkStatus = domain.homeworkStatus;
+        orm.participation = domain.participation;
+        orm.understanding = domain.understanding;
+        orm.behaviorTags = domain.behaviorTags;
+        orm.score = domain.score;
+        orm.comment = domain.comment;
+        orm.isAiGenerated = domain.isAiGenerated;
+        orm.isApproved = domain.isApproved;
+        orm.approvedAt = domain.approvedAt;
+        orm.updatedAt = new Date();
+
+        toSave.push(orm);
       }
-      orm.teacherId = domain.teacherId;
-      orm.homeworkStatus = domain.homeworkStatus;
-      orm.participation = domain.participation;
-      orm.understanding = domain.understanding;
-      orm.behaviorTags = domain.behaviorTags;
-      orm.score = domain.score;
-      orm.comment = domain.comment;
-      orm.isAiGenerated = domain.isAiGenerated;
-      orm.isApproved = domain.isApproved;
-      orm.approvedAt = domain.approvedAt;
-      orm.updatedAt = new Date();
 
-      toSave.push(orm);
+      const saved = await this.repository.save(toSave);
+      this.logger.log(`[saveBatch] Đã lưu thành công ${saved.length} bản ghi vào bảng student_session_evaluations`);
+      return saved.map((s) => this.toDomainEntity(s));
+    } catch (error) {
+      this.logger.error(`[saveBatch ERROR] Lỗi khi lưu vào bảng student_session_evaluations: ${error}`);
+      throw error;
     }
-
-    const saved = await this.repository.save(toSave);
-    return saved.map((s) => this.toDomainEntity(s));
   }
 
   async findBySessionId(sessionId: string): Promise<StudentSessionEvaluationEntity[]> {
@@ -66,6 +76,7 @@ export class TypeOrmStudentSessionEvaluationAdapter
       where: { classSessionId: sessionId },
       order: { createdAt: 'ASC' },
     });
+    this.logger.log(`[findBySessionId] Session ${sessionId} tìm thấy ${list.length} bản ghi trong bảng student_session_evaluations`);
     return list.map((item) => this.toDomainEntity(item));
   }
 
