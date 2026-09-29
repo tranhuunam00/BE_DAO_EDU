@@ -187,4 +187,77 @@ describe('StudentEvaluationController - RBAC & Permissions Spec', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('4. Ánh xạ và Bảo toàn 4 tiêu chí đánh giá (Criteria Mapping & Preservation)', () => {
+    it('4.1. GET /evaluations ánh xạ đầy đủ 4 tiêu chí từ Domain Entity sang object criteria', async () => {
+      mockSessionRepo.findOne.mockResolvedValue({ id: 'session-301' });
+      mockGetUseCase.execute.mockResolvedValue([
+        {
+          id: 'eval-1',
+          classSessionId: 'session-301',
+          studentId: 'student-301',
+          teacherId: 'teacher-1',
+          homeworkStatus: 'completed',
+          participation: 'active',
+          understanding: 'understood',
+          behaviorTags: ['attentive'],
+          score: '9.5',
+          comment: 'Học sinh hiểu bài nhanh',
+          isAiGenerated: false,
+          isApproved: true,
+          approvedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any,
+      ]);
+
+      const req = { user: { sub: 'admin-user', role: Role.ADMIN, roles: [Role.ADMIN] } };
+      const res = await controller.getEvaluations(req, 'session-301');
+
+      expect(res).toHaveLength(1);
+      expect(res[0].criteria).toEqual({
+        homework: 'done',
+        participation: 'active',
+        understanding: 'quick',
+        behavior: 'good',
+      });
+      expect(res[0].comment).toBe('Học sinh hiểu bài nhanh');
+    });
+
+    it('4.2. POST /evaluations nhận criteria object và truyền đúng enum vào saveUseCase', async () => {
+      mockSessionRepo.findOne.mockResolvedValue({ id: 'session-302' });
+      const req = { user: { sub: 'admin-user', role: Role.ADMIN, roles: [Role.ADMIN] } };
+
+      await controller.saveEvaluations(req, 'session-302', {
+        evaluations: [
+          {
+            studentId: 'student-302',
+            criteria: {
+              homework: 'missing',
+              participation: 'passive',
+              understanding: 'slow',
+              behavior: 'unfocused',
+            },
+            comment: 'Cần chú ý hơn',
+          } as any,
+        ],
+      });
+
+      expect(mockSaveUseCase.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classSessionId: 'session-302',
+          evaluations: [
+            expect.objectContaining({
+              studentId: 'student-302',
+              homeworkStatus: 'not_done',
+              participation: 'passive',
+              understanding: 'not_understood',
+              behaviorTags: ['distracted'],
+              comment: 'Cần chú ý hơn',
+            }),
+          ],
+        }),
+      );
+    });
+  });
 });
