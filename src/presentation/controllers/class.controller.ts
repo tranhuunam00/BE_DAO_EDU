@@ -55,6 +55,7 @@ import {
 import { AttendanceDeletionGuard } from '../../modules/academics/domain/services/attendance-deletion-guard.service';
 import { TimekeepingLogOrmEntity } from '../../infrastructure/persistence/typeorm/entities/timekeeping-log.orm-entity';
 import { TimekeepingMatcher, DomainClassSession, TimekeepingLog } from '../../modules/timekeeping/domain/services/timekeeping-matcher';
+import { StudentSessionEvaluationOrmEntity } from '../../infrastructure/persistence/typeorm/entities/student-session-evaluation.orm-entity';
 
 function parseDateSafely(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
@@ -1133,6 +1134,149 @@ export class ClassController {
     session.status = SessionStatus.COMPLETED;
     session.attendanceLocked = true;
     await this.sessionRepo.save(session);
+    return session;
+  }
+
+  @Post('sessions/:sessionId/cancel')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Cho nghỉ học / Hủy buổi học' })
+  async cancelSession(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+  ) {
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
+    }
+
+    await this.validateAttendancePermission(session, req);
+
+    // 1. Kiểm tra trạng thái buổi học
+    if (session.status === SessionStatus.CANCELLED) {
+      throw new BadRequestException('Buổi học này đã ở trạng thái nghỉ học (đã hủy) từ trước.');
+    }
+
+    if (session.status === SessionStatus.COMPLETED) {
+      throw new ConflictException('Buổi học này đã ở trạng thái Hoàn thành. Không thể trực tiếp cho nghỉ học (cần hoàn tác trước).');
+    }
+
+    if (session.attendanceLocked) {
+      throw new ConflictException('Buổi học này đã bị khóa điểm danh (attendance locked). Không thể cho nghỉ học.');
+    }
+
+    // 2. Kiểm tra thù lao giáo viên và trợ giảng
+    const hasTeacherWage = Boolean(
+      session.wageId ||
+      (session.billedTeacherWage !== undefined && session.billedTeacherWage !== null && Number(session.billedTeacherWage) > 0),
+    );
+    const hasAssistantWage = Boolean(
+      session.assistantWageId ||
+      (session.billedAssistantWage !== undefined && session.billedAssistantWage !== null && Number(session.billedAssistantWage) > 0),
+    );
+    if (hasTeacherWage || hasAssistantWage) {
+      throw new ConflictException(
+        'Không thể cho nghỉ học: Buổi học này đã được chốt tính thù lao giáo viên/trợ giảng vào bảng lương.',
+      );
+    }
+
+    // 3. Kiểm tra hóa đơn học phí của học sinh
+    const attendances = await this.attendanceRepo.find({ where: { classSessionId: sessionId } });
+    const billedAttendances = attendances.filter(
+      (a) => (a.billId !== null && a.billId !== undefined) || (a.billedAmount !== null && Number(a.billedAmount) > 0),
+    );
+    if (billedAttendances.length > 0) {
+      throw new ConflictException(
+        `Không thể cho nghỉ học: Buổi học này đã có ${billedAttendances.length} học sinh được chốt vào hóa đơn thu học phí (Mã hóa đơn: ${billedAttendances[0].billId}). Vui lòng gỡ buổi học khỏi hóa đơn trước khi cho nghỉ.`,
+      );
+    }
+
+    // 4. Cập nhật trạng thái an toàn trong Transaction
+    await this.dataSource.transaction(async (manager) => {
+      session.status = SessionStatus.CANCELLED;
+      session.attendanceLocked = false;
+      await manager.save(ClassSessionOrmEntity, session);
+
+      // Chắc chắn 100% toàn bộ học sinh trở về trạng thái VẮNG, không tính tiền, không tính đi muộn
+      await manager.update(
+        StudentAttendanceOrmEntity,
+        { classSessionId: sessionId },
+        {
+          isPresent: false,
+          isLate: false,
+          lateMinutes: 0,
+          reason: 'Nghỉ cả lớp (Buổi học cho nghỉ)',
+          note: 'Buổi học cho nghỉ',
+          billedAmount: null,
+          verifyMethod: null,
+          evaluationScore: null,
+          evaluationComment: null,
+        },
+      );
+
+      // Dọn dẹp bản ghi đánh giá dở dang của buổi học này (nếu có) để không kéo tụt chỉ số SQI của học sinh
+      await manager.delete(StudentSessionEvaluationOrmEntity, { classSessionId: sessionId });
+    });
+
+    return session;
+  }
+
+  @Post('sessions/:sessionId/reopen')
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Mở lại buổi học sau khi đã cho nghỉ' })
+  async reopenSession(
+    @Request() req: any,
+    @Param('sessionId') sessionId: string,
+  ) {
+    let session: ClassSessionOrmEntity;
+    try {
+      session = await this.sessionRepo.findOneOrFail({
+        where: { id: sessionId },
+        relations: { classEntity: true },
+      });
+    } catch (err: any) {
+      if (err?.name === 'EntityNotFoundError') {
+        throw new NotFoundException('Không tìm thấy thông tin buổi học.');
+      }
+      throw err;
+    }
+
+    await this.validateAttendancePermission(session, req);
+
+    if (session.status !== SessionStatus.CANCELLED) {
+      throw new BadRequestException('Chỉ có thể mở lại buổi học đang ở trạng thái đã hủy/cho nghỉ (Cancelled).');
+    }
+
+    if (session.attendanceLocked) {
+      throw new ConflictException('Buổi học này đã bị khóa điểm danh, không thể mở lại.');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      session.status = SessionStatus.SCHEDULED;
+      session.attendanceLocked = false;
+      await manager.save(ClassSessionOrmEntity, session);
+
+      await manager.update(
+        StudentAttendanceOrmEntity,
+        { classSessionId: sessionId },
+        {
+          isPresent: false,
+          isLate: false,
+          lateMinutes: 0,
+          reason: null,
+          note: null,
+          billedAmount: null,
+        },
+      );
+    });
+
     return session;
   }
 
