@@ -43,6 +43,8 @@ import { FacebookLeadItemOrmEntity } from './entities/facebook-lead-item.orm-ent
 import { LeadOrmEntity } from './entities/lead.orm-entity';
 import { LeadDemandOrmEntity } from './entities/lead-demand.orm-entity';
 import { LeadInteractionOrmEntity } from './entities/lead-interaction.orm-entity';
+import { StudentSessionEvaluationOrmEntity } from './entities/student-session-evaluation.orm-entity';
+import { StudentReportApprovalOrmEntity } from './entities/student-report-approval.orm-entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -90,6 +92,8 @@ export const AppDataSource = new DataSource({
     LeadOrmEntity,
     LeadDemandOrmEntity,
     LeadInteractionOrmEntity,
+    StudentSessionEvaluationOrmEntity,
+    StudentReportApprovalOrmEntity,
   ],
   migrations: [path.join(__dirname, '/migrations/*.{ts,js}')],
   synchronize: false, // Turn off synchronize when using migrations

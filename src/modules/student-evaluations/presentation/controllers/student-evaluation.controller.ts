@@ -149,7 +149,7 @@ export class StudentEvaluationController {
   ) {
     console.log(`[EVALUATION-API] >>> [POST /evaluations] Request sessionId: ${sessionId}, số lượng: ${dto.evaluations?.length || 0}`);
     console.log(`[EVALUATION-API] Payload mẫu học sinh đầu tiên:`, JSON.stringify(dto.evaluations?.[0]));
-    const teacher = await this.validateSessionAccess(sessionId, req);
+    const access = await this.validateSessionAccess(sessionId, req);
     const normalizedEvaluations = (dto.evaluations || []).map((e) => {
       let hw = e.homeworkStatus;
       let part = e.participation;
@@ -190,7 +190,7 @@ export class StudentEvaluationController {
 
     const result = await this.saveEvaluationsUseCase.execute({
       classSessionId: sessionId,
-      teacherId: teacher?.id || null,
+      teacherId: access.effectiveTeacherId,
       evaluations: normalizedEvaluations,
     });
 
@@ -227,8 +227,8 @@ export class StudentEvaluationController {
     @Param('sessionId') sessionId: string,
     @Body() dto: GenerateCommentDto,
   ) {
-    const teacher = await this.validateSessionAccess(sessionId, req);
-    const item = this.normalizeGenerateItem(dto, teacher?.id);
+    const access = await this.validateSessionAccess(sessionId, req);
+    const item = this.normalizeGenerateItem(dto, access.effectiveTeacherId || undefined);
     return this.generateCommentUseCase.execute(item);
   }
 
@@ -240,9 +240,9 @@ export class StudentEvaluationController {
     @Param('sessionId') sessionId: string,
     @Body() dto: GenerateBatchCommentDto,
   ) {
-    const teacher = await this.validateSessionAccess(sessionId, req);
+    const access = await this.validateSessionAccess(sessionId, req);
     const rawList = dto.items || dto.students || [];
-    const items = rawList.map((it) => this.normalizeGenerateItem(it, teacher?.id));
+    const items = rawList.map((it) => this.normalizeGenerateItem(it, access.effectiveTeacherId || undefined));
     const results = await this.generateCommentUseCase.executeBatch(items);
     return { results };
   }
@@ -284,7 +284,10 @@ export class StudentEvaluationController {
     };
   }
 
-  private async validateSessionAccess(sessionId: string, req: any): Promise<TeacherOrmEntity | null> {
+  private async validateSessionAccess(
+    sessionId: string,
+    req: any,
+  ): Promise<{ teacher: TeacherOrmEntity | null; session: ClassSessionOrmEntity; effectiveTeacherId: string | null }> {
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: { classEntity: true },
@@ -298,7 +301,8 @@ export class StudentEvaluationController {
     const isAdmin = userRoles.includes(Role.ADMIN) || req?.user?.role === Role.ADMIN;
 
     if (isAdmin) {
-      return null;
+      const effectiveTeacherId = session.teacherId || session.classEntity?.mainTeacherId || null;
+      return { teacher: null, session, effectiveTeacherId };
     }
 
     const teacher = await this.teacherRepo.findOne({
@@ -319,6 +323,6 @@ export class StudentEvaluationController {
       );
     }
 
-    return teacher;
+    return { teacher, session, effectiveTeacherId: teacher.id };
   }
 }
