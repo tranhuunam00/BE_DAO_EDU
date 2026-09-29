@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import {
   IStudentWeeklyDataQueryPort,
   StudentBasicInfo,
@@ -70,16 +70,18 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
     const sessionIds = sessions.map((s) => s.id);
 
     const [attendances, evaluations] = await Promise.all([
-      this.attendanceRepo
-        .createQueryBuilder('sa')
-        .where('sa.student_id = :studentId', { studentId })
-        .andWhere('sa.class_session_id IN (:...sessionIds)', { sessionIds })
-        .getMany(),
-      this.evalRepo
-        .createQueryBuilder('se')
-        .where('se.student_id = :studentId', { studentId })
-        .andWhere('se.class_session_id IN (:...sessionIds)', { sessionIds })
-        .getMany(),
+      this.attendanceRepo.find({
+        where: {
+          studentId,
+          classSessionId: In(sessionIds),
+        },
+      }),
+      this.evalRepo.find({
+        where: {
+          studentId,
+          classSessionId: In(sessionIds),
+        },
+      }),
     ]);
 
     const attMap = new Map<string, StudentAttendanceOrmEntity>();
