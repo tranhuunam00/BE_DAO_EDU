@@ -15,8 +15,6 @@ import {
 export class TypeOrmStudentSessionEvaluationAdapter
   implements IStudentSessionEvaluationRepositoryPort
 {
-  private readonly logger = new Logger(TypeOrmStudentSessionEvaluationAdapter.name);
-
   constructor(
     @InjectRepository(StudentSessionEvaluationOrmEntity)
     private readonly repository: Repository<StudentSessionEvaluationOrmEntity>,
@@ -28,7 +26,7 @@ export class TypeOrmStudentSessionEvaluationAdapter
     if (!evaluations.length) return [];
 
     const sessionId = evaluations[0].classSessionId;
-    this.logger.log(`[saveBatch] Bắt đầu lưu ${evaluations.length} đánh giá cho session ${sessionId}`);
+    console.log(`[EVALUATION-DB] >>> [saveBatch] Bắt đầu lưu ${evaluations.length} đánh giá cho session ${sessionId}`);
 
     try {
       const existingOrmList = await this.repository.find({
@@ -63,10 +61,10 @@ export class TypeOrmStudentSessionEvaluationAdapter
       }
 
       const saved = await this.repository.save(toSave);
-      this.logger.log(`[saveBatch] Đã lưu thành công ${saved.length} bản ghi vào bảng student_session_evaluations`);
+      console.log(`[EVALUATION-DB] <<< [saveBatch] Đã INSERT/UPDATE thành công ${saved.length} bản ghi vào bảng student_session_evaluations`);
       return saved.map((s) => this.toDomainEntity(s));
     } catch (error) {
-      this.logger.error(`[saveBatch ERROR] Lỗi khi lưu vào bảng student_session_evaluations: ${error}`);
+      console.error(`[EVALUATION-DB] ❌ [saveBatch ERROR] Lỗi database khi lưu:`, error);
       throw error;
     }
   }
@@ -76,7 +74,7 @@ export class TypeOrmStudentSessionEvaluationAdapter
       where: { classSessionId: sessionId },
       order: { createdAt: 'ASC' },
     });
-    this.logger.log(`[findBySessionId] Session ${sessionId} tìm thấy ${list.length} bản ghi trong bảng student_session_evaluations`);
+    console.log(`[EVALUATION-DB] <<< [findBySessionId] Session ${sessionId} tìm thấy ${list.length} bản ghi trong bảng student_session_evaluations`);
     return list.map((item) => this.toDomainEntity(item));
   }
 

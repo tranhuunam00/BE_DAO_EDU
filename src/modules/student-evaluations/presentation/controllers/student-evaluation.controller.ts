@@ -38,8 +38,6 @@ import { StudentAttendanceOrmEntity } from '../../../../infrastructure/persisten
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('classes/sessions/:sessionId/evaluations')
 export class StudentEvaluationController {
-  private readonly logger = new Logger(StudentEvaluationController.name);
-
   constructor(
     private readonly getEvaluationsUseCase: GetSessionEvaluationsUseCase,
     private readonly saveEvaluationsUseCase: SaveSessionEvaluationsUseCase,
@@ -62,12 +60,12 @@ export class StudentEvaluationController {
     @Request() req: any,
     @Param('sessionId') sessionId: string,
   ) {
-    this.logger.log(`[GET /evaluations] Request lấy đánh giá cho session: ${sessionId}`);
+    console.log(`[EVALUATION-API] >>> [GET /evaluations] Request sessionId: ${sessionId}`);
     await this.validateSessionAccess(sessionId, req);
     const entities = await this.getEvaluationsUseCase.execute(sessionId);
 
     if (entities && entities.length > 0) {
-      this.logger.log(`[GET /evaluations] Trả về ${entities.length} bản ghi từ student_session_evaluations`);
+      console.log(`[EVALUATION-API] <<< [GET /evaluations] Tìm thấy ${entities.length} bản ghi trong bảng student_session_evaluations`);
       return entities.map((e) => {
         let homework: 'done' | 'missing' | 'none' | undefined = undefined;
         if (e.homeworkStatus === HomeworkStatus.COMPLETED) homework = 'done';
@@ -119,7 +117,7 @@ export class StudentEvaluationController {
     }
 
     // Fallback: Nếu bảng mới chưa có dữ liệu, đọc từ bảng điểm danh cũ
-    this.logger.warn(`[GET /evaluations] Session ${sessionId} chưa có trong bảng mới, fallback đọc từ student_attendance`);
+    console.log(`[EVALUATION-API] ⚠️ [GET /evaluations] Bảng student_session_evaluations rỗng, fallback sang student_attendance`);
     const attendanceRecords = await this.attendanceRepo.find({
       where: { classSessionId: sessionId },
     });
@@ -149,7 +147,8 @@ export class StudentEvaluationController {
     @Param('sessionId') sessionId: string,
     @Body() dto: SaveEvaluationsDto,
   ) {
-    this.logger.log(`[POST /evaluations] Request lưu đánh giá cho session: ${sessionId}, số lượng: ${dto.evaluations?.length || 0}`);
+    console.log(`[EVALUATION-API] >>> [POST /evaluations] Request sessionId: ${sessionId}, số lượng: ${dto.evaluations?.length || 0}`);
+    console.log(`[EVALUATION-API] Payload mẫu học sinh đầu tiên:`, JSON.stringify(dto.evaluations?.[0]));
     const teacher = await this.validateSessionAccess(sessionId, req);
     const normalizedEvaluations = (dto.evaluations || []).map((e) => {
       let hw = e.homeworkStatus;
@@ -195,7 +194,7 @@ export class StudentEvaluationController {
       evaluations: normalizedEvaluations,
     });
 
-    this.logger.log(`[POST /evaluations] Lưu hoàn tất, savedCount = ${result.savedCount}`);
+    console.log(`[EVALUATION-API] <<< [POST /evaluations] Lưu hoàn tất, savedCount = ${result.savedCount}`);
 
     // Đồng bộ sang bảng student_attendance để bảo đảm tương thích ngược
     try {
