@@ -65,22 +65,23 @@ export class StudentEvaluationController {
     if (entities && entities.length > 0) {
       return entities.map((e) => {
         let homework: 'done' | 'missing' | 'none' | undefined = undefined;
-        if (e.homeworkStatus === HomeworkStatus.COMPLETED) homework = 'done';
-        else if (e.homeworkStatus === HomeworkStatus.NOT_DONE) homework = 'missing';
+        if (e.homeworkStatus === HomeworkStatus.COMPLETED || e.homeworkStatus === 'completed') homework = 'done';
+        else if (e.homeworkStatus === HomeworkStatus.NOT_DONE || e.homeworkStatus === 'not_done') homework = 'missing';
+        else if (e.homeworkStatus === HomeworkStatus.INCOMPLETE || e.homeworkStatus === 'incomplete') homework = 'missing';
 
         let participation: 'active' | 'normal' | 'passive' | undefined = undefined;
-        if (e.participation === ParticipationStatus.ACTIVE) participation = 'active';
-        else if (e.participation === ParticipationStatus.PASSIVE) participation = 'passive';
+        if (e.participation === ParticipationStatus.ACTIVE || e.participation === 'active') participation = 'active';
+        else if (e.participation === ParticipationStatus.PASSIVE || e.participation === 'passive') participation = 'passive';
         else if (e.participation) participation = 'normal';
 
         let understanding: 'quick' | 'normal' | 'slow' | undefined = undefined;
-        if (e.understanding === UnderstandingStatus.UNDERSTOOD) understanding = 'quick';
-        else if (e.understanding === UnderstandingStatus.NOT_UNDERSTOOD) understanding = 'slow';
+        if (e.understanding === UnderstandingStatus.UNDERSTOOD || e.understanding === 'understood' || e.understanding === 'quick') understanding = 'quick';
+        else if (e.understanding === UnderstandingStatus.NOT_UNDERSTOOD || e.understanding === 'not_understood' || e.understanding === 'slow') understanding = 'slow';
         else if (e.understanding) understanding = 'normal';
 
         let behavior: 'good' | 'talkative' | 'unfocused' | undefined = undefined;
-        if (e.behaviorTags?.includes(BehaviorTag.DISTRACTED)) behavior = 'unfocused';
-        else if (e.behaviorTags?.includes(BehaviorTag.TALKATIVE)) behavior = 'talkative';
+        if (e.behaviorTags?.includes(BehaviorTag.DISTRACTED) || e.behaviorTags?.includes('distracted' as any)) behavior = 'unfocused';
+        else if (e.behaviorTags?.includes(BehaviorTag.TALKATIVE) || e.behaviorTags?.includes('talkative' as any)) behavior = 'talkative';
         else if (e.behaviorTags && e.behaviorTags.length > 0) behavior = 'good';
 
         return {
