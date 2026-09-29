@@ -310,17 +310,17 @@ export class WeeklyStudentReportController {
       try {
         const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const prompt = `Bạn là chuyên gia sư phạm tại tổ chức giáo dục DAO EDU. Dựa vào thông tin học tập của học sinh ${studentName} trong ${body.reportType === 'month' ? `tháng ${body.periodNumber}/${body.year}` : `tuần ${body.periodNumber}/${body.year}`}:
-- Điểm SQI: ${body.sqiScore ?? 80}/100
-- Ưu điểm: ${body.strengths || 'Điểm danh đầy đủ, tiếp thu bài tốt'}
-- Điểm cần lưu ý: ${body.improvements || 'Cần làm thêm bài tập về nhà'}
+        const prompt = `Bạn là chuyên gia cố vấn sư phạm cao cấp tại tổ chức giáo dục DAO EDU. Dựa vào kết quả học tập của học sinh ${studentName} trong ${body.reportType === 'month' ? `tháng ${body.periodNumber}/${body.year}` : `tuần ${body.periodNumber}/${body.year}`}:
+- Điểm SQI đánh giá tổng hợp: ${body.sqiScore ?? 80}/100
+- Điểm mạnh hiện tại: ${body.strengths || 'Điểm danh đầy đủ, tiếp thu bài tốt, có ý thức học tập'}
+- Điểm cần lưu ý/cải thiện: ${body.improvements || 'Cần duy trì đều đặn thói quen làm bài tập về nhà và tập trung hơn'}
 
-Hãy soạn thảo nhận xét sư phạm dưới định dạng JSON duy nhất không kèm markdown:
+Hãy soạn thảo nhận xét sư phạm toàn diện, chi tiết, mang tính xây dựng và chuẩn mực giáo dục dưới định dạng JSON duy nhất không kèm markdown (bắt buộc có đủ 4 trường nội dung):
 {
-  "commendation": "Lời tuyên dương ngắn gọn nếu có điểm sáng hoặc tiến bộ (1-2 câu)",
-  "suggestion": "Gợi ý cụ thể giúp học sinh rèn luyện phương pháp học tập (1-2 câu)",
-  "strengths": "Ưu điểm nổi bật của con",
-  "improvements": "Điểm con cần lưu ý cải thiện",
+  "commendation": "Lời tuyên dương sâu sắc (2-3 câu) ghi nhận sự nỗ lực, tiến bộ nổi bật và tinh thần tự giác của con",
+  "strengths": "Nhận xét chi tiết (2-3 câu) về ưu điểm, khả năng tư duy, mức độ tương tác và khả năng tiếp thu bài trên lớp",
+  "improvements": "Điểm con cần lưu ý và rèn giũa thêm (2-3 câu) về nền nếp làm bài tập, chuyên cần, hoặc độ tập trung",
+  "suggestion": "Kế hoạch rèn luyện cụ thể tại nhà (2-3 câu) và hướng dẫn chi tiết để gia đình/phụ huynh đồng hành hỗ trợ con hiệu quả",
   "recommendations": ["Gợi ý phối hợp 1 cho phụ huynh", "Gợi ý phối hợp 2 cho phụ huynh"]
 }`;
 
@@ -350,13 +350,16 @@ Hãy soạn thảo nhận xét sư phạm dưới định dạng JSON duy nhất
       success: true,
       data: {
         commendation: isGood
-          ? `Tuyên dương con ${studentName} đã duy trì thái độ học tập nghiêm túc, chăm chỉ phát biểu và đạt kết quả SQI xuất sắc!`
-          : `Ghi nhận sự cố gắng và tinh thần tự giác của ${studentName} trong các buổi học vừa qua.`,
-        suggestion: isGood
-          ? `Tiếp tục phát huy thói quen ôn bài trước giờ học và thử sức thêm với các bài tập nâng cao.`
-          : `Dành 20-30 phút mỗi ngày xem lại kiến thức trọng tâm và hoàn thành bài tập đúng hạn để tiến bộ nhanh hơn.`,
-        strengths: body.strengths || `Con ${studentName} tiếp thu bài tốt và có ý thức học tập nghiêm túc.`,
-        improvements: body.improvements || `Cần duy trì đều đặn thói quen làm bài tập về nhà.`,
+          ? `Tuyên dương con ${studentName} đã duy trì thái độ học tập rất nghiêm túc, tích cực phát biểu và đạt chỉ số SQI xuất sắc (${body.sqiScore ?? 85}/100) trong đợt học vừa qua!`
+          : `Thầy cô ghi nhận sự cố gắng, tính tự giác và tinh thần vượt khó của con ${studentName} trong suốt các buổi học vừa qua.`,
+        strengths: isGood
+          ? `Con ${studentName} có khả năng tiếp thu bài nhanh, tư duy logic tốt và chủ động thảo luận các dạng bài học cùng thầy cô và các bạn.`
+          : `Con ${studentName} có ý thức lắng nghe giảng bài, tuân thủ tốt nội quy lớp học và luôn cố gắng hoàn thành nhiệm vụ được giao.`,
+        improvements: isGood
+          ? `Con cần chú ý rèn luyện tính cẩn thận trong các bước trình bày chi tiết và chủ động thử sức thêm với các bài tập nâng cao.`
+          : `Con cần dành thêm thời gian ôn tập kiến thức sau mỗi buổi học và duy trì thói quen làm bài tập về nhà đầy đủ trước khi lên lớp.`,
+        suggestion:
+          `• Học sinh: Dành 25-30 phút mỗi ngày xem lại bài giảng trọng tâm và tự giác hoàn thành bài tập đúng hạn.\n• Gia đình: Phụ huynh tiếp tục động viên, nhắc nhở con kiểm tra lại bài vở vào buổi tối để con tự tin và tiến bộ vượt bậc.`,
         recommendations: [
           'Gia đình dành lời khen ngợi để tiếp thêm sự tự tin cho con sau mỗi tuần học.',
           'Nhắc con chuẩn bị sách vở và hoàn thiện bài tập sớm vào buổi tối trước khi đến lớp.',
