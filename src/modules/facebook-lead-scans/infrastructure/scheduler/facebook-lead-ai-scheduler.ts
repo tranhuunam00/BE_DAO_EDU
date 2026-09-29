@@ -9,7 +9,7 @@ export class FacebookLeadAiScheduler {
 
   constructor(
     private readonly processPendingScans: ProcessPendingFacebookLeadScansUseCase,
-  ) {}
+  ) { }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCron() {

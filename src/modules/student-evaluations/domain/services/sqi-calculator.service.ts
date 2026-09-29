@@ -49,13 +49,14 @@ export class SqiCalculator {
         trend: TrendDirection.STABLE,
         hasSessions: false,
         breakdown: {
+          attendance: null,
+          homework: null,
+          behavior: null,
+          participation: null,
           academic: null,
           progress: null,
           competency: null,
-          attendance: null,
-          homework: null,
           attitude: null,
-          behavior: null,
         },
         subjectPerformances: [],
       };
@@ -76,16 +77,16 @@ export class SqiCalculator {
 
     const totalSessions = sessions.length;
 
-    // 1. Chuyên cần (10%) - Chỉ tính Có mặt (1.0) vs Vắng (0.0)
+    // 1. Chuyên cần (30%) - Tính theo tỷ lệ số buổi có mặt / tổng số buổi
     let presentCount = 0;
     for (const s of sessions) {
       if (s.isPresent) {
         presentCount += 1.0;
       }
     }
-    const attendanceScore = totalSessions > 0 ? (presentCount / totalSessions) * 10 : null;
+    const attendanceScore = totalSessions > 0 ? (presentCount / totalSessions) * 30 : null;
 
-    // 2. Bài tập về nhà (10%) - Không có thì để null (hiển thị -)
+    // 2. Làm bài tập (30%) - Chỉ tính trên các buổi có giao bài tập
     const hwSessions = sessions.filter(
       (s) => s.homeworkStatus !== undefined && s.homeworkStatus !== null,
     );
@@ -101,171 +102,102 @@ export class SqiCalculator {
           hwPoints += 0.0;
         }
       }
-      homeworkScore = (hwPoints / hwSessions.length) * 10;
+      homeworkScore = (hwPoints / hwSessions.length) * 30;
     }
 
-    // 3. Thái độ học tập (10%) - Không có thì để null (hiển thị -)
-    const attSessions = sessions.filter(
-      (s) => s.participation !== undefined && s.participation !== null,
-    );
-    let attitudeScore: number | null = null;
-    if (attSessions.length > 0) {
-      let attPoints = 0;
-      for (const s of attSessions) {
-        if (s.participation === ParticipationStatus.ACTIVE) {
-          attPoints += 1.0;
-        } else {
-          attPoints += 0.5;
-        }
-      }
-      attitudeScore = (attPoints / attSessions.length) * 10;
-    }
-
-    // 4. Kỹ năng & Hành vi / Kỷ luật (5%) - Không có thì để null (hiển thị -)
+    // 3. Tuân thủ nội quy (20%) - Chỉ tính trên các buổi có đánh giá nề nếp
     const behaviorSessions = sessions.filter(
       (s) => Array.isArray(s.behaviorTags) && s.behaviorTags.length > 0,
     );
     let behaviorScore: number | null = null;
     if (behaviorSessions.length > 0) {
-      let negativeViolations = 0;
+      let goodSessions = 0;
       for (const s of behaviorSessions) {
-        const tags = s.behaviorTags || [];
-        for (const tag of tags) {
-          if (
-            tag === BehaviorTag.TALKATIVE ||
-            tag === BehaviorTag.PHONE ||
-            tag === BehaviorTag.DISTRACTED
-          ) {
-            negativeViolations += 1;
-          }
+        const tags = (s.behaviorTags || []).map((t) => String(t).toLowerCase());
+        const hasViolation = tags.some((tag) =>
+          ['talkative', 'distracted', 'unfocused', 'phone', 'sleepy', 'disruptive'].includes(tag),
+        );
+        if (!hasViolation) {
+          goodSessions += 1.0;
         }
       }
-      behaviorScore = Math.max(0, 5 - negativeViolations);
+      behaviorScore = (goodSessions / behaviorSessions.length) * 20;
     }
 
-    // 5. Năng lực tiếp thu (15%) - Không có thì để null (hiển thị -)
-    const compSessions = sessions.filter(
-      (s) => s.understanding !== undefined && s.understanding !== null,
+    // 4. Tích cực tham gia (20%) - Chỉ tính trên các buổi có đánh giá tương tác
+    const partSessions = sessions.filter(
+      (s) => s.participation !== undefined && s.participation !== null,
     );
-    let competencyScore: number | null = null;
-    if (compSessions.length > 0) {
-      let understoodCount = 0;
-      for (const s of compSessions) {
-        if (s.understanding === UnderstandingStatus.UNDERSTOOD) {
-          understoodCount += 1.0;
-        } else if ((s.understanding as any) === 'partially') {
-          understoodCount += 0.5;
+    let participationScore: number | null = null;
+    if (partSessions.length > 0) {
+      let partPoints = 0;
+      for (const s of partSessions) {
+        if (s.participation === ParticipationStatus.ACTIVE) {
+          partPoints += 1.0;
+        } else if ((s.participation as string) === 'normal') {
+          partPoints += 0.6;
         } else {
-          understoodCount += 0.0;
+          partPoints += 0.0; // PASSIVE
         }
       }
-      competencyScore = (understoodCount / compSessions.length) * 15;
+      participationScore = (partPoints / partSessions.length) * 20;
     }
 
-    // 6. Kết quả học tập (30%) - Chỉ tính khi có điểm số thực tế
-    const acadSessions = sessions.filter(
-      (s) =>
-        s.score !== null &&
-        s.score !== undefined &&
-        String(s.score).trim() !== '' &&
-        !isNaN(Number(String(s.score).replace(',', '.'))),
-    );
-    let academicScore: number | null = null;
-    if (acadSessions.length > 0) {
-      let totalNorm = 0;
-      for (const s of acadSessions) {
-        const parsed = Number(String(s.score).replace(',', '.'));
-        totalNorm += Math.min(Math.max(parsed / 10, 0), 1);
-      }
-      academicScore = (totalNorm / acadSessions.length) * 30;
-    }
-
-    // 7. Mức độ tiến bộ (20%) - So sánh với kỳ trước nếu có
-    let progressScore: number | null = null;
-    let delta = 0;
-    let trend = TrendDirection.STABLE;
-
-    if (previousWeekSqi !== null && previousWeekSqi !== undefined) {
-      let currentBaseSum = 0;
-      let currentBaseWeight = 0;
-      if (attendanceScore !== null) { currentBaseSum += attendanceScore; currentBaseWeight += 10; }
-      if (homeworkScore !== null) { currentBaseSum += homeworkScore; currentBaseWeight += 10; }
-      if (attitudeScore !== null) { currentBaseSum += attitudeScore; currentBaseWeight += 10; }
-      if (behaviorScore !== null) { currentBaseSum += behaviorScore; currentBaseWeight += 5; }
-      if (competencyScore !== null) { currentBaseSum += competencyScore; currentBaseWeight += 15; }
-      if (academicScore !== null) { currentBaseSum += academicScore; currentBaseWeight += 30; }
-
-      if (currentBaseWeight > 0) {
-        const normalizedCurrent = (currentBaseSum / currentBaseWeight) * 100;
-        delta = Math.round((normalizedCurrent - previousWeekSqi) * 10) / 10;
-        if (delta >= 2.5) {
-          progressScore = 20;
-          trend = TrendDirection.UP;
-        } else if (delta >= -2.5) {
-          progressScore = normalizedCurrent >= 90 ? 20 : 16;
-          trend = TrendDirection.STABLE;
-        } else if (delta >= -7.0) {
-          progressScore = 12;
-          trend = TrendDirection.DOWN;
-        } else {
-          progressScore = 8;
-          trend = TrendDirection.DOWN;
-        }
-      }
-    } else {
-      trend = TrendDirection.NEW;
-    }
-
-    // 8. TÍNH ĐIỂM SQI TỔNG HỢP: CHỈ TÍNH TRÊN NHỮNG TIÊU CHÍ ĐÃ CÓ DỮ LIỆU
+    // 5. TÍNH ĐIỂM SQI TỔNG HỢP: Chuẩn hóa trên tổng trọng số của các tiêu chí đã có dữ liệu
     let totalWeightedPoints = 0;
     let totalAvailableWeight = 0;
 
     if (attendanceScore !== null) {
       totalWeightedPoints += attendanceScore;
-      totalAvailableWeight += 10;
+      totalAvailableWeight += 30;
     }
     if (homeworkScore !== null) {
       totalWeightedPoints += homeworkScore;
-      totalAvailableWeight += 10;
-    }
-    if (attitudeScore !== null) {
-      totalWeightedPoints += attitudeScore;
-      totalAvailableWeight += 10;
+      totalAvailableWeight += 30;
     }
     if (behaviorScore !== null) {
       totalWeightedPoints += behaviorScore;
-      totalAvailableWeight += 5;
+      totalAvailableWeight += 20;
     }
-    if (competencyScore !== null) {
-      totalWeightedPoints += competencyScore;
-      totalAvailableWeight += 15;
-    }
-    if (academicScore !== null) {
-      totalWeightedPoints += academicScore;
-      totalAvailableWeight += 30;
-    }
-    if (progressScore !== null) {
-      totalWeightedPoints += progressScore;
+    if (participationScore !== null) {
+      totalWeightedPoints += participationScore;
       totalAvailableWeight += 20;
     }
 
-    const totalSqi = totalAvailableWeight > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round((totalWeightedPoints / totalAvailableWeight) * 100 * 10) / 10,
-          ),
-        )
-      : 0;
+    const totalSqi =
+      totalAvailableWeight > 0
+        ? Math.min(
+            100,
+            Math.max(
+              0,
+              Math.round((totalWeightedPoints / totalAvailableWeight) * 100 * 10) / 10,
+            ),
+          )
+        : 0;
 
-    // Tính điểm môn học tuần trước để so sánh chính xác
+    // Tính chênh lệch và xu hướng so với tuần trước
+    let delta = 0;
+    let trend = TrendDirection.STABLE;
+
+    if (previousWeekSqi !== null && previousWeekSqi !== undefined) {
+      delta = Math.round((totalSqi - previousWeekSqi) * 10) / 10;
+      if (delta >= 2.5) {
+        trend = TrendDirection.UP;
+      } else if (delta <= -2.5) {
+        trend = TrendDirection.DOWN;
+      } else {
+        trend = TrendDirection.STABLE;
+      }
+    } else {
+      trend = TrendDirection.NEW;
+    }
+
+    // Tính điểm theo từng môn tuần trước để so sánh xu hướng
     const prevSubjectMap = new Map<string, { totalScore: number; count: number }>();
     if (previousSessions && previousSessions.length > 0) {
       for (const ps of previousSessions) {
         const name = ps.subjectName || 'Chung';
         const ex = prevSubjectMap.get(name) || { totalScore: 0, count: 0 };
-        // Chỉ tính khi có điểm thực tế, KHÔNG bịa mặc định
         if (ps.score !== null && ps.score !== undefined && ps.score !== '') {
           const p = Number(String(ps.score).replace(',', '.'));
           if (!isNaN(p)) {
@@ -277,12 +209,11 @@ export class SqiCalculator {
       }
     }
 
-    // Tính điểm theo từng môn tuần này
+    // Tính điểm môn học tuần này
     const subjectMap = new Map<string, { totalScore: number; count: number; hasRealScore: boolean }>();
     for (const s of sessions) {
       const name = s.subjectName || 'Chung';
       const existing = subjectMap.get(name) || { totalScore: 0, count: 0, hasRealScore: false };
-      // Chỉ tính khi có điểm thực tế, KHÔNG bịa mặc định
       if (s.score !== null && s.score !== undefined && s.score !== '') {
         const parsed = Number(String(s.score).replace(',', '.'));
         if (!isNaN(parsed)) {
@@ -299,21 +230,14 @@ export class SqiCalculator {
       const avg = Math.round((val.totalScore / val.count) * 10) / 10;
       let subTrend = TrendDirection.STABLE;
       let scoreDelta: number | undefined = undefined;
-      let prevAvg: number | null = null;
 
-      const prevSub = prevSubjectMap.get(name);
-      if (prevSub && prevSub.count > 0) {
-        prevAvg = Math.round((prevSub.totalScore / prevSub.count) * 10) / 10;
+      const prev = prevSubjectMap.get(name);
+      const prevAvg = prev && prev.count > 0 ? Math.round((prev.totalScore / prev.count) * 10) / 10 : null;
+
+      if (prevAvg !== null) {
         scoreDelta = Math.round((avg - prevAvg) * 10) / 10;
-        if (scoreDelta > 0.1) {
-          subTrend = TrendDirection.UP;
-        } else if (scoreDelta < -0.1) {
-          subTrend = TrendDirection.DOWN;
-        } else {
-          subTrend = TrendDirection.STABLE;
-        }
-      } else {
-        subTrend = TrendDirection.NEW;
+        if (scoreDelta >= 0.5) subTrend = TrendDirection.UP;
+        else if (scoreDelta <= -0.5) subTrend = TrendDirection.DOWN;
       }
 
       subjectPerformances.push({
@@ -327,13 +251,14 @@ export class SqiCalculator {
     });
 
     const breakdown: SqiBreakdown = {
-      academic: academicScore !== null ? Math.round(academicScore * 10) / 10 : null,
-      progress: progressScore !== null ? Math.round(progressScore * 10) / 10 : null,
-      competency: competencyScore !== null ? Math.round(competencyScore * 10) / 10 : null,
       attendance: attendanceScore !== null ? Math.round(attendanceScore * 10) / 10 : null,
       homework: homeworkScore !== null ? Math.round(homeworkScore * 10) / 10 : null,
-      attitude: attitudeScore !== null ? Math.round(attitudeScore * 10) / 10 : null,
       behavior: behaviorScore !== null ? Math.round(behaviorScore * 10) / 10 : null,
+      participation: participationScore !== null ? Math.round(participationScore * 10) / 10 : null,
+      attitude: participationScore !== null ? Math.round(participationScore * 10) / 10 : null,
+      competency: null,
+      academic: null,
+      progress: null,
     };
 
     let level = SqiLevel.LEVEL_1_WEAK;

@@ -133,7 +133,7 @@ describe('SqiCalculator Edge Cases & Boundary Values Spec', () => {
         homeworkStatus: HomeworkStatus.COMPLETED,
         participation: ParticipationStatus.ACTIVE,
         understanding: UnderstandingStatus.UNDERSTOOD,
-        behaviorTags: [BehaviorTag.ATTENTIVE, BehaviorTag.LEADERSHIP],
+        behaviorTags: [BehaviorTag.ATTENTIVE],
         score: '10.0',
       },
     ];
@@ -144,12 +144,9 @@ describe('SqiCalculator Edge Cases & Boundary Values Spec', () => {
     expect(result.sqiScore).toBe(100);
     expect(result.level).toBe(SqiLevel.LEVEL_5_EXCELLENT);
     expect(result.trend).toBe(TrendDirection.UP);
-    expect(result.breakdown.academic).toBe(30);
-    expect(result.breakdown.attendance).toBe(10);
-    expect(result.breakdown.homework).toBe(10);
-    expect(result.breakdown.attitude).toBe(10);
-    expect(result.breakdown.competency).toBe(15);
-    expect(result.breakdown.behavior).toBe(5);
-    expect(result.breakdown.progress).toBe(20);
+    expect(result.breakdown.attendance).toBe(30);
+    expect(result.breakdown.homework).toBe(30);
+    expect(result.breakdown.behavior).toBe(20);
+    expect(result.breakdown.participation).toBe(20);
   });
 });
