@@ -134,7 +134,7 @@ describe('ProcessRawLogUseCase', () => {
     // Assert
     expect(studentRepository.createQueryBuilder).toHaveBeenCalledWith('student');
     expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-      "LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code",
+      "LTRIM(REGEXP_REPLACE(student.student_id, '[^0-9]', '', 'g'), '0') = :code",
       { code: '2026007' }
     );
     expect(studentAttendanceRepository.save).toHaveBeenCalled();
@@ -152,7 +152,7 @@ describe('ProcessRawLogUseCase', () => {
     // Assert
     expect(studentRepository.createQueryBuilder).toHaveBeenCalledWith('student');
     expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-      "LTRIM(REGEXP_REPLACE(student.studentId, '[^0-9]', '', 'g'), '0') = :code",
+      "LTRIM(REGEXP_REPLACE(student.student_id, '[^0-9]', '', 'g'), '0') = :code",
       { code: '2026007' }
     );
     expect(mockInsertQueryBuilder.values).toHaveBeenCalledWith(

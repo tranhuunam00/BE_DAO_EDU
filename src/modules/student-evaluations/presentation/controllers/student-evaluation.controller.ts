@@ -270,17 +270,24 @@ export class StudentEvaluationController {
       }
     }
 
+    const isAbsent = it.isPresent === false ||
+      (it.attendanceStatus && ['absent_excused', 'absent_unexcused', 'no'].includes(it.attendanceStatus.toLowerCase())) ||
+      it.criteria?.attendance === 'no';
+
     const rawName = (it.studentName || '').trim();
     const studentName = rawName && rawName !== '-' ? rawName : 'Học sinh';
 
     return {
       studentId: it.studentId,
       studentName,
-      homeworkStatus: hw,
-      participation: part,
-      understanding: under,
-      behaviorTags: tags,
-      score: it.score,
+      homeworkStatus: isAbsent ? undefined : hw,
+      participation: isAbsent ? undefined : part,
+      understanding: isAbsent ? undefined : under,
+      behaviorTags: isAbsent ? [] : tags,
+      score: isAbsent ? null : it.score,
+      isPresent: !isAbsent,
+      attendanceStatus: it.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'on_time'),
+      date: it.date,
       teacherId,
     };
   }

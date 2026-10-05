@@ -7,6 +7,7 @@ describe('ReportController', () => {
     const attendanceReport = { execute: jest.fn() };
     const assignmentReport = { execute: jest.fn() };
     const studentsReport = { execute: jest.fn() };
+    const topStudentsAttendance = { execute: jest.fn() };
     const reportsQuery = {
       getClassStudentsStats: jest.fn(),
       getSaleOrdersReport: jest.fn(),
@@ -22,6 +23,7 @@ describe('ReportController', () => {
         attendanceReport as any,
         assignmentReport as any,
         studentsReport as any,
+        topStudentsAttendance as any,
         reportsQuery as any,
       ),
       revenueReport,

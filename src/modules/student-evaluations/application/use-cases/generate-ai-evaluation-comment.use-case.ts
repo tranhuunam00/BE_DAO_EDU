@@ -61,13 +61,19 @@ export class GenerateAiEvaluationCommentUseCase {
       }
     }
 
+    const isAbsent = input.isPresent === false ||
+      (input.attendanceStatus && ['absent_excused', 'absent_unexcused', 'no'].includes(input.attendanceStatus.toLowerCase()));
+
     const cleanCriteria: AiEvaluationCriteria = {
       studentName: sanitizedName,
-      homeworkStatus: input.homeworkStatus,
-      participation: input.participation,
-      understanding: input.understanding,
-      behaviorTags: input.behaviorTags,
-      score: input.score,
+      homeworkStatus: isAbsent ? undefined : input.homeworkStatus,
+      participation: isAbsent ? undefined : input.participation,
+      understanding: isAbsent ? undefined : input.understanding,
+      behaviorTags: isAbsent ? [] : input.behaviorTags,
+      score: isAbsent ? null : input.score,
+      isPresent: !isAbsent,
+      attendanceStatus: input.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'on_time'),
+      date: input.date,
     };
 
     // 3. Kiểm tra Cache để tiết kiệm chi phí API
@@ -123,12 +129,17 @@ export class GenerateAiEvaluationCommentUseCase {
 
   private generateCacheKey(idOrName: string, c: AiEvaluationCriteria): string {
     const tags = (c.behaviorTags || []).slice().sort().join(',');
-    return `ai_eval_${idOrName}_${c.homeworkStatus || ''}_${c.participation || ''}_${c.understanding || ''}_${tags}_${c.score || ''}`;
+    return `ai_eval_${idOrName}_${c.isPresent ? 'pres' : 'abs'}_${c.attendanceStatus || ''}_${c.homeworkStatus || ''}_${c.participation || ''}_${c.understanding || ''}_${tags}_${c.score || ''}`;
   }
 
   private buildFallbackComment(c: AiEvaluationCriteria): string {
-    const parts: string[] = [];
     const name = c.studentName || 'Học sinh';
+
+    if (c.isPresent === false || (c.attendanceStatus && ['absent_excused', 'absent_unexcused', 'no'].includes(c.attendanceStatus.toLowerCase()))) {
+      return `Em ${name} vắng mặt trong buổi học. Con cần xem lại bài giảng và hoàn thành bài tập bù trước buổi học sau.`;
+    }
+
+    const parts: string[] = [];
 
     if (c.understanding === UnderstandingStatus.UNDERSTOOD) {
       parts.push(`Em ${name} tiếp thu bài tốt trong buổi học`);

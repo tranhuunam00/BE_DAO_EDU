@@ -16,7 +16,9 @@ describe('GetAttendanceReportUseCase', () => {
       getAttendanceSummary: jest.fn(),
       getAttendanceByClass: jest.fn(),
       getAttendanceByMonth: jest.fn(),
-      getTopAbsentStudents: jest.fn(),
+      getTopAbsentStudents: jest.fn().mockResolvedValue([]),
+      getTopPresentStudents: jest.fn().mockResolvedValue([]),
+      getTopAbsentStudentsRanked: jest.fn().mockResolvedValue([]),
       getAssignmentSummary: jest.fn(),
       getAssignmentByClass: jest.fn(),
     } as any;

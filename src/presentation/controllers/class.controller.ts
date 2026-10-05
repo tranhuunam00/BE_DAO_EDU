@@ -1631,7 +1631,7 @@ export class ClassController {
             classStudents
               .filter((cs) => {
                 if (session.date < cs.joinedDate) return false;
-                if (cs.status === 'Active') {
+                if (!cs.status || cs.status === 'Active') {
                   return !cs.droppedDate || session.date < cs.droppedDate;
                 }
                 if (cs.status === 'Dropped') {

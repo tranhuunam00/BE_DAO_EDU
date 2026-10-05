@@ -91,7 +91,7 @@ describe('TimekeepingDeviceController', () => {
 
       expect(logRepository.createQueryBuilder).toHaveBeenCalledWith('log');
       expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('log.student', 'student');
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('log.eventTime', 'DESC');
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('log.event_time', 'DESC');
       expect(mockQueryBuilder.skip).toHaveBeenCalledWith(0);
       expect(mockQueryBuilder.take).toHaveBeenCalledWith(20);
     });
@@ -100,7 +100,7 @@ describe('TimekeepingDeviceController', () => {
       await controller.listLogs(1, 20, 'Vy');
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('LOWER(log.employeeNo) LIKE :search'),
+        expect.stringContaining('LOWER(log.employee_no) LIKE :search'),
         { search: '%vy%' }
       );
     });
@@ -109,11 +109,11 @@ describe('TimekeepingDeviceController', () => {
       await controller.listLogs(1, 20, undefined, undefined, '2026-08-10', '2026-08-11');
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'log.eventTime >= :start',
+        'log.event_time >= :start',
         { start: new Date('2026-08-10T00:00:00+07:00') }
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'log.eventTime <= :end',
+        'log.event_time <= :end',
         { end: new Date('2026-08-11T23:59:59+07:00') }
       );
     });
@@ -122,7 +122,7 @@ describe('TimekeepingDeviceController', () => {
       await controller.listLogs(1, 20, undefined, '2026-08-11');
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'log.eventTime BETWEEN :start AND :end',
+        'log.event_time BETWEEN :start AND :end',
         { start: new Date('2026-08-11T00:00:00+07:00'), end: new Date('2026-08-11T23:59:59+07:00') }
       );
     });
@@ -131,7 +131,7 @@ describe('TimekeepingDeviceController', () => {
       await controller.listLogs(1, 20, undefined, undefined, undefined, undefined, 'fingerprint');
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'log.verifyMethod = :verifyMethod',
+        'log.verify_method = :verifyMethod',
         { verifyMethod: 'fingerprint' }
       );
     });
@@ -139,13 +139,13 @@ describe('TimekeepingDeviceController', () => {
     it('nên áp dụng lọc theo trạng thái khớp học sinh là matched', async () => {
       await controller.listLogs(1, 20, undefined, undefined, undefined, undefined, undefined, 'matched');
 
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('log.studentId IS NOT NULL');
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('log.student_id IS NOT NULL');
     });
 
     it('nên áp dụng lọc theo trạng thái khớp học sinh là unmatched', async () => {
       await controller.listLogs(1, 20, undefined, undefined, undefined, undefined, undefined, 'unmatched');
 
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('log.studentId IS NULL');
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('log.student_id IS NULL');
     });
   });
 });

@@ -128,16 +128,16 @@ export class GetMonthlyStudentReportUseCase {
     year: number,
   ): { overview: string; strengths: string; improvements: string; recommendations: string[] } {
     const total = sessions.length;
-    const hwSessions = sessions.filter((s) => Boolean(s.homeworkStatus));
-    const completedHw = hwSessions.filter((s) => s.homeworkStatus === 'completed').length;
+    const hwSessions = sessions.filter((s) => Boolean(s.homeworkStatus) && s.isPresent);
+    const completedHw = hwSessions.filter((s) => s.homeworkStatus === 'completed' || s.homeworkStatus === 'yes' || s.homeworkStatus === 'done' || s.homeworkStatus === 'excellent').length;
 
-    const underSessions = sessions.filter((s) => Boolean(s.understanding));
-    const understoodCount = underSessions.filter((s) => s.understanding === 'understood').length;
+    const underSessions = sessions.filter((s) => Boolean(s.understanding) && s.isPresent);
+    const understoodCount = underSessions.filter((s) => s.understanding === 'understood' || s.understanding === 'quick').length;
 
-    const partSessions = sessions.filter((s) => Boolean(s.participation));
-    const activeCount = partSessions.filter((s) => s.participation === 'active').length;
+    const partSessions = sessions.filter((s) => Boolean(s.participation) && s.isPresent);
+    const activeCount = partSessions.filter((s) => ['active', 'yes', 'active_raise_hand', 'proactive_ask', 'answer_well'].includes(String(s.participation).toLowerCase())).length;
 
-    const absentCount = sessions.filter((s) => !s.isPresent).length;
+    const absentCount = sessions.filter((s) => !s.isPresent || ['no', 'absent_unexcused', 'absent_excused'].includes((s.attendanceStatus || '').toLowerCase())).length;
 
     // Overview
     let overview = '';

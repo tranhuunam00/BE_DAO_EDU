@@ -108,14 +108,14 @@ describe('Attendance Bill Edge Cases & Impact Scenarios (TDD Spec)', () => {
   describe('Edge Case 2: Sửa lịch học tương lai (scope: all-future) khi một số ca đã chốt hóa đơn', () => {
     it('cập nhật các ca chưa chốt tiền và giữ nguyên vẹn các ca đã có học sinh đóng học phí', async () => {
       const qb = createMockQueryBuilder([
-        { id: 'session-future-unbilled-1', date: '2026-09-15', startTime: '08:00', endTime: '10:00', attendanceLocked: false },
-        { id: 'session-future-unbilled-2', date: '2026-09-22', startTime: '08:00', endTime: '10:00', attendanceLocked: false },
+        { id: 'session-future-unbilled-1', date: '2099-09-15', startTime: '08:00', endTime: '10:00', attendanceLocked: false },
+        { id: 'session-future-unbilled-2', date: '2099-09-22', startTime: '08:00', endTime: '10:00', attendanceLocked: false },
       ]);
       const sessionRepo = {
         findOne: jest.fn().mockResolvedValue({
           id: 'session-anchor',
           classId: 'class-1',
-          date: '2026-09-10',
+          date: '2099-09-10',
           startTime: '08:00',
           endTime: '10:00',
           attendanceLocked: false,
@@ -123,7 +123,7 @@ describe('Attendance Bill Edge Cases & Impact Scenarios (TDD Spec)', () => {
         findOneOrFail: jest.fn().mockResolvedValue({
           id: 'session-anchor',
           classId: 'class-1',
-          date: '2026-09-10',
+          date: '2099-09-10',
           startTime: '08:00',
           endTime: '10:00',
           attendanceLocked: false,

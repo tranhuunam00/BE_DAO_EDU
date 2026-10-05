@@ -69,6 +69,15 @@ export class GenerateCommentDto {
   @IsString()
   notes?: string;
 
+  @ApiPropertyOptional({ description: 'Trạng thái điểm danh có mặt/vắng' })
+  @IsOptional()
+  isPresent?: boolean;
+
+  @ApiPropertyOptional({ description: 'Trạng thái chuyên cần' })
+  @IsOptional()
+  @IsString()
+  attendanceStatus?: string;
+
   @ApiPropertyOptional({ description: 'Tiêu chí đánh giá 1-chạm' })
   @IsOptional()
   @Allow()

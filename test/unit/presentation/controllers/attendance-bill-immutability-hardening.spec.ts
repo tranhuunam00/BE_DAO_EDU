@@ -221,9 +221,10 @@ describe('Attendance Bill Immutability Hardening (TDD Spec)', () => {
         createQueryBuilder: jest.fn().mockReturnValue(qb),
         count: jest.fn().mockResolvedValue(1),
       };
+      const classId = 'a0000000-0000-0000-0000-000000000001';
       const classRepo = {
-        findOne: jest.fn().mockResolvedValue({ id: 'c1', mainTeacherId: 'old-teacher', branchId: 'b1', status: 'Active' }),
-        findOneOrFail: jest.fn().mockResolvedValue({ id: 'c1', mainTeacherId: 'old-teacher', branchId: 'b1', status: 'Active' }),
+        findOne: jest.fn().mockResolvedValue({ id: classId, mainTeacherId: 'old-teacher', branchId: 'b1', status: 'Active' }),
+        findOneOrFail: jest.fn().mockResolvedValue({ id: classId, mainTeacherId: 'old-teacher', branchId: 'b1', status: 'Active' }),
         save: jest.fn().mockImplementation((val) => Promise.resolve(val)),
       };
       const scheduleRepo = {
@@ -252,7 +253,7 @@ describe('Attendance Bill Immutability Hardening (TDD Spec)', () => {
         {} as any,
       );
 
-      await controller.update('c1', { mainTeacherId: 'new-teacher' } as any);
+      await controller.update(classId, { mainTeacherId: 'new-teacher' } as any);
 
       expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('wage_id IS NULL'));
     });

@@ -12,6 +12,9 @@ export interface AiEvaluationCriteria {
   understanding?: UnderstandingStatus;
   behaviorTags?: BehaviorTag[];
   score?: string | null;
+  isPresent?: boolean;
+  attendanceStatus?: string;
+  date?: string;
 }
 
 export interface IAiEvaluationGeneratorPort {

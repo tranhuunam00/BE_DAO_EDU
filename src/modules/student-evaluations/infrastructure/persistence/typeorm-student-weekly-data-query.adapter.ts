@@ -127,20 +127,20 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       }
 
       // Không có evaluation record → undefined, KHÔNG được tự gán mặc định
-      const homeworkStatus: HomeworkStatus | undefined = ev?.homeworkStatus
+      let homeworkStatus: HomeworkStatus | undefined = ev?.homeworkStatus
         ? (ev.homeworkStatus as HomeworkStatus)
         : undefined;
 
-      const participation: ParticipationStatus | undefined = ev?.participation
+      let participation: ParticipationStatus | undefined = ev?.participation
         ? (ev.participation as ParticipationStatus)
         : undefined;
 
-      const understanding: UnderstandingStatus | undefined = ev?.understanding
+      let understanding: UnderstandingStatus | undefined = ev?.understanding
         ? (ev.understanding as UnderstandingStatus)
         : undefined;
 
-      const behaviorTags: BehaviorTag[] = (ev?.behaviorTags || []) as BehaviorTag[];
-      const score = ev?.score || att?.evaluationScore || null;
+      let behaviorTags: BehaviorTag[] = (ev?.behaviorTags || []) as BehaviorTag[];
+      let score = ev?.score || att?.evaluationScore || null;
       const teacherComment = ev?.comment || att?.evaluationComment || null;
 
       const attendanceStatus =
@@ -148,6 +148,18 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
         (att as any)?.attendanceStatus ||
         (att?.reason && ['on_time', 'makeup', 'late', 'early_leave', 'late_much', 'absent_excused', 'absent_unexcused'].includes(att.reason) ? att.reason : undefined) ||
         (isPresent ? (isLate ? 'late' : 'on_time') : 'absent_unexcused');
+
+      // NGUYÊN TẮC BẢO TOÀN DỮ LIỆU SƯ PHẠM:
+      // Học sinh nghỉ học (vắng mặt) thì không thể có phát biểu, nề nếp hay tiếp thu bài trên lớp.
+      // Buổi nghỉ cũng không ghi nhận làm BTVN tại lớp trừ khi có bài nộp bù rõ ràng.
+      const isAbsent = !isPresent || ['no', 'absent_unexcused', 'absent_excused'].includes(attendanceStatus.toLowerCase());
+      if (isAbsent) {
+        participation = undefined;
+        behaviorTags = [];
+        understanding = undefined;
+        score = null;
+        homeworkStatus = undefined;
+      }
 
       return {
         classSessionId: s.id,

@@ -62,6 +62,20 @@ export class GeminiAiEvaluationGeneratorAdapter implements IAiEvaluationGenerato
   }
 
   private buildPrompt(c: AiEvaluationCriteria): string {
+    const isAbsent = c.isPresent === false ||
+      (c.attendanceStatus && ['absent_excused', 'absent_unexcused', 'no'].includes(c.attendanceStatus.toLowerCase()));
+
+    if (isAbsent) {
+      return `Bạn là giáo viên sư phạm tận tâm tại trung tâm DAO EDU. Hãy viết một đoạn nhận xét ngắn gọn (1-2 câu, tối đa 50 từ) gửi phụ huynh học sinh sau buổi học:
+- Tên học sinh: ${c.studentName}
+- Tình trạng: Học sinh vắng mặt (nghỉ học) trong buổi học này${c.date ? ` (ngày ${c.date})` : ''}.
+
+QUY TẮC BẮT BUỘC:
+1. Thông báo rõ việc học sinh vắng mặt ở buổi học này, nhắc nhở gia đình động viên con xem lại bài giảng và hoàn thành bài tập bù trước buổi học sau.
+2. NGUYÊN TẮC CHỐNG ẢO GIÁC: Tuyệt đối KHÔNG nhận xét về thái độ tương tác, khả năng phát biểu hay mức độ tiếp thu bài trên lớp của học sinh vì học sinh không có mặt tại lớp.
+3. Chỉ trả về duy nhất nội dung câu nhận xét, không thêm lời chào, không tiêu đề, không ngoặc kép.`;
+    }
+
     const tagMap: Record<string, string> = {
       [BehaviorTag.ATTENTIVE]: 'tập trung nghe giảng',
       [BehaviorTag.TALKATIVE]: 'nói chuyện riêng trong giờ',
