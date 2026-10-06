@@ -451,19 +451,26 @@ export class DashboardController {
           // - Diễn ra rồi có tham gia: color: Green (xanh lá cây)
           // - Diễn ra rồi không tham gia: color: Red (đỏ)
           // - Chưa điểm danh (đối với buổi đã hoặc đang diễn ra nhưng chưa có bản ghi điểm danh): color: Gray (xám)
-          let attendanceColor = 'blue'; // blue (Scheduled)
-          let attendanceText = 'Chưa diễn ra';
+          // - Nghỉ học (đối với buổi bị huỷ): color: Gray (xám)
+          const isCancelled = session.status === SessionStatus.CANCELLED || (session.status as string) === 'Cancelled';
+          const isCompleted = session.status === SessionStatus.COMPLETED || (session.status as string) === 'Completed';
+          const sessionDateStr = typeof session.date === 'string' ? session.date.split('T')[0] : ((session.date as any) instanceof Date ? (session.date as any).toISOString().split('T')[0] : String(session.date));
+          const isPast = sessionDateStr < new Date().toISOString().split('T')[0];
           const hasAttendanceRecord = !!attendance;
 
-          if (hasAttendanceRecord) {
-            if (attendance.isPresent) {
-              attendanceColor = 'green';
-              attendanceText = 'Có tham gia';
-            } else {
-              attendanceColor = 'red';
-              attendanceText = 'Vắng mặt';
-            }
-          } else if (session.status === SessionStatus.COMPLETED || session.status === SessionStatus.IN_PROGRESS) {
+          let attendanceColor = 'blue';
+          let attendanceText = 'Chưa diễn ra';
+
+          if (isCancelled) {
+            attendanceColor = 'gray';
+            attendanceText = 'Nghỉ học';
+          } else if (attendance?.isPresent) {
+            attendanceColor = 'green';
+            attendanceText = 'Có tham gia';
+          } else if (isCompleted || (isPast && (attendance?.note || attendance?.reason || attendance?.attendanceType === 'manual'))) {
+            attendanceColor = 'red';
+            attendanceText = 'Vắng mặt';
+          } else if (isCompleted || session.status === SessionStatus.IN_PROGRESS || isPast) {
             attendanceColor = 'gray';
             attendanceText = 'Chưa điểm danh';
           }
@@ -472,6 +479,7 @@ export class DashboardController {
             id: session.id,
             className: session.classEntity?.className || 'Lớp học',
             classCode: session.classEntity?.classCode || '',
+            classStatus: session.classEntity?.status || 'Active',
             date: session.date,
             startTime: session.startTime,
             endTime: session.endTime,
@@ -489,14 +497,43 @@ export class DashboardController {
       );
     }
 
-    // 5. Calculate attendance statistics — scoped to current month only
+    // 5. Calculate attendance statistics — calculated up to current session / date
     const currentDate = new Date();
+    const todayDateStr = currentDate.toISOString().split('T')[0];
+    const currentTimeStr = `${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`;
     const currentMonthYear = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+
+    // Helper: format date to YYYY-MM-DD
+    const formatDate = (dateVal: any): string => {
+      if (!dateVal) return '';
+      if (typeof dateVal === 'string') return dateVal.split('T')[0];
+      if (dateVal instanceof Date) {
+        const y = dateVal.getFullYear();
+        const m = String(dateVal.getMonth() + 1).padStart(2, '0');
+        const d = String(dateVal.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      return String(dateVal).split('T')[0];
+    };
 
     // Helper: get MM/YYYY string from session date string "YYYY-MM-DD"
     const getMonthYear = (dateStr: string): string | null => {
       const parts = dateStr.split('-');
       return parts.length >= 2 ? `${parts[1]}/${parts[0]}` : null;
+    };
+
+    // Helper: check if session has occurred up to the current session / date
+    const hasSessionOccurred = (s: any): boolean => {
+      if (s.status === SessionStatus.CANCELLED || s.status === 'Cancelled') return false;
+      if (s.status === SessionStatus.COMPLETED || s.status === 'Completed') return true;
+      const sDateStr = formatDate(s.date);
+      if (sDateStr < todayDateStr) return true;
+      if (sDateStr === todayDateStr) {
+        if (s.isPresent) return true;
+        const endTime = s.endTime || s.startTime;
+        if (endTime && String(endTime).slice(0, 5) <= currentTimeStr) return true;
+      }
+      return false;
     };
 
     // Build set of 3 allowed months: current, prev, prev-prev
@@ -506,19 +543,20 @@ export class DashboardController {
       allowedMonths.add(`${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
     }
 
-    // Overall stats = current month sessions only
-    const currentMonthSessions = sessionsList.filter((s) => getMonthYear(s.date) === currentMonthYear);
-    const totalSessionsCompleted = currentMonthSessions.length;
-    const presentCount = currentMonthSessions.filter((s) => s.hasAttendanceRecord && s.isPresent).length;
-    const absentCount = currentMonthSessions.filter((s) => s.hasAttendanceRecord && !s.isPresent).length;
-    const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 0;
+    // Sessions that have occurred up to current date / session
+    const occurredSessions = sessionsList.filter((s) => hasSessionOccurred(s));
+    const totalSessionsCompleted = occurredSessions.length;
+    const presentCount = occurredSessions.filter((s) => s.hasAttendanceRecord && s.isPresent).length;
+    const absentCount = occurredSessions.filter((s) => s.hasAttendanceRecord && !s.isPresent).length;
+    const presentRate = totalSessionsCompleted > 0 ? Number(((presentCount / totalSessionsCompleted) * 100).toFixed(1)) : 100;
 
-    // Monthly attendance breakdown — only show current month + 2 previous months
+    // Monthly attendance breakdown — only show current month + 2 previous months (occurred sessions only)
     const monthlyAttendance: Record<string, { completed: number; present: number; absent: number }> = {
       [currentMonthYear]: { completed: 0, present: 0, absent: 0 }
     };
     for (const s of sessionsList) {
-      const monthYear = getMonthYear(s.date);
+      if (!hasSessionOccurred(s)) continue; // Only count sessions that have occurred up to now
+      const monthYear = getMonthYear(formatDate(s.date));
       if (!monthYear || !allowedMonths.has(monthYear)) continue; // skip months outside the 3-month window
       if (!monthlyAttendance[monthYear]) {
         monthlyAttendance[monthYear] = { completed: 0, present: 0, absent: 0 };
@@ -534,7 +572,7 @@ export class DashboardController {
       .map(([month, stats]) => ({
         month,
         ...stats,
-        rate: stats.completed > 0 ? Number(((stats.present / stats.completed) * 100).toFixed(1)) : 0,
+        rate: stats.completed > 0 ? Number(((stats.present / stats.completed) * 100).toFixed(1)) : 100,
       }))
       .sort((a, b) => {
         const [mA, yA] = a.month.split('/');
