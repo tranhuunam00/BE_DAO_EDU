@@ -160,6 +160,7 @@ export class ClassController {
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách Lớp học' })
   async findAll(
+    @Request() req?: any,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('search') search?: string,
@@ -167,12 +168,49 @@ export class ClassController {
     @Query('centerId') centerId?: string,
     @Query('courseId') courseId?: string,
   ) {
+    let teacherClassIds: string[] | null = null;
+    if (req?.user?.role?.toUpperCase() === 'TEACHER') {
+      const teacher = await this.teacherRepo.findOne({
+        where: { userId: req.user.sub },
+      });
+      if (!teacher) {
+        return { classes: [], total: 0, page: Number(page), limit: Number(limit) };
+      }
+
+      const sessionClasses = await this.sessionRepo
+        .createQueryBuilder('session')
+        .select('DISTINCT session.class_id', 'classId')
+        .where('session.teacher_id = :teacherId OR session.assistant_id = :teacherId', { teacherId: teacher.id })
+        .getRawMany<{ classId: string }>();
+
+      const classIdSet = new Set(sessionClasses.map((row: any) => row.classId || row.class_id).filter(Boolean));
+
+      const teacherClasses = await this.classRepo.find({
+        where: [
+          { mainTeacherId: teacher.id },
+          { assistantId: teacher.id },
+        ],
+        select: { id: true },
+      });
+      teacherClasses.forEach(c => classIdSet.add(c.id));
+
+      if (classIdSet.size === 0) {
+        return { classes: [], total: 0, page: Number(page), limit: Number(limit) };
+      }
+
+      teacherClassIds = Array.from(classIdSet);
+    }
+
     const qb = this.classRepo.createQueryBuilder('c')
       .leftJoinAndSelect('c.course', 'course')
       .leftJoinAndSelect('c.courseLevel', 'level')
       .leftJoinAndSelect('c.mainTeacher', 'teacher')
       .leftJoinAndSelect('c.assistant', 'assistant')
       .leftJoinAndSelect('c.center', 'center');
+
+    if (teacherClassIds) {
+      qb.andWhere('c.id IN (:...teacherClassIds)', { teacherClassIds });
+    }
 
     if (search) {
       qb.andWhere('(c.class_name ILIKE :s OR c.class_code ILIKE :s)', { s: `%${search}%` });
@@ -226,18 +264,42 @@ export class ClassController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Lấy chi tiết Lớp học' })
-  async findOne(@Param('id') id: string) {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${id}`);
+  async findOne(@Request() req: any, @Param('id') id?: string) {
+    const classId = typeof req === 'string' ? req : id!;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId)) {
+      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${classId}`);
     }
 
     const classEntity = await this.classRepo.findOne({
-      where: { id },
+      where: { id: classId },
       relations: { course: true, courseLevel: true, mainTeacher: true, assistant: true, center: true },
     });
 
     if (!classEntity) {
-      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${id}`);
+      throw new NotFoundException(`Không tìm thấy lớp học với mã: ${classId}`);
+    }
+
+    const userObj = typeof req === 'object' && req ? req.user : null;
+    if (userObj?.role?.toUpperCase() === 'TEACHER') {
+      const teacher = await this.teacherRepo.findOne({
+        where: { userId: userObj.sub },
+      });
+      if (!teacher) {
+        throw new ForbiddenException('Không tìm thấy thông tin giáo viên.');
+      }
+      const isMain = classEntity.mainTeacherId === teacher.id;
+      const isAssistant = classEntity.assistantId === teacher.id;
+      if (!isMain && !isAssistant) {
+        const sessionCount = await this.sessionRepo.count({
+          where: [
+            { classId, teacherId: teacher.id },
+            { classId, assistantId: teacher.id },
+          ],
+        });
+        if (sessionCount === 0) {
+          throw new ForbiddenException('Bạn không có quyền truy cập lớp học này.');
+        }
+      }
     }
 
     const schedules = await this.scheduleRepo.find({
@@ -635,7 +697,7 @@ export class ClassController {
   }
 
   @Put(':id/students/:studentId/dropped-date')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Chỉnh sửa ngày rời lớp (kick) của học sinh' })
   async updateStudentDroppedDate(
     @Param('id') classId: string,
@@ -742,7 +804,7 @@ export class ClassController {
   }
 
   @Post(':id/sessions')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Tạo buổi học đột xuất (Ad-hoc) cho Lớp' })
   async createAdhocSession(
     @Param('id') classId: string,
@@ -858,7 +920,7 @@ export class ClassController {
   }
 
   @Delete('sessions/:sessionId')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Xóa một buổi học chưa diễn ra' })
   async deleteSession(@Param('sessionId') sessionId: string) {
     const session = await this.sessionRepo.findOne({
@@ -1050,8 +1112,8 @@ export class ClassController {
   }
 
   @Post('sessions/:sessionId/attendance-override')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: '[Admin] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: '[Admin/Teacher] Sửa điểm danh đã chốt - chỉ với buổi chưa tính tiền' })
   async overrideAttendance(
     @Param('sessionId') sessionId: string,
     @Body() body: { attendance: { studentId: string; isPresent: boolean; reason?: string; note?: string; evaluationScore?: string | null; evaluationComment?: string | null }[] }

@@ -31,8 +31,8 @@ export class CenterController {
   }
 
   @Get()
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả trung tâm có phân trang và bộ lọc (Dành cho ADMIN)' })
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy danh sách tất cả trung tâm có phân trang và bộ lọc' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
@@ -55,8 +55,8 @@ export class CenterController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Lấy chi tiết một trung tâm theo ID (Dành cho ADMIN)' })
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy chi tiết một trung tâm theo ID' })
   async findOne(@Param('id') id: string) {
     return this.getCenterByIdUseCase.execute(id);
   }

@@ -54,8 +54,8 @@ export class TeacherController {
   }
 
   @Get()
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả giáo viên có phân trang và bộ lọc (Dành cho ADMIN)' })
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy danh sách tất cả giáo viên có phân trang và bộ lọc' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
@@ -395,8 +395,8 @@ export class TeacherController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Lấy chi tiết một giáo viên theo ID (Dành cho ADMIN)' })
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Lấy chi tiết một giáo viên theo ID' })
   async findOne(@Param('id') id: string) {
     return this.getTeacherByIdUseCase.execute(id);
   }
