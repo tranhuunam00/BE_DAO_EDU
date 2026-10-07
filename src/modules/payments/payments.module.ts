@@ -58,9 +58,11 @@ import { VietQrTokenAdapter } from './infrastructure/services/vietqr-token.adapt
     },
     {
       provide: ClaimTuitionTransferUseCase,
-      useFactory: (persistence: PaymentPersistencePort) =>
-        new ClaimTuitionTransferUseCase(persistence),
-      inject: [PaymentPersistencePort],
+      useFactory: (
+        persistence: PaymentPersistencePort,
+        config: PaymentConfigPort,
+      ) => new ClaimTuitionTransferUseCase(persistence, config),
+      inject: [PaymentPersistencePort, PaymentConfigPort],
     },
     {
       provide: GetTuitionPaymentRequestUseCase,

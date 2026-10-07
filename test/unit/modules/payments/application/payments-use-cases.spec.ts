@@ -82,6 +82,71 @@ describe('Payments application use cases', () => {
     expect(persistence.paymentLogs[0].event).toBe('transfer_claimed');
   });
 
+  it('auto-creates a payment request with static QR config when student claims transfer without prior admin QR creation', async () => {
+    const { persistence, config } = createContext();
+    persistence.bills.set('bill-no-qr', {
+      id: 'bill-no-qr',
+      month: '2026-07',
+      totalAmount: 1800000,
+      paidAmount: 0,
+      status: 'Unpaid',
+      paymentDate: null,
+      note: null,
+      studentUserId: 'student-no-qr',
+      periodName: 'Học phí tháng 7',
+    });
+
+    // Student claims directly without admin ever clicking "Lấy QR"
+    const useCase = new ClaimTuitionTransferUseCase(persistence, config);
+    const result = await useCase.execute({
+      billId: 'bill-no-qr',
+      studentUserId: 'student-no-qr',
+    });
+
+    expect(result.status).toBe('processing');
+    expect(result.claimedAt).toBeDefined();
+    expect(result.amount).toBe(1800000);
+    expect(result.accountNumber).toBe('2152486504');
+    expect(result.transferContent).toBe('DAOHPBILLNOQR');
+    expect(persistence.bills.get('bill-no-qr')?.status).toBe('Unpaid');
+    expect(persistence.requests.get('bill-no-qr')).toBeDefined();
+    expect(persistence.requests.get('bill-no-qr')?.status).toBe('processing');
+    expect(persistence.paymentLogs.at(-1)?.event).toBe('transfer_claimed');
+  });
+
+  it('PERFORMANCE BENCHMARK: claims 500 static QR tuition transfer requests within SLA 250ms', async () => {
+    const { persistence, config } = createContext();
+    const useCase = new ClaimTuitionTransferUseCase(persistence, config);
+
+    // Seed 500 bills without prior QR
+    for (let i = 1; i <= 500; i++) {
+      persistence.bills.set(`bill-bulk-${i}`, {
+        id: `bill-bulk-${i}`,
+        month: '2026-07',
+        totalAmount: 1000000 + i * 1000,
+        paidAmount: 0,
+        status: 'Unpaid',
+        paymentDate: null,
+        note: null,
+        studentUserId: `student-bulk-${i}`,
+        periodName: 'Học phí tháng 7',
+      });
+    }
+
+    const t0 = performance.now();
+    for (let i = 1; i <= 500; i++) {
+      await useCase.execute({
+        billId: `bill-bulk-${i}`,
+        studentUserId: `student-bulk-${i}`,
+      });
+    }
+    const duration = performance.now() - t0;
+
+    // SLA benchmark limit: 500 operations in < 250ms
+    expect(duration).toBeLessThan(250);
+    expect(persistence.requests.size).toBe(500);
+  });
+
   it('reconciles only through a matching VietQR callback', async () => {
     const { persistence, config, qrCode, tokens } = createContext();
     const request = await new SendTuitionPaymentRequestUseCase(
