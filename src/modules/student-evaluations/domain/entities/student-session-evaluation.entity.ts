@@ -31,9 +31,9 @@ export class StudentSessionEvaluationEntity {
   private _classSessionId: string;
   private _studentId: string;
   private _teacherId: string | null;
-  private _homeworkStatus: HomeworkStatus;
-  private _participation: ParticipationStatus;
-  private _understanding: UnderstandingStatus;
+  private _homeworkStatus?: HomeworkStatus;
+  private _participation?: ParticipationStatus;
+  private _understanding?: UnderstandingStatus;
   private _behaviorTags: BehaviorTag[];
   private _score: string | null;
   private _comment: string | null;
@@ -55,9 +55,9 @@ export class StudentSessionEvaluationEntity {
     this._classSessionId = props.classSessionId;
     this._studentId = props.studentId;
     this._teacherId = props.teacherId || null;
-    this._homeworkStatus = props.homeworkStatus || HomeworkStatus.COMPLETED;
-    this._participation = props.participation || ParticipationStatus.ACTIVE;
-    this._understanding = props.understanding || UnderstandingStatus.UNDERSTOOD;
+    this._homeworkStatus = props.homeworkStatus || undefined;
+    this._participation = props.participation || undefined;
+    this._understanding = props.understanding || undefined;
     this._behaviorTags = props.behaviorTags
       ? (props.behaviorTags.length <= 1 ? props.behaviorTags : Array.from(new Set(props.behaviorTags)))
       : [];
@@ -82,9 +82,9 @@ export class StudentSessionEvaluationEntity {
   public get classSessionId(): string { return this._classSessionId; }
   public get studentId(): string { return this._studentId; }
   public get teacherId(): string | null { return this._teacherId; }
-  public get homeworkStatus(): HomeworkStatus { return this._homeworkStatus; }
-  public get participation(): ParticipationStatus { return this._participation; }
-  public get understanding(): UnderstandingStatus { return this._understanding; }
+  public get homeworkStatus(): HomeworkStatus | undefined { return this._homeworkStatus; }
+  public get participation(): ParticipationStatus | undefined { return this._participation; }
+  public get understanding(): UnderstandingStatus | undefined { return this._understanding; }
   public get behaviorTags(): BehaviorTag[] { return [...this._behaviorTags]; }
   public get score(): string | null { return this._score; }
   public get comment(): string | null { return this._comment; }

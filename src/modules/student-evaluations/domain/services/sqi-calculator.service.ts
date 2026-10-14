@@ -108,7 +108,7 @@ export class SqiCalculator {
       } else {
         // Fallback tương thích dữ liệu cũ
         if (s.isPresent) {
-          p = 1.0;
+          p = s.isLate ? 0.75 : 1.0;
           label = s.isLate ? 'buổi đi muộn' : 'buổi đúng giờ';
         } else {
           p = 0.0;
@@ -126,10 +126,10 @@ export class SqiCalculator {
     // 2. Làm BTVN (30%)
     const hwSessions = sessions.filter((s) => {
       const st = String(s.homeworkStatus || '').toLowerCase();
-      return st !== '' && st !== 'no_homework' && st !== 'none' && st !== 'undefined';
+      return st !== '' && st !== 'no_homework' && st !== 'none' && st !== 'undefined' && st !== 'null';
     });
     let homeworkScore: number | null = null;
-    let homeworkNarrative = 'Không giao BTVN';
+    let homeworkNarrative = 'Chưa có ghi nhận';
     if (hwSessions.length > 0) {
       let hwPoints = 0;
       const hwCounts: Record<string, number> = {};

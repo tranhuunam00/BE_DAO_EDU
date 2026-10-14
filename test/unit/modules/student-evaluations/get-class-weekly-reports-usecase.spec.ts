@@ -236,8 +236,8 @@ describe('GetClassWeeklyReportsUseCase & Edge Cases Spec', () => {
     expect(st.hasSessions).toBe(true);
     expect(st.attendanceRate).toBe(100);
     expect(st.homeworkRate).toBeNull(); // Không có BTVN thì null (hiển thị —), không tự ý mặc định 0%
-    // SQI vẫn tính ra điểm hợp lệ chỉ dựa trên tiêu chí có mặt, không bị NaN hoặc null
-    expect(st.sqiScore).toBe(100);
+    // SQI tính đúng theo điểm danh (1 buổi đúng giờ 1.0 + 1 buổi đi muộn 0.75 -> 87.5đ)
+    expect(st.sqiScore).toBe(87.5);
     expect(Number.isNaN(st.sqiScore)).toBe(false);
     expect(result.averageSqi).toBe(st.sqiScore);
   });

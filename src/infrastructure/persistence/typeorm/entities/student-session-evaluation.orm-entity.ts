@@ -28,14 +28,14 @@ export class StudentSessionEvaluationOrmEntity {
   @Column({ type: 'uuid', name: 'teacher_id', nullable: true })
   teacherId!: string | null;
 
-  @Column({ type: 'varchar', length: 20, name: 'homework_status', default: 'completed' })
-  homeworkStatus!: string;
+  @Column({ type: 'varchar', length: 20, name: 'homework_status', nullable: true })
+  homeworkStatus!: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'active' })
-  participation!: string;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  participation!: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'understood' })
-  understanding!: string;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  understanding!: string | null;
 
   @Column('text', { array: true, name: 'behavior_tags', default: '{}' })
   behaviorTags!: string[];

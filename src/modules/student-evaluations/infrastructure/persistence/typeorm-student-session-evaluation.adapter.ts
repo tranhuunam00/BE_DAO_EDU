@@ -94,9 +94,9 @@ export class TypeOrmStudentSessionEvaluationAdapter
     orm.classSessionId = domain.classSessionId;
     orm.studentId = domain.studentId;
     orm.teacherId = domain.teacherId;
-    orm.homeworkStatus = domain.homeworkStatus;
-    orm.participation = domain.participation;
-    orm.understanding = domain.understanding;
+    orm.homeworkStatus = domain.homeworkStatus ?? null;
+    orm.participation = domain.participation ?? null;
+    orm.understanding = domain.understanding ?? null;
     orm.behaviorTags = domain.behaviorTags;
     orm.score = domain.score;
     orm.comment = domain.comment;
@@ -114,9 +114,9 @@ export class TypeOrmStudentSessionEvaluationAdapter
       classSessionId: orm.classSessionId,
       studentId: orm.studentId,
       teacherId: orm.teacherId,
-      homeworkStatus: orm.homeworkStatus as HomeworkStatus,
-      participation: orm.participation as ParticipationStatus,
-      understanding: orm.understanding as UnderstandingStatus,
+      homeworkStatus: (orm.homeworkStatus as HomeworkStatus) || undefined,
+      participation: (orm.participation as ParticipationStatus) || undefined,
+      understanding: (orm.understanding as UnderstandingStatus) || undefined,
       behaviorTags: (orm.behaviorTags || []) as BehaviorTag[],
       score: orm.score,
       comment: orm.comment,

@@ -156,20 +156,26 @@ export class StudentEvaluationController {
 
       if (e.criteria) {
         if (!hw && e.criteria.homework) {
-          hw = e.criteria.homework === 'missing' ? HomeworkStatus.NOT_DONE : HomeworkStatus.COMPLETED;
+          if (e.criteria.homework === 'missing') hw = HomeworkStatus.NOT_DONE;
+          else if (['done', 'completed', 'yes', 'excellent'].includes(e.criteria.homework)) hw = HomeworkStatus.COMPLETED;
+          else if (e.criteria.homework === 'none' || e.criteria.homework === 'no_homework') hw = undefined;
         }
         if (!part && e.criteria.participation) {
-          part = e.criteria.participation === 'passive' ? ParticipationStatus.PASSIVE : ParticipationStatus.ACTIVE;
+          if (e.criteria.participation === 'passive' || e.criteria.participation === 'quiet') part = ParticipationStatus.PASSIVE;
+          else if (['active', 'yes', 'active_raise_hand', 'proactive_ask'].includes(e.criteria.participation)) part = ParticipationStatus.ACTIVE;
         }
         if (!under && e.criteria.understanding) {
-          under = e.criteria.understanding === 'slow' ? UnderstandingStatus.NOT_UNDERSTOOD : UnderstandingStatus.UNDERSTOOD;
+          if (e.criteria.understanding === 'slow') under = UnderstandingStatus.NOT_UNDERSTOOD;
+          else if (['quick', 'understood', 'normal'].includes(e.criteria.understanding)) under = UnderstandingStatus.UNDERSTOOD;
         }
         if (!tags && e.criteria.behavior) {
           tags = e.criteria.behavior === 'talkative'
             ? [BehaviorTag.TALKATIVE]
             : e.criteria.behavior === 'unfocused'
               ? [BehaviorTag.DISTRACTED]
-              : [BehaviorTag.ATTENTIVE];
+              : e.criteria.behavior === 'good' || e.criteria.behavior === 'yes'
+                ? [BehaviorTag.ATTENTIVE]
+                : [];
         }
       }
 
