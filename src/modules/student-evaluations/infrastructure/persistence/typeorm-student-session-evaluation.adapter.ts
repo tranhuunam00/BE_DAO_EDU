@@ -46,9 +46,9 @@ export class TypeOrmStudentSessionEvaluationAdapter
           orm.studentId = domain.studentId;
         }
         orm.teacherId = domain.teacherId;
-        orm.homeworkStatus = domain.homeworkStatus;
-        orm.participation = domain.participation;
-        orm.understanding = domain.understanding;
+        orm.homeworkStatus = domain.homeworkStatus ?? null;
+        orm.participation = domain.participation ?? null;
+        orm.understanding = domain.understanding ?? null;
         orm.behaviorTags = domain.behaviorTags;
         orm.score = domain.score;
         orm.comment = domain.comment;
