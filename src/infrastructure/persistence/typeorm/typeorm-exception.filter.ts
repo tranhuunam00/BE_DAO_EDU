@@ -2,9 +2,11 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
+  Injectable,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 
+@Injectable()
 @Catch(QueryFailedError)
 export class TypeOrmExceptionFilter implements ExceptionFilter {
   catch(exception: QueryFailedError, host: ArgumentsHost): void {
@@ -23,8 +25,8 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
         statusCode: 409,
         message:
           code === '23P01'
-            ? 'Room or teacher schedule conflicts with another session.'
-            : 'The requested record already exists.',
+            ? 'Trùng lịch: Phòng học hoặc giáo viên đã có lịch buổi học khác trong khung giờ này.'
+            : 'Bản ghi này đã tồn tại trong hệ thống.',
       });
       return;
     }
@@ -37,9 +39,20 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Bắt lỗi từ các PostgreSQL Trigger bảo vệ dữ liệu (CANNOT_DELETE_SESSION, CANNOT_DELETE_ATTENDANCE)
+    if (exception.message?.includes('CANNOT_DELETE_SESSION') || exception.message?.includes('CANNOT_DELETE_ATTENDANCE')) {
+      const match = exception.message.match(/CANNOT_DELETE_[^:]+:\s*([^\n\r.]+)/);
+      const userMessage = match ? match[1].trim() : exception.message;
+      response.status(409).json({
+        statusCode: 409,
+        message: userMessage,
+      });
+      return;
+    }
+
     response.status(500).json({
       statusCode: 500,
-      message: 'Database operation failed.',
+      message: 'Thao tác cơ sở dữ liệu thất bại. Vui lòng thử lại sau.',
     });
   }
 }

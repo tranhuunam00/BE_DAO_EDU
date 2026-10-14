@@ -303,12 +303,12 @@ export class ClassController {
     }
 
     const schedules = await this.scheduleRepo.find({
-      where: { classId: id },
+      where: { classId },
       relations: { room: true },
       order: { weekday: 'ASC' },
     });
     const students = await this.classStudentRepo.find({
-      where: { classId: id },
+      where: { classId },
       relations: { student: { user: true } },
       order: { joinedDate: 'ASC' },
     });
@@ -1614,17 +1614,30 @@ export class ClassController {
       this.classStudentRepo.find({ where: { classId } }),
       this.sessionRepo.find({
         where: { classId, date: Between(startFromStr, endDateStr) },
-        select: { id: true, date: true, startTime: true, status: true, attendanceLocked: true, teacherId: true, assistantId: true },
+        select: {
+          id: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          roomId: true,
+          status: true,
+          attendanceLocked: true,
+          teacherId: true,
+          assistantId: true,
+        },
       }),
       classEntity.skipHolidays
         ? this.getHolidayDates.execute(startFromStr, endDateStr)
         : Promise.resolve([] as string[]),
     ]);
 
-    // Build lookup map: "date_startTime" → session, to avoid N+1 findOne calls
-    const existingMap = new Map(
-      existingSessions.map((s) => [`${s.date}_${s.startTime}`, s]),
-    );
+    // Group existing sessions by date
+    const existingByDate = new Map<string, ClassSessionOrmEntity[]>();
+    for (const s of existingSessions) {
+      const list = existingByDate.get(s.date) || [];
+      list.push(s as ClassSessionOrmEntity);
+      existingByDate.set(s.date, list);
+    }
     const holidaySet = new Set(holidayDates);
 
     const sessionsToUpdate: ClassSessionOrmEntity[] = [];
@@ -1639,22 +1652,44 @@ export class ClassController {
       const dateStr = this.formatUtcDate(d);
       if (holidaySet.has(dateStr)) continue;
 
-      for (const schedule of schedules) {
-        if (weekdayMap[schedule.weekday] !== dayOfWeek) continue;
+      const daySchedules = schedules.filter((s) => weekdayMap[s.weekday] === dayOfWeek);
+      if (daySchedules.length === 0) continue;
 
-        const key = `${dateStr}_${schedule.startTime}`;
-        const exists = existingMap.get(key);
+      const sessionsOnDate = existingByDate.get(dateStr) || [];
+      const claimedSessionIds = new Set<string>();
 
-        if (exists) {
-          // Only update teacher/assistant on future unlocked Scheduled sessions
+      for (const schedule of daySchedules) {
+        // 1. Exact time match (handles both "HH:mm" and "HH:mm:ss")
+        const exactMatch = sessionsOnDate.find(
+          (s) =>
+            !claimedSessionIds.has(s.id) &&
+            s.startTime?.slice(0, 5) === schedule.startTime.slice(0, 5),
+        );
+
+        // 2. If no exact match, shift existing future unlocked Scheduled session on this date to new hours
+        const sessionToUse =
+          exactMatch ||
+          sessionsOnDate.find(
+            (s) =>
+              !claimedSessionIds.has(s.id) &&
+              !s.attendanceLocked &&
+              s.date >= todayStr &&
+              s.status === SessionStatus.SCHEDULED,
+          );
+
+        if (sessionToUse) {
+          claimedSessionIds.add(sessionToUse.id);
           if (
-            !exists.attendanceLocked &&
-            exists.date >= todayStr &&
-            exists.status === SessionStatus.SCHEDULED
+            !sessionToUse.attendanceLocked &&
+            sessionToUse.date >= todayStr &&
+            sessionToUse.status === SessionStatus.SCHEDULED
           ) {
-            exists.teacherId = classEntity.mainTeacherId;
-            exists.assistantId = classEntity.assistantId;
-            sessionsToUpdate.push(exists as ClassSessionOrmEntity);
+            sessionToUse.startTime = schedule.startTime;
+            sessionToUse.endTime = schedule.endTime;
+            sessionToUse.roomId = schedule.roomId || null;
+            sessionToUse.teacherId = classEntity.mainTeacherId;
+            sessionToUse.assistantId = classEntity.assistantId;
+            sessionsToUpdate.push(sessionToUse);
           }
           continue;
         }
