@@ -82,11 +82,11 @@ describe('No Default Evaluation Values Spec (TDD & Performance Benchmark)', () =
 
       const result = SqiCalculator.calculate(sessions, null);
 
-      // 1. Chuyên cần: (5*1.0 + 6*0.75 + 0)/13 * 30 = 9.5/13 * 30 = 21.9
-      expect(result.breakdown.attendance).toBe(21.9);
-      expect(result.breakdown.narratives?.attendance).toContain('5 buổi đúng giờ');
-      expect(result.breakdown.narratives?.attendance).toContain('6 buổi đi muộn');
+      // 1. Chuyên cần: (11*1.0 + 0)/13 * 30 = 11/13 * 30 = 25.4 (11 buổi có mặt, 2 buổi vắng)
+      expect(result.breakdown.attendance).toBe(25.4);
+      expect(result.breakdown.narratives?.attendance).toContain('11 buổi có mặt');
       expect(result.breakdown.narratives?.attendance).toContain('2 buổi vắng không phép');
+      expect(result.breakdown.narratives?.attendance).not.toContain('đi muộn');
 
       // 2. Bài tập: Chưa chấm -> PHẢI LÀ NULL và 'Chưa có ghi nhận' (CẤM 30/30 hay '11 buổi đã làm BTVN')
       expect(result.breakdown.homework).toBeNull();
@@ -101,8 +101,8 @@ describe('No Default Evaluation Values Spec (TDD & Performance Benchmark)', () =
       expect(result.breakdown.narratives?.participation).toBe('Chưa có ghi nhận');
 
       // Điểm SQI tổng chỉ chuẩn hóa trên tiêu chí đã có dữ liệu (Chuyên cần)
-      // 21.923 / 30 * 100 = 73.1 điểm
-      expect(result.sqiScore).toBe(73.1);
+      // 25.385 / 30 * 100 = 84.6 điểm
+      expect(result.sqiScore).toBe(84.6);
     });
 
     it('2.2. Khi giáo viên THỰC TẾ ĐÁNH GIÁ một số buổi, chỉ tính trên các buổi có dữ liệu đó', () => {

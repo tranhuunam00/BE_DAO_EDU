@@ -87,34 +87,25 @@ export class SqiCalculator {
       const status = (s.attendanceStatus || '').toLowerCase();
       let p = 0;
       let label = '';
-      if (status === 'yes' || status === 'on_time' || status === 'makeup') {
-        p = 1.0;
-        label = status === 'makeup' ? 'buổi học bù' : 'buổi đúng giờ';
-      } else if (status === 'late') {
-        p = 0.75;
-        label = 'buổi đi muộn';
-      } else if (status === 'early_leave') {
-        p = 0.75;
-        label = 'buổi về sớm';
-      } else if (status === 'late_much') {
-        p = 0.4;
-        label = 'buổi đi muộn nhiều';
-      } else if (status === 'absent_excused') {
-        p = 0.2;
-        label = 'buổi vắng có phép';
-      } else if (status === 'no' || status === 'absent_unexcused') {
+
+      const isAbsent =
+        s.isPresent === false ||
+        ['no', 'absent', 'absent_excused', 'absent_unexcused'].includes(status);
+
+      if (isAbsent) {
         p = 0.0;
-        label = status === 'no' ? 'buổi vắng mặt' : 'buổi vắng không phép';
-      } else {
-        // Fallback tương thích dữ liệu cũ
-        if (s.isPresent) {
-          p = s.isLate ? 0.75 : 1.0;
-          label = s.isLate ? 'buổi đi muộn' : 'buổi đúng giờ';
+        if (status === 'absent_excused') {
+          label = 'buổi vắng có phép';
+        } else if (status === 'absent_unexcused') {
+          label = 'buổi vắng không phép';
         } else {
-          p = 0.0;
           label = 'buổi vắng mặt';
         }
+      } else {
+        p = 1.0;
+        label = status === 'makeup' ? 'buổi học bù' : 'buổi có mặt';
       }
+
       attPoints += p;
       attCounts[label] = (attCounts[label] || 0) + 1;
     }

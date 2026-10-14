@@ -143,16 +143,20 @@ export class TypeOrmStudentWeeklyDataQueryAdapter implements IStudentWeeklyDataQ
       let score = ev?.score || att?.evaluationScore || null;
       const teacherComment = ev?.comment || att?.evaluationComment || null;
 
-      const attendanceStatus =
-        (att as any)?.status ||
-        (att as any)?.attendanceStatus ||
-        (att?.reason && ['on_time', 'makeup', 'late', 'early_leave', 'late_much', 'absent_excused', 'absent_unexcused'].includes(att.reason) ? att.reason : undefined) ||
-        (isPresent ? (isLate ? 'late' : 'on_time') : 'absent_unexcused');
+      const isExcused =
+        att?.reason?.toLowerCase().includes('phép') ||
+        att?.reason === 'absent_excused' ||
+        (att as any)?.status === 'absent_excused' ||
+        (att as any)?.attendanceStatus === 'absent_excused';
+
+      const attendanceStatus = isPresent
+        ? ((att as any)?.status === 'makeup' || (att as any)?.attendanceStatus === 'makeup' ? 'makeup' : 'present')
+        : (isExcused ? 'absent_excused' : 'absent_unexcused');
 
       // NGUYÊN TẮC BẢO TOÀN DỮ LIỆU SƯ PHẠM:
       // Học sinh nghỉ học (vắng mặt) thì không thể có phát biểu, nề nếp hay tiếp thu bài trên lớp.
       // Buổi nghỉ cũng không ghi nhận làm BTVN tại lớp trừ khi có bài nộp bù rõ ràng.
-      const isAbsent = !isPresent || ['no', 'absent_unexcused', 'absent_excused'].includes(attendanceStatus.toLowerCase());
+      const isAbsent = !isPresent || ['no', 'absent', 'absent_unexcused', 'absent_excused'].includes(attendanceStatus.toLowerCase());
       if (isAbsent) {
         participation = undefined;
         behaviorTags = [];

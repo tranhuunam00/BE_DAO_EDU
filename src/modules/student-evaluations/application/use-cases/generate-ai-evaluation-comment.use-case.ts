@@ -72,7 +72,7 @@ export class GenerateAiEvaluationCommentUseCase {
       behaviorTags: isAbsent ? [] : input.behaviorTags,
       score: isAbsent ? null : input.score,
       isPresent: !isAbsent,
-      attendanceStatus: input.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'on_time'),
+      attendanceStatus: input.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'present'),
       date: input.date,
     };
 

@@ -37,7 +37,7 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       expect(res.sqiScore).toBe(0);
     });
 
-    it('Case 2: 100% vắng mặt có phép (absent_excused) -> Chuyên cần 6/30 (0.2/buổi), BTVN/Năng động null', () => {
+    it('Case 2: 100% vắng mặt có phép (absent_excused) -> Chuyên cần 0/30 (0/buổi), BTVN/Năng động null', () => {
       const sessions: SessionEvaluationInput[] = Array.from({ length: 5 }, (_, i) => ({
         classSessionId: `sess-${i}`,
         subjectName: 'Toán',
@@ -46,14 +46,14 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       }));
 
       const res = SqiCalculator.calculate(sessions, null);
-      // (5 * 0.2 / 5) * 30 = 6 điểm
-      expect(res.breakdown.attendance).toBe(6);
+      // Vắng mặt nhận 0 điểm chuyên cần
+      expect(res.breakdown.attendance).toBe(0);
       expect(res.breakdown.narratives?.attendance).toBe('5 buổi vắng có phép');
       expect(res.breakdown.homework).toBeNull();
       expect(res.breakdown.narratives?.homework).toBe('Chưa có ghi nhận');
     });
 
-    it('Case 3: 100% đi muộn (late) -> Chuyên cần 22.5/30 (0.75/buổi)', () => {
+    it('Case 3: Học sinh có mặt (dù có cờ late) -> Chuyên cần 30/30 (1.0/buổi)', () => {
       const sessions: SessionEvaluationInput[] = Array.from({ length: 4 }, (_, i) => ({
         classSessionId: `sess-${i}`,
         subjectName: 'Tiếng Anh',
@@ -62,12 +62,11 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       }));
 
       const res = SqiCalculator.calculate(sessions, null);
-      // (4 * 0.75 / 4) * 30 = 22.5 điểm
-      expect(res.breakdown.attendance).toBe(22.5);
-      expect(res.breakdown.narratives?.attendance).toBe('4 buổi đi muộn');
+      expect(res.breakdown.attendance).toBe(30);
+      expect(res.breakdown.narratives?.attendance).toBe('4 buổi có mặt');
     });
 
-    it('Case 4: 100% đi muộn nhiều (late_much) -> Chuyên cần 12/30 (0.4/buổi)', () => {
+    it('Case 4: Học sinh có mặt (dù có cờ late_much) -> Chuyên cần 30/30 (1.0/buổi)', () => {
       const sessions: SessionEvaluationInput[] = Array.from({ length: 5 }, (_, i) => ({
         classSessionId: `sess-${i}`,
         subjectName: 'Văn',
@@ -76,12 +75,11 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       }));
 
       const res = SqiCalculator.calculate(sessions, null);
-      // (5 * 0.4 / 5) * 30 = 12 điểm
-      expect(res.breakdown.attendance).toBe(12);
-      expect(res.breakdown.narratives?.attendance).toBe('5 buổi đi muộn nhiều');
+      expect(res.breakdown.attendance).toBe(30);
+      expect(res.breakdown.narratives?.attendance).toBe('5 buổi có mặt');
     });
 
-    it('Case 5: 100% về sớm (early_leave) -> Chuyên cần 22.5/30 (0.75/buổi)', () => {
+    it('Case 5: Học sinh có mặt (dù có cờ early_leave) -> Chuyên cần 30/30 (1.0/buổi)', () => {
       const sessions: SessionEvaluationInput[] = Array.from({ length: 4 }, (_, i) => ({
         classSessionId: `sess-${i}`,
         subjectName: 'Toán',
@@ -90,8 +88,8 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       }));
 
       const res = SqiCalculator.calculate(sessions, null);
-      expect(res.breakdown.attendance).toBe(22.5);
-      expect(res.breakdown.narratives?.attendance).toBe('4 buổi về sớm');
+      expect(res.breakdown.attendance).toBe(30);
+      expect(res.breakdown.narratives?.attendance).toBe('4 buổi có mặt');
     });
 
     it('Case 6: 100% học bù (makeup) -> Chuyên cần 30/30 (1.0/buổi)', () => {
@@ -107,7 +105,7 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       expect(res.breakdown.narratives?.attendance).toBe('3 buổi học bù');
     });
 
-    it('Case 7: Duy nhất 1 buổi trong tháng, đi muộn -> Chuyên cần 22.5/30, SQI chuẩn hóa = 75', () => {
+    it('Case 7: Duy nhất 1 buổi trong tháng, có mặt -> Chuyên cần 30/30, SQI chuẩn hóa = 100', () => {
       const sessions: SessionEvaluationInput[] = [
         {
           classSessionId: 'sess-single',
@@ -118,8 +116,8 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       ];
 
       const res = SqiCalculator.calculate(sessions, null);
-      expect(res.breakdown.attendance).toBe(22.5);
-      expect(res.sqiScore).toBe(75);
+      expect(res.breakdown.attendance).toBe(30);
+      expect(res.sqiScore).toBe(100);
       expect(res.breakdown.homework).toBeNull();
       expect(res.breakdown.participation).toBeNull();
       expect(res.breakdown.behavior).toBeNull();
@@ -133,11 +131,11 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       ];
 
       const res = SqiCalculator.calculate(sessions, null);
-      // (0.75 + 1.0 + 0) / 3 * 30 = 17.5
-      expect(res.breakdown.attendance).toBe(17.5);
-      expect(res.breakdown.narratives?.attendance).toContain('1 buổi đi muộn');
-      expect(res.breakdown.narratives?.attendance).toContain('1 buổi đúng giờ');
+      // (1.0 + 1.0 + 0) / 3 * 30 = 20
+      expect(res.breakdown.attendance).toBe(20);
+      expect(res.breakdown.narratives?.attendance).toContain('2 buổi có mặt');
       expect(res.breakdown.narratives?.attendance).toContain('1 buổi vắng mặt');
+      expect(res.breakdown.narratives?.attendance).not.toContain('đi muộn');
     });
 
     it('Case 9: Dữ liệu chuỗi hoa/thường lẫn lộn (On_TiMe, LATE, AbSeNt_ExCuSeD) chuẩn hóa an toàn', () => {
@@ -148,11 +146,11 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       ];
 
       const res = SqiCalculator.calculate(sessions, null);
-      // (1.0 + 0.75 + 0.2) / 3 * 30 = 19.5
-      expect(res.breakdown.attendance).toBe(19.5);
-      expect(res.breakdown.narratives?.attendance).toContain('1 buổi đúng giờ');
-      expect(res.breakdown.narratives?.attendance).toContain('1 buổi đi muộn');
+      // (1.0 + 1.0 + 0) / 3 * 30 = 20
+      expect(res.breakdown.attendance).toBe(20);
+      expect(res.breakdown.narratives?.attendance).toContain('2 buổi có mặt');
       expect(res.breakdown.narratives?.attendance).toContain('1 buổi vắng có phép');
+      expect(res.breakdown.narratives?.attendance).not.toContain('đi muộn');
     });
   });
 
@@ -363,7 +361,7 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
 
       expect(output.hasSessions).toBe(true);
       const report = output.report!;
-      expect(report.sqiBreakdown.attendance).toBe(21.9);
+      expect(report.sqiBreakdown.attendance).toBe(25.4);
       expect(report.sqiBreakdown.homework).toBeNull();
       expect(report.sqiBreakdown.narratives?.homework).toBe('Chưa có ghi nhận');
       expect(report.sqiBreakdown.participation).toBeNull();
@@ -410,7 +408,7 @@ describe('Comprehensive Evaluation Edge Cases & Integration Spec (20+ Cases)', (
       });
 
       const report = output.report!;
-      expect(report.sqiScore).toBe(73.1);
+      expect(report.sqiScore).toBe(84.6);
       // Delta so với tháng trước phải là số âm và tính đúng hiệu số
       expect(report.sqiDelta).toBeLessThan(0);
     });

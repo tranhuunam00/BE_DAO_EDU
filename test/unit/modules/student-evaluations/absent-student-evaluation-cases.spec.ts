@@ -187,7 +187,7 @@ describe('Absent Student Evaluation & Anti-Hallucination Spec (Kiểm thử toà
 
       // Chuyên cần: 6/7 buổi đúng giờ (làm tròn 1 chữ số thập phân = 25.7đ)
       expect(result.breakdown.attendance).toBeCloseTo(25.7, 1);
-      expect(result.breakdown.narratives?.attendance).toContain('6 buổi đúng giờ');
+      expect(result.breakdown.narratives?.attendance).toContain('6 buổi có mặt');
       expect(result.breakdown.narratives?.attendance).toContain('1 buổi vắng không phép');
 
       // Điểm BTVN: 6 buổi có mặt làm bài đầy đủ (6/6 = 100% -> 30đ)

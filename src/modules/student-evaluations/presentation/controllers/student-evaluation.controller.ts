@@ -292,7 +292,7 @@ export class StudentEvaluationController {
       behaviorTags: isAbsent ? [] : tags,
       score: isAbsent ? null : it.score,
       isPresent: !isAbsent,
-      attendanceStatus: it.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'on_time'),
+      attendanceStatus: it.attendanceStatus || (isAbsent ? 'absent_unexcused' : 'present'),
       date: it.date,
       teacherId,
     };
