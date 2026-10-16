@@ -1666,7 +1666,19 @@ export class ClassController {
             s.startTime?.slice(0, 5) === schedule.startTime.slice(0, 5),
         );
 
-        // 2. If no exact match, shift existing future unlocked Scheduled session on this date to new hours
+        // 2. Tuyệt đối bảo toàn các buổi học khác trạng thái Scheduled (Đang học, Đã hoàn thành, hoặc đã khoá điểm danh, hoặc quá khứ)
+        // Không chỉnh sửa và không sinh trùng buổi mới lên ngày này
+        const existingConducted = sessionsOnDate.find(
+          (s) =>
+            !claimedSessionIds.has(s.id) &&
+            (s.status !== SessionStatus.SCHEDULED || s.attendanceLocked || s.date < todayStr),
+        );
+        if (existingConducted) {
+          claimedSessionIds.add(existingConducted.id);
+          continue;
+        }
+
+        // 3. If no exact match, shift existing future unlocked Scheduled session on this date to new hours
         const sessionToUse =
           exactMatch ||
           sessionsOnDate.find(
